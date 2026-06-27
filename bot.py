@@ -18,6 +18,19 @@ RENDER_URL = os.getenv("RENDER_EXTERNAL_URL")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
+# ВРЕМЕННЫЙ ЛОГ ДЛЯ ПРОВЕРКИ ПЕРЕМЕННЫХ
+print(f"--- ПРОВЕРКА ОБЛАКА ---")
+print(f"SUPABASE_URL заполнен?: {bool(SUPABASE_URL)}")
+print(f"SUPABASE_KEY заполнен?: {bool(SUPABASE_KEY)}")
+if SUPABASE_KEY:
+    print(f"Длина SUPABASE_KEY: {len(SUPABASE_KEY)} символов")
+    print(f"Первые 5 символов ключа: {SUPABASE_KEY[:5]}")
+print(f"------------------------")
+
+# Инициализация
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+
 # Инициализация клиента Supabase теперь будет работать через скрытые переменные
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
