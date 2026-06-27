@@ -565,19 +565,15 @@ async def duel_timeout(context: ContextTypes.DEFAULT_TYPE):
     chat_id = job.chat_id
     user_id = job.user_id
     
-    # Пытаемся вытащить данные диалога для этого чата
+    # Очищаем данные сессии
     application = context.application
-    # Принудительно закрываем диалог в ConversationHandler для этого пользователя в этом чате
-    application.handlers[0].get_context(ConversationHandler).update_state(
-        ConversationHandler.END, 
-        key=(chat_id, user_id)
-    )
     
     await context.bot.send_message(
         chat_id=chat_id, 
         text="⏱ *Время вышло!* Вызывающий не отправил тег соперника в течение минуты. Дуэль отменена.",
         parse_mode="Markdown"
     )
+
 
 async def duel_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type == "private":
@@ -611,35 +607,50 @@ async def duel_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def duel_process(update: Update, context: ContextTypes.DEFAULT_TYPE):
     challenger = update.effective_user
     chat_id = update.effective_chat.id
+    message_text = update.message.text.strip()
 
+    # Проверяем, что отвечает именно тот, кто создал дуэль
     if context.user_data.get("challenger_id") != challenger.id:
         return WAITING_FOR_TARGET
 
-    # Если игрок успел отправить тег, отменяем запущенный таймер, чтобы он не сработал позже
+    # Убираем таймер таймаута, так как ответ получен
     job_name = f"duel_timeout_{chat_id}_{challenger.id}"
     current_jobs = context.job_queue.get_jobs_by_name(job_name)
     for job in current_jobs:
         job.schedule_removal()
 
     target_username = None
+
+    # Шаг 1: Пробуем найти через сущности Telegram (mention)
     if update.message.entities:
         for entity in update.message.entities:
             if entity.type == "mention":
                 target_username = update.message.text[entity.offset:entity.offset + entity.length]
                 break
 
-    if not target_username and update.message.text.startswith("@"):
-        target_username = update.message.text.split()[0]
-
+    # Шаг 2: Если сущность не распозналась (такое бывает на вебхуках), парсим текст руками
     if not target_username:
-        await update.message.reply_text("❌ Это не похоже на тег. Отправь никнейм через @упоминание или напиши /cancel:")
+        words = message_text.split()
+        for word in words:
+            if word.startswith("@"):
+                target_username = word
+                break
+            elif len(word) > 2: # Если человек написал ник БЕЗ собачки (например, ivan)
+                target_username = f"@{word}"
+                break
+
+    # Если вообще ничего не нашли
+    if not target_username:
+        await update.message.reply_text("❌ Я не понял, кого ты вызываешь. Отправь никнейм соперника (например, @username):")
         return WAITING_FOR_TARGET
 
+    # Защита от дуэли с самим собой
     if challenger.username and f"@{challenger.username}".lower() == target_username.lower():
-        await update.message.reply_text("🤡 Ты не можешь вызвать на дуэль самого себя. Диалог отменен.")
+        await update.message.reply_text("🤡 Ты не можешь вызвать на дуэль самого себя. Считай, что ты проиграл ментально. Дуэль отменена!")
         context.user_data.pop("challenger_id", None)
         return ConversationHandler.END
 
+    # ЗАПУСК КРУТИЛКИ
     challenger_name = f"@{challenger.username}" if challenger.username else challenger.first_name
     challenger_wins = random.choice([True, False])
 
@@ -668,7 +679,6 @@ async def duel_process(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.pop("challenger_id", None)
     return ConversationHandler.END
 
-
 async def cancel_duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     user_id = update.effective_user.id
@@ -691,42 +701,47 @@ async def cancel_duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Переименуем функцию main в асинхронную
 async def main():
     app = Application.builder().token(TOKEN).build()
-
+# Инициализируем очередь задач, если она не создалась автоматически
+    if app.job_queue is None:
+         print("Критическая ошибка: Планировщик задач не инициализирован. Проверьте requirements.txt")
+        
+    # Добавляем все хэндлеры
     app.add_handler(CommandHandler("start", help_command))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("register", register))
-    app.add_handler(CommandHandler("switch", switch))
     app.add_handler(CommandHandler("unreg", unreg))
     app.add_handler(CommandHandler("reset", reset_stats))
     app.add_handler(CommandHandler("pidor", pidor))
     app.add_handler(CommandHandler("run", run_command))
     app.add_handler(CommandHandler("stats", stats))
     app.add_handler(CommandHandler("procents", procents))
+    app.add_handler(CommandHandler("switch", switch))
     app.add_handler(CommandHandler("records", records))
-        # Настраиваем пошаговый обработчик для дуэли
+
+    # Сюда вставляем наш ConversationHandler для дуэли
     duel_handler = ConversationHandler(
-        entry_points=[CommandHandler("duel", duel_start)], # Точка входа: команда /duel
+        entry_points=[CommandHandler("duel", duel_start)],
         states={
-            # Если бот ждет тег, он направляет текстовое сообщение в функцию duel_process
             WAITING_FOR_TARGET: [
-                CommandHandler("cancel", cancel_duel), # Если внутри шага написали /cancel
-                MessageHandler(filters.TEXT & ~filters.COMMAND, duel_process) # Любой обычный текст
+                CommandHandler("cancel", cancel_duel),
+                # Изменяем фильтр: ловим ВООБЩЕ ЛЮБОЙ текст, чтобы бот точно среагировал
+                MessageHandler(filters.TEXT & ~filters.COMMAND, duel_process) 
             ]
         },
         fallbacks=[CommandHandler("cancel", cancel_duel)],
-        per_chat=True # Критически важно: диалог привязывается к чату, а не к личке!
+        per_chat=True
     )
-    
-    # Регистрируем созданный обработчик в приложение бота
     app.add_handler(duel_handler)
-
 
     if RENDER_URL:
         print("Бот запускается в режиме Webhook на Render...")
         PORT = int(os.getenv("PORT", 10000))
         
-        # Для вебхуков на Python 3.14+ инициализируем приложение вручную перед стартом
         await app.initialize()
+        # Принудительно запускаем планировщик задач для таймеров таймаута
+        if app.job_queue:
+            await app.job_queue.start()
+            
         await app.updater.start_webhook(
             listen="0.0.0.0",
             port=PORT,
@@ -734,9 +749,8 @@ async def main():
             webhook_url=f"{RENDER_URL}/{TOKEN}"
         )
         await app.start()
-        print("Вебхук успешно запущен и слушает порт!")
+        print("Вебхук и Таймеры успешно запущены!")
         
-        # Оставляем бота запущенным в бесконечном цикле, пока сервер работает
         while True:
             await asyncio.sleep(3600)
     else:
