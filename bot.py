@@ -504,55 +504,58 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"🛡 Нельзя перевести стрелу на {target_username}, он сегодня неприкосновенный Красавчик дня!")
         return
 
-    # Записываем стрелочнику дату использования команды
+        # Записываем стрелочнику дату использования команды
     supabase.table("users").update({"last_switch_date": str(today)}).eq("user_id", user.id).execute()
 
-    # Интригующие сообщения
+    # --- ИСПРАВЛЕННЫЙ БЛОК (УБРАН MARKDOWN ДЛЯ ЗАЩИТЫ ОТ ПАДЕНИЯ ИЗ-ЗА НИКНЕЙМОВ) ---
     intro = [
-        f"🃏 *МЕМНЫЙ РЕВЕРС!* {user.first_name} активирует карту «UNO» и пытается перевести позор на {target_username}!",
+        f"🃏 МЕМНЫЙ РЕВЕРС! {user.first_name} активирует карту «UNO» и пытается перевести позор на {target_username}!",
         "🎲 Вероятность успеха всего 5%... Высшие силы взвешивают шансы...",
     ]
     for phrase in intro:
-        await context.bot.send_message(chat_id=chat_id, text=phrase, parse_mode="Markdown")
+        # Без parse_mode бот гарантированно отправит сообщение с любым юзернеймом жертвы
+        await context.bot.send_message(chat_id=chat_id, text=phrase)
         await asyncio.sleep(1.5)
 
     # Крутим шанс 5% (выбираем число от 1 до 100)
     is_success = random.randint(1, 100) <= 5
 
+    # Вытаскиваем текущие данные стрелочника, чтобы узнать его реальный pidor_count
+    current_user_data = supabase.table("users").select("pidor_count").eq("user_id", user.id).execute().data[0]
+    current_pidor_count = current_user_data.get("pidor_count", 1)
+
     if is_success:
         # УДАЧА (5%): Перекидываем титул
-        # 1. Откатываем стату и веса стрелочнику (ведь он спасся)
+        # 1. Откатываем стату и веса стрелочнику (уменьшаем его реальный счетчик на 1)
         supabase.table("users").update({
-            "pidor_count": user_res.data[0].get("pidor_count", 1) - 1, # если у тебя в коде каунт уже вырос, уменьшаем на 1
-            "pidor_weight": 100.0 # возвращаем вес в базу
+            "pidor_count": current_pidor_count - 1, 
+            "pidor_weight": 100.0 
         }).eq("user_id", user.id).execute()
         
         # 2. Наказываем жертву
         supabase.table("users").update({
             "pidor_count": victim["pidor_count"] + 1,
-            "pidor_weight": 60.0 # даем штраф
+            "pidor_weight": 60.0 
         }).eq("user_id", victim["user_id"]).execute()
 
         # 3. Меняем победителя дня в истории daily_winners
         supabase.table("daily_winners").update({"user_id": victim["user_id"]}).eq("game_date", str(today)).eq("role", "pidor").execute()
 
         await update.message.reply_text(
-            f"💥 *ЭТО ПРОСТО НЕВЕРОЯТНО! ЧАТ, СЕНСАЦИЯ!* 💥\n\n"
+            f"💥 ЭТО ПРОСТО НЕВЕРОЯТНО! ЧАТ, СЕНСАЦИЯ! 💥\n\n"
             f"Карта UNO сработала! Магия 5% сработала!\n"
             f"👑 {user.first_name} полностью очищен от подозрений.\n\n"
-            f"🤡 Новый официальный ПИДОР ДНЯ — {victim['first_name']} ({target_username})! Смирись с этим!", 
-            parse_mode="Markdown"
+            f"🤡 Новый официальный ПИДОР ДНЯ — {victim['first_name']} ({target_username})! Смирись с этим!"
         )
     else:
         # НЕУДАЧА (95%): Стрела сорвалась, вес возвращается к 100
         supabase.table("users").update({"pidor_weight": 100.0}).eq("user_id", user.id).execute()
         
         await update.message.reply_text(
-            f"❌ *КАРТА UNO ПОРВАЛАСЬ ВО ВРЕМЯ ИСПОЛЬЗОВАНИЯ!* {user.first_name}, боги рандома не помогли в этот раз.\n\n"
-            f"Титул Пидора дня остается на тебе. В наказание твой процентаж аннулирован и..."
-            f"Завтра у тебя будут большие шансы выпасть снова! 🤡"
-            f"p.s. через недельку, можешь попробовать снова (за выдачу новой карты, 50р на карту)", 
-            parse_mode="Markdown"
+            f"❌ КАРТА UNO ПОРВАЛАСЬ ВО ВРЕМЯ ИСПОЛЬЗОВАНИЯ! {user.first_name}, боги рандома не помогли в этот раз.\n\n"
+            f"Титул Пидора дня остается на тебе. В наказание твой процентаж аннулирован и...\n"
+            f"Завтра у тебя будут большие шансы выпасть снова! 🤡\n"
+            f"p.s. через недельку, можешь попробовать снова (за выдачу новой карты, 50р на карту)"
         )
 
 # ---------------- ЗАПУСК (ВЕБХУК) ----------------
