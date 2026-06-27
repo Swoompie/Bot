@@ -145,13 +145,20 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     
-    # Проверяем, есть ли юзер в Supabase
+    # 1. Проверяем, был ли пользователь вообще когда-то в базе
     res = supabase.table("users").select("*").eq("user_id", user.id).execute()
+    
     if res.data:
-        await update.message.reply_text(f"Вы уже зарегистрированы, {user.first_name}!")
+        player = res.data[0]
+        # Если он есть, но отключен (is_active == False) — возвращаем его в игру
+        if not player.get("is_active", True):
+            supabase.table("users").update({"is_active": True}).eq("user_id", user.id).execute()
+            await update.message.reply_text(f"✅ {user.first_name}, с возвращением в игру! Твоя старая статистика восстановлена.")
+        else:
+            await update.message.reply_text(f"Вы уже зарегистрированы, {user.first_name}!")
         return
 
-    # Если нет — добавляем запись в облако
+    # 2. Если пользователя вообще нет в базе — создаем с нуля
     supabase.table("users").insert({
         "user_id": user.id,
         "username": user.username,
@@ -159,23 +166,30 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "pidor_weight": 100.0,
         "kras_weight": 100.0,
         "pidor_count": 0,
-        "kras_count": 0
+        "kras_count": 0,
+        "is_active": True  # Явно указываем, что активен
     }).execute()
     
-    await update.message.reply_text(f"✅ {user.first_name} успешно зарегистрирован в рулетке!")
+    await update.message.reply_text(f"✅ {user.first_name} успешно зарегистрирован в рулетке с нуля!")
+
 
 async def unreg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     
-    # Проверяем существование пользователя
+    # Проверяем существование
     res = supabase.table("users").select("*").eq("user_id", user.id).execute()
-    if not res.data:
-        await update.message.reply_text("Вы и так не зарегистрированы в рулетке.")
+    if not res.data or not res.data[0].get("is_active", True):
+        await update.message.reply_text("Тебя и так нет в игре, можешь в окно выйти, лол.")
         return
 
-    # Удаляем пользователя из базы данных
-    supabase.table("users").delete().eq("user_id", user.id).execute()
-    await update.message.reply_text(f"🚪 {user.first_name} успешно ливнул из рулетки. Ваши очки обнулены!")
+    # Вместо удаления просто выключаем флаг активности и сбрасываем веса до базовых
+    supabase.table("users").update({
+        "is_active": False,
+        "pidor_weight": 100.0,
+        "kras_weight": 100.0
+    }).eq("user_id", user.id).execute()
+    
+    await update.message.reply_text(f"🚪 {user.first_name} ты реально ливнул? Твоя статистика сохранена, так что не прощаемся - дешёвка!")
 
 async def reset_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Обнуляем счетчики побед и возвращаем базовые веса всем игрокам в Supabase
