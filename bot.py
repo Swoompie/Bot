@@ -13,13 +13,12 @@ from telegram.ext import (
 # Подключаем Supabase клиент
 from supabase import create_client, Client
 
-# Токен берем из Render (безопасность), либо оставляем твой для тестов
-TOKEN = os.getenv("BOT_TOKEN", "8696913937:AAGDndpJrZD6r7bXClIVy78yRipvjQ8uZSI")
-RENDER_URL = os.getenv("NONE")
+TOKEN = os.getenv("BOT_TOKEN")
+RENDER_URL = os.getenv("RENDER_EXTERNAL_URL")
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
-# Инициализация Supabase (Переменные заполним в настройках Render)
-SUPABASE_URL = os.getenv("https://erlanewccwsskmfmnyfe.supabase.co")
-SUPABASE_KEY = os.getenv("sb_publishable_KYQt90S_5t1htOjxcRuCWA_grqdlQV_")
+# Инициализация клиента Supabase теперь будет работать через скрытые переменные
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # ---------------- ФРАЗЫ ----------------
