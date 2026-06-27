@@ -346,7 +346,8 @@ async def procents(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ---------------- ЗАПУСК (ВЕБХУК) ----------------
 
-def main():
+# Переименуем функцию main в асинхронную
+async def main():
     app = Application.builder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", help_command))
@@ -359,20 +360,28 @@ def main():
     app.add_handler(CommandHandler("stats", stats))
     app.add_handler(CommandHandler("procents", procents))
 
-    # Автоматическое определение режима запуска (Локально или на Render)
     if RENDER_URL:
         print("Бот запускается в режиме Webhook на Render...")
         PORT = int(os.getenv("PORT", 10000))
-        app.run_webhook(
+        
+        # Для вебхуков на Python 3.14+ инициализируем приложение вручную перед стартом
+        await app.initialize()
+        await app.updater.start_webhook(
             listen="0.0.0.0",
             port=PORT,
             url_path=TOKEN,
             webhook_url=f"{RENDER_URL}/{TOKEN}"
         )
+        await app.start()
+        print("Вебхук успешно запущен и слушает порт!")
+        
+        # Оставляем бота запущенным в бесконечном цикле, пока сервер работает
+        while True:
+            await asyncio.sleep(3600)
     else:
         print("Бот запущен локально в режиме Polling!")
         app.run_polling()
 
-
 if __name__ == "__main__":
-    main()
+    # Запускаем асинхронный main() через правильный asyncio.run()
+    asyncio.run(main())
