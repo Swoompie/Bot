@@ -573,14 +573,22 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Кого на дуэль-то вызывать? Тегни соперника через @username!")
         return
 
-    # Ищем упомянутого пользователя (жертву дуэли)
-    # Нам нужно вытащить текст тега (например, @ivan)
+       # Ищем упомянутого пользователя (улучшенный поиск для любых чатов)
     target_username = None
-    for entity in update.message.entities:
-        if entity.type == "mention":
-            # Вырезаем никнейм из текста сообщения
-            target_username = update.message.text[entity.offset:entity.offset + entity.length]
-            break
+    
+    # Способ 1: Ищем через entities
+    if update.message.entities:
+        for entity in update.message.entities:
+            if entity.type == "mention":
+                target_username = update.message.text[entity.offset:entity.offset + entity.length]
+                break
+
+    # Способ 2: Если Telegram скрыл entity в этом чате, вытаскиваем руками из текста
+    if not target_username and context.args:
+        for arg in context.args:
+            if arg.startswith("@"):
+                target_username = arg
+                break
 
     if not target_username:
         await update.message.reply_text("❌ Ошибка! Нужно именно тегнуть соперника через @упоминание.")
