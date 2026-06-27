@@ -4,17 +4,17 @@ import random
 import asyncio
 from datetime import date
 from telegram import Update
-# ДОБАВЛЯЕМ СЮДА НОВЫЕ ИМПОРТЫ ДЛЯ ДУЭЛИ
 from telegram.ext import Application, CommandHandler, ContextTypes, ConversationHandler, MessageHandler, filters
 from supabase import create_client, Client
 
 # Настройка Supabase и бота
 TOKEN = os.getenv("BOT_TOKEN")
+RENDER_URL = os.getenv("RENDER_EXTERNAL_URL")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# СОСТОЯНИЕ ДИАЛОГА ДЛЯ ДУЭЛИ (ТОЖЕ В НАЧАЛО)
+# СОСТОЯНИЕ ДИАЛОГА ДЛЯ ДУЭЛИ
 WAITING_FOR_TARGET = 1
 
 # ВРЕМЕННЫЙ ЛОГ ДЛЯ ПРОВЕРКИ ПЕРЕМЕННЫХ
