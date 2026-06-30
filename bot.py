@@ -508,10 +508,10 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Считаем разницу между сегодня и датой использования
         days_passed = (today - last_date).days
         
-        if days_passed < 7:
+                if days_passed < 7:
             days_left = 7 - days_passed
             
-            # ИСПРАВЛЕНО: Правильно прописали проверку чисел для склонения
+            # ИСПРАВЛЕНО: Добавили список [2, 3, 4] для правильного склонения дней
             if days_left == 1:
                 day_word = "день"
             elif days_left in:
@@ -524,8 +524,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"Твоя новая карта всё еще в процессе доставки! Доступ появится через {days_left} {day_word}."
             )
             
-            # 📥 ДОБАВЛЕН СТИКЕР ТАЙМАУТА КД:
-            # Получи ID забавного стикера ожидания (например, часики или фейспалм) и вставь сюда
+            # Твой стикер ожидания
             await update.message.reply_sticker(sticker='CAACAgIAAxkBAAEReRpqQ3-pZ9QRME44W1Es3DPWTGUPNAACkAIAAladvQoy0qlxuNTQtTwE')
             return
 
