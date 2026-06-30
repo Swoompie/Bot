@@ -172,22 +172,22 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def unreg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    
-    # Проверяем существование
+    chat_id = update.effective_chat.id
+
+    # Проверяем существование пользователя в базе
     res = supabase.table("users").select("*").eq("user_id", user.id).execute()
     if not res.data or not res.data[0].get("is_active", True):
         await update.message.reply_text("Тебя и так нет в игре, можешь в окно выйти, лол.")
         return
 
-    # Вместо удаления просто выключаем флаг активности и сбрасываем веса до базовых
+    # ОБНОВЛЕННЫЙ БЛОК: Выключаем только флаг активности, ВЕСА НЕ ТРОГАЕМ!
     supabase.table("users").update({
-        "is_active": False,
-        "pidor_weight": 100.0,
-        "kras_weight": 100.0
+        "is_active": False
     }).eq("user_id", user.id).execute()
     
+    # Твой текст и отправка стикера реплаем (без риска упасть из-за chat_id)
     await update.message.reply_text(f"🚪 {user.first_name} ты реально ливнул? Твоя статистика сохранена, так что не прощаемся - дешёвка!")
-    await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAEReQ5qQ3ghClnZvA6qP2Cx0lGm8NIjBwACMlIAAv-BOEl-zu7LwscR5DwE')
+    await update.message.reply_sticker(sticker='CAACAgIAAxkBAAEReQ5qQ3ghClnZvA6qP2Cx0lGm8NIjBwACMlIAAv-BOEl-zu7LwscR5DwE')
 
 async def reset_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Обнуляем счетчики побед и возвращаем базовые веса всем игрокам в Supabase
