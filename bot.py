@@ -198,11 +198,14 @@ async def reset_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "kras_weight": 100.0
     }).neq("user_id", 0).execute()  # .neq("user_id", 0) хак, чтобы обновить вообще всех юзеров разом
     
-    # Полностью очищаем таблицу сегодняшних победителей
+    # Полностью очищаем таблицу "победителей"
     supabase.table("daily_winners").delete().neq("user_id", 0).execute()
     
     await update.message.reply_text("🔄 *Вся статистика обнулена!* Счетчик подопытных сброшен, шансы участников снова равны.", parse_mode="Markdown")
-    await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgQAAxkBAAEReRBqQ3htVR15fuIwV3C_4QUWL8_xxQACbhwAAltJOVMTctyzCRD65jwE')
+    
+    # ИСПРАВЛЕНО: Используем reply_sticker вместо send_sticker, чтобы бот не падал из-за отсутствия chat_id
+    await update.message.reply_sticker(sticker='CAACAgQAAxkBAAEReRBqQ3htVR15fuIwV3C_4QUWL8_xxQACbhwAAltJOVMTctyzCRD65jwE')
+
 
 async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
     users = get_users()
