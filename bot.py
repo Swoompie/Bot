@@ -513,7 +513,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Склоняем слово "день" в зависимости от остатка
             if days_left == 1:
                 day_word = "день"
-            elif days_left in:
+            elif days_left in [2, 3, 4]:
                 day_word = "дня"
             else:
                 day_word = "дней"
