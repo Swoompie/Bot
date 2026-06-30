@@ -500,15 +500,33 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🤡 Ты не сегодняшний пидор дня, чтобы стрелки переводить. Сиди тихо!")
         return
 
-    # 3. Проверяем КД команды (1 раз в календарную неделю)
-    # Вытаскиваем данные стрелочника из базы
+        # 3. Проверяем КД команды (строго 7 дней с момента последнего использования)
     user_res = supabase.table("users").select("last_switch_date").eq("user_id", user.id).execute()
     if user_res.data and user_res.data[0]["last_switch_date"]:
         last_date = date.fromisoformat(user_res.data[0]["last_switch_date"])
-        # Считаем, сколько дней прошло с последнего понедельника
-        current_week_start = today - timedelta(days=today.weekday())
-        if last_date >= current_week_start:
-            await update.message.reply_text("❌ Ты уже использовал «карту UNO» на этой неделе. Лимит исчерпан!")
+        
+        # Считаем разницу между сегодня и датой использования
+        days_passed = (today - last_date).days
+        
+        if days_passed < 7:
+            days_left = 7 - days_passed
+            
+            # ИСПРАВЛЕНО: Правильно прописали проверку чисел для склонения
+            if days_left == 1:
+                day_word = "день"
+            elif days_left in:
+                day_word = "дня"
+            else:
+                day_word = "дней"
+                
+            await update.message.reply_text(
+                f"❌ Ты уже использовал «карту UNO». \n"
+                f"Твоя новая карта всё еще в процессе доставки! Доступ появится через {days_left} {day_word}."
+            )
+            
+            # 📥 ДОБАВЛЕН СТИКЕР ТАЙМАУТА КД:
+            # Получи ID забавного стикера ожидания (например, часики или фейспалм) и вставь сюда
+            await update.message.reply_sticker(sticker='CAACAgIAAxkBAAEReRpqQ3-pZ9QRME44W1Es3DPWTGUPNAACkAIAAladvQoy0qlxuNTQtTwE')
             return
 
     # 4. Проверяем, тегнул ли он кого-то
@@ -556,7 +574,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🎲 Вероятность успеха всего 5%... Высшие силы взвешивают шансы...",
     ]
     for phrase in intro:
-        # Без parse_mode бот гарантированно отправит сообщение с любым юзернеймом жертвы
+    # Без parse_mode бот гарантированно отправит сообщение с любым юзернеймом жертвы
         await context.bot.send_message(chat_id=chat_id, text=phrase)
         await asyncio.sleep(1.5)
 
@@ -572,13 +590,13 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # 1. Откатываем стату и веса стрелочнику (уменьшаем его реальный счетчик на 1)
         supabase.table("users").update({
             "pidor_count": current_pidor_count - 1, 
-            "pidor_weight": 100.0 
+            "pidor_weight": 90.0 
         }).eq("user_id", user.id).execute()
         
         # 2. Наказываем жертву
         supabase.table("users").update({
             "pidor_count": victim["pidor_count"] + 1,
-            "pidor_weight": 60.0 
+            "pidor_weight": 65.0 
         }).eq("user_id", victim["user_id"]).execute()
 
         # 3. Меняем победителя дня в истории daily_winners
