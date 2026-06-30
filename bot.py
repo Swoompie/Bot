@@ -134,6 +134,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/procents — Узнать свои шансы на победу 🎯\n"
         "/records — Узнать лидеров чата 👀\n"
         "/switch @username — Использовать карту UNO и перевести от себя пидора (Шанс 5%, КД 1 неделя) 🃏\n"
+        "/mystats — Узнать свою статистику и карту UNO 👀\n"
         "/unreg — Выйти из рулетки и удалить данные (нет) 🚪\n"
         "/help — Показать это сообщение еще раз (но на кое хер?)"
     )
@@ -619,6 +620,38 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # 📥 СТИКЕР ПРОВАЛА: Вставь сюда ID стикера, когда карта порвалась (95%)
         await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAEReQpqQ3adafSczLOzJ3WEyKHoQvfvJAACNhUAAjhx-EmeBZwsT5kj1TwE')
 
+async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    today = date.today()
+    
+    # Вытаскиваем данные конкретного юзера из Supabase
+    res = supabase.table("users").select("*").eq("user_id", user.id).execute()
+    if not res.data:
+        await update.message.reply_text("❌ Тебя еще нет в игре! Напиши /register")
+        return
+        
+    player = res.data[0]
+    
+    # Проверяем статус КД карты UNO
+    uno_status = "🟢 ГОТОВА К БОЮ!"
+    if player.get("last_switch_date"):
+        last_date = date.fromisoformat(player["last_switch_date"])
+        days_passed = (today - last_date).days
+        if days_passed < 7:
+            days_left = 7 - days_passed
+            day_word = "день" if days_left == 1 else ("дня" if days_left in [2, 3, 4] else "дней")
+            uno_status = f"🔴 НА ПЕРЕЗАРЯДКЕ (еще {days_left} {day_word})"
+
+    username = f" (@{player['username']})" if player['username'] else ""
+    message = (
+        f"👤 *ЛИЧНОЕ ДОСЬЕ ИГРОКА*:\n\n"
+        f"Участник: *{player['first_name']}{username}*\n"
+        f"🤡 Статус Пидора: {player['pidor_count']} раз(а)\n"
+        f"😎 Статус Красавчика: {player['kras_count']} раз(а)\n\n"
+        f"🃏 *Карта UNO:* {uno_status}"
+    )
+    await update.message.reply_text(message, parse_mode="Markdown")
+
 # ---------------- ЗАПУСК (ВЕБХУК) ----------------
 
 # Переименуем функцию main в асинхронную
@@ -640,6 +673,7 @@ async def main():
     app.add_handler(CommandHandler("procents", procents))
     app.add_handler(CommandHandler("switch", switch))
     app.add_handler(CommandHandler("records", records))
+    app.add_handler(CommandHandler("mystats", my_stats))
 
     if RENDER_URL:
         print("Бот запускается в режиме Webhook на Render...")
