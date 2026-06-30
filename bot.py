@@ -187,6 +187,7 @@ async def unreg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     }).eq("user_id", user.id).execute()
     
     await update.message.reply_text(f"🚪 {user.first_name} ты реально ливнул? Твоя статистика сохранена, так что не прощаемся - дешёвка!")
+    await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAEReQ5qQ3ghClnZvA6qP2Cx0lGm8NIjBwACMlIAAv-BOEl-zu7LwscR5DwE')
 
 async def reset_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Обнуляем счетчики побед и возвращаем базовые веса всем игрокам в Supabase
@@ -201,7 +202,7 @@ async def reset_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     supabase.table("daily_winners").delete().neq("user_id", 0).execute()
     
     await update.message.reply_text("🔄 *Вся статистика обнулена!* Счетчик подопытных сброшен, шансы участников снова равны.", parse_mode="Markdown")
-
+    await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgQAAxkBAAEReRBqQ3htVR15fuIwV3C_4QUWL8_xxQACbhwAAltJOVMTctyzCRD65jwE')
 
 async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
     users = get_users()
@@ -249,6 +250,16 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ---------------- БЛОК ЮБИЛЕЙНЫХ ПОЗДРАВЛЕНИЙ ----------------
     name = winner["first_name"]
 
+    # Мемные стикеры для пидорских юбилеев (вставь сюда 3-5 разных ID)
+    pidor_stickers_pool = [
+        'CAACAgIAAxkBAAEReO5qQ22SmZkDyLqKq0vP6-ELBjPTUAACjnQAAihj2EtnaWFztIKP7DwE',
+        'CAACAgIAAxkBAAERePBqQ27RxFYFJcHGEaZ9kPTDkhO1EAACSk4AAuAKOUlEfzO0OLfimzwE',
+        'CAACAgIAAxkBAAERePJqQ27guzCAFe3IqBMNm9Rsq4tlIwACxVQAAsfrOEk6oSm-WVc9QjwE',
+        'CAACAgIAAxkBAAERePRqQ28nWDjJOWNP0amyxIzJUiJwgAACckYAArr9OUlyV8svBKf4PzwE',
+        'CAACAgIAAxkBAAERePZqQ29RyTAuFB6ryyH6BApiXpfNtgAC3EoAAmsNOUmTv1vWKkSg7TwE',
+        'CAACAgIAAxkBAAERePhqQ29fvKDHMorjySaOzDQ013gcdgACNUoAAoRQOEkf13J-sHIrqTwE'
+    ]
+        
     # Список фраз-шуток для круглых десятков
     jokes = {
         10: f"🎂 *ОГО, 10 РАЗ!* {name}, поздравляем! Первый юбилей на дне. Давай, расскажи всем, что это просто «случайность» и «рандом сломался»! 🤡",
@@ -263,10 +274,19 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
         100: f"🏆 *ЛЕГЕНДА ВЕКА! СТО КРАТНЫЙ ПИДОР!* 🎉💥 {name} полностью прошёл эту жизнь с обратной стороны! Исторический момент, чат, салютуйте главному боссу этой игры! 👑🍾"
     }
 
+    # 1. Отправляем текст (как и было)
+    is_anniversary = False # флаг, чтобы понять, круглое ли число
+    
     if new_count == 5:
         await update.message.reply_text(f"🎉 *РАЗОГРЕВ ОКОНЧЕН!* {name} косячит уже 5-й раз! Начало положено, но до клуба великих данжн мастеров далеко! 🎖", parse_mode="Markdown")
+        is_anniversary = True
     elif new_count in jokes:
         await update.message.reply_text(jokes[new_count], parse_mode="Markdown")
+        is_anniversary = True
+         # 2. Если это юбилей (5 или круглый десяток) — кидаем СЛУЧАЙНЫЙ стикер!
+    if is_anniversary:
+        random_sticker = random.choice(pidor_stickers_pool)
+        await context.bot.send_sticker(chat_id=chat_id, sticker=random_sticker)
 
 async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     users = get_users()
@@ -313,6 +333,16 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ---------------- БЛОК ЮБИЛЕЙНЫХ ПОЗДРАВЛЕНИЙ С ИЗДЁВКОЙ ----------------
     name = winner["first_name"]
+    
+    # Мемные стикеры для пидорских юбилеев (вставь сюда 3-5 разных ID)
+    kras_stickers_pool = [
+        'CAACAgIAAxkBAAERePpqQ3C50Eqg_2plBXsHEFEtGOtmnQACk1QAAgmZ4EkPKsG3ATUGIDwE',
+        'CAACAgIAAxkBAAERePxqQ3FkKQTrDt2Kt3E3v09Q90uUzgAC5zMAAvyF0EhRH0ZM6KsQGjwE',
+        'CAACAgIAAxkBAAEReP5qQ3GP592jnDm3vTPxPH5LqTK3rgACrhQAAo4n0EqxFZIn-u6dajwE',
+        'CAACAgIAAxkBAAEReQABakNxn4mZ1mhxrJf0em63Qj9qEb8AAs4ZAAKJEBBKhq0wFniF8sA8BA',
+        'CAACAgIAAxkBAAEReQJqQ3HbH2OkT4mcPqJovAXsFJh5bQAClyAAAt88OUtsjjyKWQ5bXjwE',
+        'CAACAgIAAxkBAAEReQRqQ3Ldb-x4CbDRQhozMvG6zY9vqQACagADJeuTHyg3EZuaMZFnPAQ'
+    ]
 
     jokes = {
         10: f"👑 *ОГО, 10 РАЗ!* {name}, аккуратнее на поворотах, а то нимб упадёт и ноги отдавит! Чат, расступаемся, тут идёт мисс/мистер Обаяние! 📸",
@@ -323,14 +353,24 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         60: f"🎰 *60 ПОБЕД!* {name} официально признан главным нарциссом этого чата. Датчики привлекательности сгорели от такого пафоса! ⚡️",
         70: f"🛰 *КОСМИЧЕСКИЙ КРАСАВЧИК!* 70-й раз! {name}, твоё великолепие ослепляет даже спутники наблюдения! Надень маску, побереги наши глаза! 🌌",
         80: f"🛡 *80 РАЗ! СВЕРХЛЮДИ СРЕДИ НАС!* К {name} уже выстроилась очередь за автографами. Не забудь упомянуть этот чат, когда поедешь на Мисс/Мистер Вселенная! 🦾",
-        90: f"🏛 *90 ПОБЕД!* {name} одной ногой в зале славы великих Чэдов. Ещё чуть-чуть, и твоё лицо напечатают на обложках всех журналов! 🧛‍♂️",
+        90: f"🏛 *90 ПОБЕД!* {name} одной ногой в зале славы великих Победителей. Ещё чуть-чуть, и твоё лицо напечатают на обложках всех журналов! 🧛‍♂️",
         100: f"👑🍾 *ЛЕГЕНДА ВЕКА! СТОКРАТНЫЙ КРАСАВЧИК!* 🎉💥 {name} официально прошёл эту игру! 100 побед! Абсолютный рекордсмен, икона стиля и босс этого чата! Салют чемпиону! 🏆🌟"
     }
 
+     # 1. Отправляем текст (как и было)
+    is_anniversary = False # флаг, чтобы понять, круглое ли число
+    
     if new_count == 5:
-        await update.message.reply_text(f"🎉 *5 ПОБЕД!* {name} вступает в клуб самовлюбленных! Начало положено, но до настоящих Чэдов тебе ещё пилить и пилить! 🎖", parse_mode="Markdown")
+        await update.message.reply_text(f"🎉 *5 ПОБЕД!* {name} вступает в клуб самовлюбленных! Начало положено, но до настоящих победителей тебе ещё пилить и пилить! 🎖", parse_mode="Markdown")
+        is_anniversary = True
     elif new_count in jokes:
         await update.message.reply_text(jokes[new_count], parse_mode="Markdown")
+        is_anniversary = True
+        
+         # 2. Если это юбилей (5 или круглый десяток) — кидаем СЛУЧАЙНЫЙ стикер!
+    if is_anniversary:
+        random_sticker = random.choice(kras_stickers_pool)
+        await context.bot.send_sticker(chat_id=chat_id, sticker=random_sticker)
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Функция get_users() уже возвращает только тех, у кого is_active == True
@@ -547,6 +587,8 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"👑 {user.first_name} полностью очищен от подозрений.\n\n"
             f"🤡 Новый официальный ПИДОР ДНЯ — {victim['first_name']} ({target_username})! Смирись с этим!"
         )
+         # 📥 СТИКЕР УСПЕХА: Вставь сюда ID стикера, когда карта сработала (5%)
+        await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAEReQxqQ3c1Ul6X4NVVPO-Fd7SdNeiqIgACx04AAnJSgEuFrKam1iO89TwE')
     else:
         # НЕУДАЧА (95%): Стрела сорвалась, вес возвращается к 100
         supabase.table("users").update({"pidor_weight": 100.0}).eq("user_id", user.id).execute()
@@ -557,6 +599,8 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Завтра у тебя будут большие шансы выпасть снова! 🤡\n"
             f"p.s. через недельку, можешь попробовать снова (за выдачу новой карты, 50р на карту)"
         )
+        # 📥 СТИКЕР ПРОВАЛА: Вставь сюда ID стикера, когда карта порвалась (95%)
+        await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAEReQpqQ3adafSczLOzJ3WEyKHoQvfvJAACNhUAAjhx-EmeBZwsT5kj1TwE')
 
 # ---------------- ЗАПУСК (ВЕБХУК) ----------------
 
