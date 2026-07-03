@@ -26,10 +26,6 @@ print(f"------------------------")
 # Инициализация
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-
-# Инициализация клиента Supabase теперь будет работать через скрытые переменные
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-
 # ---------------- ФРАЗЫ ----------------
 
 PIDOR_PHRASES = [
@@ -99,28 +95,42 @@ def weighted_choice(users, column_name):
             return user
 
 
-def redistribute_weights(winner_id, column_name):
-    users = get_users()
-    winner = next((u for u in users if u["user_id"] == winner_id), None)
-    if not winner:
+def redistribute_weights(winner_id, weight_column):
+    # 1. Получаем всех активных пользователей из базы
+    users = supabase.table("users").select("*").eq("is_active", True).execute().data
+    if not users:
         return
 
-    current_weight = winner[column_name]
-    decrease = 40
+    # Рассчитываем штраф для сегодняшнего победителя
+    for user in users:
+        if user["user_id"] == winner_id:
+            current_weight = user[weight_column]
+            # Победитель получает штраф -40.0, но не ниже капа 60.0
+            new_winner_weight = max(70.0, current_weight - 30.0)
+            supabase.table("users").update({weight_column: new_winner_weight}).eq("user_id", winner_id).execute()
+            break
 
-    if current_weight <= 60:
-        return
+    # 2. Пересчитываем веса для ВСЕХ ОСТАЛЬНЫХ участников розыгрыша
+    for user in users:
+        if user["user_id"] == winner_id:
+            continue  # Пропускаем сегодняшнего победителя
 
-    new_weight = current_weight - decrease
-    # Обновляем вес победителя в облаке
-    supabase.table("users").update({column_name: new_weight}).eq("user_id", winner_id).execute()
+        current_weight = user[weight_column]
 
-    others = [u for u in users if u["user_id"] != winner_id]
-    if others:
-        bonus = decrease / len(others)
-        for user in others:
-            old_weight = user[column_name]
-            supabase.table("users").update({column_name: old_weight + bonus}).eq("user_id", user["user_id"]).execute()
+        if current_weight < 100.0:
+            # Если игрок в зоне защиты (недавно выигрывал) — плавно возвращаем к норме на +4.0
+            new_weight = min(100.0, current_weight + 4.0)
+        else:
+            # Если игрок НЕ выигрывал сегодня — даем ему микро-прирост +1.0 к весу (шанс растет).
+            # Но если его вес за прошлые дни уже улетел слишком высоко (например, выше 120.0),
+            # система плавно сдувает его излишки на -2.0 обратно к балансу.
+            if current_weight > 120.0:
+                new_weight = max(100.0, current_weight - 2.0)
+            else:
+                new_weight = current_weight + 1.0
+
+        # Обновляем значение веса конкретного участника в Supabase
+        supabase.table("users").update({weight_column: new_weight}).eq("user_id", user["user_id"]).execute()
 
 # ---------------- КОМАНДЫ ----------------
 
@@ -509,8 +519,8 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Считаем разницу между сегодня и датой использования
         days_passed = (today - last_date).days
         
-        if days_passed < 7:
-            days_left = 7 - days_passed
+        if days_passed < 6:
+            days_left = 6 - days_passed
             # Склоняем слово "день" в зависимости от остатка
             if days_left == 1:
                 day_word = "день"
