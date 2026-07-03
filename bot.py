@@ -105,7 +105,7 @@ def redistribute_weights(winner_id, weight_column):
     for user in users:
         if user["user_id"] == winner_id:
             current_weight = user[weight_column]
-            # Победитель получает штраф -40.0, но не ниже капа 60.0
+            # Победитель получает штраф -30.0, но не ниже капа 70.0
             new_winner_weight = max(70.0, current_weight - 30.0)
             supabase.table("users").update({weight_column: new_winner_weight}).eq("user_id", winner_id).execute()
             break
@@ -118,8 +118,8 @@ def redistribute_weights(winner_id, weight_column):
         current_weight = user[weight_column]
 
         if current_weight < 100.0:
-            # Если игрок в зоне защиты (недавно выигрывал) — плавно возвращаем к норме на +4.0
-            new_weight = min(100.0, current_weight + 4.0)
+            # Если игрок в зоне защиты (недавно выигрывал) — плавно возвращаем к норме на +3.0
+            new_weight = min(100.0, current_weight + 3.0)
         else:
             # Если игрок НЕ выигрывал сегодня — даем ему микро-прирост +1.0 к весу (шанс растет).
             # Но если его вес за прошлые дни уже улетел слишком высоко (например, выше 120.0),
