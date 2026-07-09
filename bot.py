@@ -521,8 +521,8 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # 2. Проверяем КД команды (6 дней)
     user_res = supabase.table("users").select("last_switch_date").eq("user_id", user.id).execute()
-    if user_res.data and user_res.data[0]["last_switch_date"]:
-        last_date = date.fromisoformat(user_res.data[0]["last_switch_date"])
+    if user_res.data and user_res.data["last_switch_date"]:
+        last_date = date.fromisoformat(user_res.data["last_switch_date"])
         days_passed = (today - last_date).days
         
         if days_passed < 6:
@@ -560,6 +560,9 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🎭 Переводить карту на самого себя? Оригинально, но нет.")
         return
 
+    # Проверяем, является ли это ВТОРОЙ попыткой перевода
+    is_retry_attempt = context.user_data.get("switch_retry", False)
+    
     # 🔥 УМНАЯ ПРОВЕРКА: Кем является жертва сегодня?
     kras_today_res = supabase.table("daily_winners").select("*").eq("game_date", str(today)).eq("role", "krasavchik").execute()
     
@@ -568,17 +571,23 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if kras_today_res.data and kras_today_res.data[0]["user_id"] == victim["user_id"]:
         is_robbing_chad = True
 
-    # 4. ВЫДАЕМ РАЗНЫЙ ИНТРО-ТЕКСТ В ЗАВИСИМОСТИ ОТ СТАТУСА ЖЕРТВЫ
+   # 4. ВЫДАЕМ ИНТРО-ТЕКСТ
     if is_robbing_chad:
         intro = [
             f"👑 КРАЖА ВЕКА! Пидор дня {user.first_name} активирует карту «UNO» против Красавчика {target_username}!",
-            "🎲 Это Королевское Ограбление! Шанс 5%. Если сработает, титулы поменяются, а карта ОСТАНЕТСЯ ЦЕЛОЙ! 🔥",
+            "🎲 Это Королевское Ограбление! Шанс 5%. Если сработает, титулы поменяются, а карта ОСТАНЕТСЯ ЦЕЛОЙ! Бывает только раз! 🔥",
         ]
     else:
-        intro = [
-            f"🃏 МЕМНЫЙ РЕВЁРС! {user.first_name} активирует карту «UNO» и пытается скинуть клеймо Пидора на {target_username}!",
-            "🎲 Шанс перевода 5%... Высшие силы взвешивают шансы...",
-        ]
+        if is_retry_attempt:
+            intro = [
+                f"🔥 ВТОРОЙ ШАНС! {user.first_name} трясущимися руками активирует карту «UNO» ПОВТОРНО против мирного {target_username}!",
+                "🎲 На этот раз боги шутить не будут. Вероятность 5%. Либо пан, либо пропал...",
+            ]
+        else:
+            intro = [
+                f"🃏 МЕМНЫЙ РЕВЁРС! {user.first_name} активирует карту «UNO» и пытается скинуть клеймо Пидора на {target_username}!",
+                "🎲 Шанс перевода 5%... Высшие силы взвешивают шансы...",
+            ]
 
     for phrase in intro:
         await context.bot.send_message(chat_id=chat_id, text=phrase)
@@ -592,30 +601,29 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     current_user = current_user_data[0] if current_user_data else None
 
     if is_success and current_user:
-        # ====================================================================
-        # 🎉🎉🎉 ВЫПАЛ СЧАСТЛИВЫЙ ШАНС 5% (КАРТА СРАБОТАЛА!) 🎉🎉🎉
-        # ====================================================================
+        # ================= 🎉🎉🎉 УСПЕШНЫЙ ПЕРЕВОД (5%) 🎉🎉🎉 =================
+        context.user_data.pop("switch_retry", None) # очищаем память ретрая
         
         if is_robbing_chad:
             # 👑 ПУТЬ А: УСПЕШНОЕ ОГРАБЛЕНИЕ КРАСАВЧИКА (КД НЕ ЗАПИСЫВАЕМ!)
-            
-            # Стрелочник: минус пидор, плюс красавчик, веса сбрасываем до 95/80
+                        
+            # 1. Обновляем Стрелочника (минус пидор, плюс красавчик, веса 95/80)
             supabase.table("users").update({
-                "pidor_count": max(0, current_user["pidor_count"] - 1),
-                "kras_count": current_user["kras_count"] + 1,
-                "pidor_weight": 95.0,
+                "pidor_count": max(0, current_user["pidor_count"] - 1), 
+                "kras_count": current_user["kras_count"] + 1, 
+                "pidor_weight": 95.0, 
                 "kras_weight": 80.0
             }).eq("user_id", user.id).execute()
-
-            # Жертва (экс-красавчик): минус красавчик, плюс пидор, веса 70/70
+            
+            # 2. Обновляем Жертву (минус красавчик, плюс пидор, веса 70/70)
             supabase.table("users").update({
-                "kras_count": max(0, victim["kras_count"] - 1),
-                "pidor_count": victim["pidor_count"] + 1,
-                "pidor_weight": 70.0,
+                "kras_count": max(0, victim["kras_count"] - 1), 
+                "pidor_count": victim["pidor_count"] + 1, 
+                "pidor_weight": 70.0, 
                 "kras_weight": 70.0
             }).eq("user_id", victim["user_id"]).execute()
-
-            # Перебиваем историю сегодняшнего дня в daily_winners
+            
+            # 3. Перебиваем историю сегодняшнего дня в daily_winners строго по ролям
             supabase.table("daily_winners").update({"user_id": victim["user_id"]}).eq("game_date", str(today)).eq("role", "pidor").execute()
             supabase.table("daily_winners").update({"user_id": user.id}).eq("game_date", str(today)).eq("role", "krasavchik").execute()
 
@@ -627,43 +635,96 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             await update.message.reply_sticker(sticker='CAACAgIAAxkBAAERfwtqSi0WKXA0-slyXjuDMUAC14PGkAAC6BMAAp7K8UkQAAGdV1VM7UI8BA')
 
-        else:
-            # 🃏 ПУТЬ Б: УСПЕШНЫЙ ОБЫЧНЫЙ ПЕРЕВОД НА МИРНОГО (ЗАПИСЫВАЕМ КД)
+                else:
+            # 🃏 ПУТЬ Б: УСПЕШНЫЙ ОБЫЧНЫЙ ПЕРЕВОД НА МИРНОГО (Записываем КД)
+            # Записываем стрелочнику дату использования карты UNO
             supabase.table("users").update({"last_switch_date": str(today)}).eq("user_id", user.id).execute()
             
-            supabase.table("users").update({"pidor_count": max(0, current_user["pidor_count"] - 1), "pidor_weight": 85.0}).eq("user_id", user.id).execute()
-            supabase.table("users").update({"pidor_count": victim["pidor_count"] + 1, "pidor_weight": 80.0}).eq("user_id", victim["user_id"]).execute()
+            # Обновляем Стрелочника: минус позор, и даем ему вес 70.0 
+            supabase.table("users").update({
+                "pidor_count": max(0, current_user["pidor_count"] - 1), 
+                "pidor_weight": 70.0
+            }).eq("user_id", user.id).execute()
+            
+            # Обновляем Жертву: плюс позор, и даем штрафной вес 70.0
+            supabase.table("users").update({
+                "pidor_count": victim["pidor_count"] + 1, 
+                "pidor_weight": 70.0
+            }).eq("user_id", victim["user_id"]).execute()
+            
+            # Точечно перебиваем историю сегодняшнего дня в daily_winners
             supabase.table("daily_winners").update({"user_id": victim["user_id"]}).eq("game_date", str(today)).eq("role", "pidor").execute()
 
-            await update.message.reply_text(
-                f"💥 СТРЕЛА УСПЕШНО ПЕРЕВЕДЕНА! Магия 5% сработала!\n\n"
-                f"👑 {user.first_name} полностью очищен от подозрений.\n"
-                f"🤡 Новый официальный ПИДОР ДНЯ — {victim['first_name']} ({target_username})! Смирись!"
-            )
-            await update.message.reply_sticker(sticker='CAACAgIAAxkBAAEReQxqQ3c1Ul6X4NVVPO-Fd7SdNeiqIgACx04AAnJSgEuFrKam1iO89TwE')
+            # --- РАЗВЕТВЛЕНИЕ ТЕКСТА И СТИКЕРОВ В ЗАВИСИМОСТИ ОТ ПОПЫТКИ ---
+            if is_retry_attempt:
+                # Если перевод удался СО ВТОРOГO РАЗА (Второй шанс выстрелил)
+                await update.message.reply_text(
+                    f"🦊 *КАК ОН ЭТО ДЕЛАЕТ?! ХИТРЫЙ ЛИС В ДЕЛЕ!* 🦊\n\n"
+                    f"Первая карта порвалась, но со второго шанса {user.first_name} совершает невозможное и выбивает 5%!\n"
+                    f"👑 Ты полностью очищен от подозрений, легенда кубиков!\n\n"
+                    f"🤡 А вот {victim['first_name']} ({target_username}) официально становится ПИДOPOМ ДНЯ со второй подачи! Отлетай!",
+                    parse_mode="Markdown"
+                )
+                await update.message.reply_sticker(sticker='CAACAgIAAxkBAAERg8xqT1rvV4e9QOkd5krbAdwHGMbORQACrB8AAi-rqEswnXHdk_VAETwE')
+            else:
+                # Стандартный перевод С ПЕРВОГО РАЗА
+                await update.message.reply_text(
+                    f"💥 *КАРТА ПЕРЕВЕДЕНА!* Магия 5% сработала!\n\n"
+                    f"👑 {user.first_name} полностью очищен от подозрений.\n"
+                    f"🤡 Новый официальный ПИДОР ДНЯ — {victim['first_name']} ({target_username})! Смирись!",
+                    parse_mode="Markdown"
+                )
+                await update.message.reply_sticker(sticker='CAACAgIAAxkBAAEReQxqQ3c1Ul6X4NVVPO-Fd7SdNeiqIgACx04AAnJSgEuFrKam1iO89TwE')
+            
+            # После успешного исхода в любом случае очищаем пометку ретрая из памяти бота
+            context.user_data.pop("switch_retry", None)
 
     else:
-        # ====================================================================
-        # ❌❌❌ ВЫПАЛ ПРОВАЛ 95% (КАРТА СГОРЕЛА И УШЛА НА КД) 🎉🎉🎉
-        # ====================================================================
-        # При любом провале карта тратится, записываем кулдаун в базу
-        supabase.table("users").update({"last_switch_date": str(today), "pidor_weight": 100.0}).eq("user_id", user.id).execute()
-
+        # ================= ❌❌❌ ВЫПАЛ ПРОВАЛ 95% (КАРТА СГОРЕЛА ИЛИ ОСЕЧКА) =================
         if is_robbing_chad:
-            # Провал при краже Красавчика
+            # На Красавчика только ОДНА попытка. Сразу вешаем КД на 6 дней за провал!
+            supabase.table("users").update({"last_switch_date": str(today), "pidor_weight": 100.0}).eq("user_id", user.id).execute()
             await update.message.reply_text(
-                f"❌ ТРЮК ПРОВАЛЕН! Королевская карта UNO СГОРЕЛА ВО ВРЕМЯ КРАЖИ! \n\n"
-                f"{user.first_name}, за попытку ограбить Красавчика боги рандома изымают твою карту на 6 дней.\n"
-                f"Титул Пидора дня остается на тебе, а завтра твои шансы — максимальные! 🤡"
+                f"❌ ТРЮК ПРОВАЛЕН! Королевская карта UNO СГОРЕЛА ВО ВРЕМЯ ПОПЫТКИ КРАЖИ! \n\n"
+                f"{user.first_name}, попытка ограбить Красавчика провалилась, боги рандома изымают карту на 6 дней.\n"
+                f"Титул Пидора дня остается на тебе! 🤡"
             )
-            await update.message.reply_sticker(sticker='CAACAgIAAxkBAAERfw1qSi1bN8j62aNrBuvzS9i0R_vgFwACWEYAAhwNyEpsTxdCfH_ZTzwE')
-        else:
-            # Провал при обычном переводе
-            await update.message.reply_text(
-                f"❌ КАРТА UNO ПОРВАЛАСЬ! {user.first_name}, стрела сорвалась и полетела обратно в тебя.\n\n"
-                f"Титул остается на тебе. Карта уходит на перезарядку на 6 дней. 🤡"
-            )
+            # Вставь сюда ID стикера провала при краже красавчика (или оставь обычный провал)
             await update.message.reply_sticker(sticker='CAACAgIAAxkBAAEReQpqQ3adafSczLOzJ3WEyKHoQvfvJAACNhUAAjhx-EmeBZwsT5kj1TwE')
+            
+        else:
+            # Провал при обычном переводе на мирного (Включается логика Второго Шанса)
+            if is_retry_attempt:
+                # Вторая попытка на мирного провалилась — сжигаем карту окончательно
+                supabase.table("users").update({"last_switch_date": str(today), "pidor_weight": 85.0}).eq("user_id", user.id).execute()
+                context.user_data.pop("switch_retry", None)
+
+                await update.message.reply_text(
+                    f"💀 ПОЛНОЕ ФИАСКО, СТРЕЛОЧНИК! Второй шанс тоже провален! \n\n"
+                    f"{user.first_name}, твоя карта UNO окончательно ПРЕВРАТИЛАСЬ В ПЕПЕЛ. "
+                    f"Кулдаун 6 дней активирован. Завтра твои шансы максимальны! 🤡"
+                )
+                await update.message.reply_sticker(sticker='CAACAgIAAxkBAAERg9tqT2Lb7EssiCPdH7XeEz1W5sbVswAC6S8AApkAAYhJDcx-Vp6-Sco8BA')
+            else:
+                # Первый провал на мирного — крутим скрытые 5% на "Второй Шанс"
+                has_second_chance = random.randint(1, 100) <= 5
+                
+                if has_second_chance:
+                    context.user_data["switch_retry"] = True # включаем триггер повтора
+                    await update.message.reply_text(
+                        f"⚡️ ОПА, ОСЕЧКА... ИЛИ НЕТ?! ⚡️\n\n"
+                        f"{user.first_name}, твоя карта UNO задымилась, но боги рандома дали тебе **ВТОРОЙ ШАНС**! "
+                        f"Кулдаун НЕ активирован! Быстро пиши команду `/switch` ещё раз на любую мирную цель, пока лазейка не закрылась! 🃏"
+                    )
+                    await update.message.reply_sticker(sticker='CAACAgIAAxkBAAERg85qT110qgTm1RJWyqRuKm0QwbCoLwAC9B4AAiNcOEtYh2FNKYLHdDwE')
+                else:
+                    # Стандартный провал на мирного с первого раза (в 95% случаев)
+                    supabase.table("users").update({"last_switch_date": str(today), "pidor_weight": 90.0}).eq("user_id", user.id).execute()
+                    await update.message.reply_text(
+                        f"❌ КАРТА UNO ПОРВАЛАСЬ! {user.first_name}, перевод сорвался и полетел обратно в тебя.\n\n"
+                        f"Титул остается на тебе. Карта уходит на перезарядку на 6 дней. 🤡"
+                    )
+                    await update.message.reply_sticker(sticker='CAACAgIAAxkBAAEReQpqQ3adafSczLOzJ3WEyKHoQvfvJAACNhUAAjhx-EmeBZwsT5kj1TwE')
 
 async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
