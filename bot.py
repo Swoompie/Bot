@@ -635,21 +635,21 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             await update.message.reply_sticker(sticker='CAACAgIAAxkBAAERfwtqSi0WKXA0-slyXjuDMUAC14PGkAAC6BMAAp7K8UkQAAGdV1VM7UI8BA')
 
-                else:
+        else:
             # 🃏 ПУТЬ Б: УСПЕШНЫЙ ОБЫЧНЫЙ ПЕРЕВОД НА МИРНОГО (Записываем КД)
             # Записываем стрелочнику дату использования карты UNO
             supabase.table("users").update({"last_switch_date": str(today)}).eq("user_id", user.id).execute()
             
-            # Обновляем Стрелочника: минус позор, и даем ему вес 70.0 
+            # Обновляем Стрелочника: минус позор, и даем ему вес 85.0 
             supabase.table("users").update({
                 "pidor_count": max(0, current_user["pidor_count"] - 1), 
-                "pidor_weight": 70.0
+                "pidor_weight": 85.0
             }).eq("user_id", user.id).execute()
             
-            # Обновляем Жертву: плюс позор, и даем штрафной вес 70.0
+            # Обновляем Жертву: плюс позор, и даем штрафной вес 80.0
             supabase.table("users").update({
                 "pidor_count": victim["pidor_count"] + 1, 
-                "pidor_weight": 70.0
+                "pidor_weight": 80.0
             }).eq("user_id", victim["user_id"]).execute()
             
             # Точечно перебиваем историю сегодняшнего дня в daily_winners
