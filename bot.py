@@ -2,17 +2,20 @@ print("СТАРТ БОТА")
 import os
 import random
 import asyncio
+import json
 from datetime import date
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, ConversationHandler, MessageHandler, filters
 from supabase import create_client, Client
+from io import BytesIO
+
+ADMIN_TG_ID = 646119167
 
 # Настройка Supabase и бота
 TOKEN = os.getenv("BOT_TOKEN")
 RENDER_URL = os.getenv("RENDER_EXTERNAL_URL")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # ВРЕМЕННЫЙ ЛОГ ДЛЯ ПРОВЕРКИ ПЕРЕМЕННЫХ
 print(f"--- ПРОВЕРКА ОБЛАКА ---")
@@ -23,8 +26,49 @@ if SUPABASE_KEY:
     print(f"Первые 5 символов ключа: {SUPABASE_KEY[:5]}")
 print(f"------------------------")
 
-# Инициализация
+# Инициализация 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# ---------------- КОД ТИХОГО БЭКАПА ----------------
+async def silent_backup(context: ContextTypes.DEFAULT_TYPE):
+    try:
+        # Выкачиваем актуальные таблицы из Supabase
+        users_data = supabase.table("users").select("*").execute().data
+        winners_data = supabase.table("daily_winners").select("*").execute().data
+        
+        # Собираем их в один словарь
+        backup_dict = {
+            "backup_date": str(date.today()),
+            "tables": {
+                "users": users_data,
+                "daily_winners": winners_data
+            }
+        }
+        
+        # Упаковываем в JSON-файл прямо в оперативной памяти
+        json_data = json.dumps(backup_dict, ensure_ascii=False, indent=4)
+        file_stream = BytesIO(json_data.encode('utf-8'))
+        file_stream.name = f"backup_{date.today()}.json"
+        
+        # Отправляем файл строго админу в личку (в чате этого никто не увидит)
+        await context.bot.send_document(
+            chat_id=ADMIN_TG_ID,
+            document=file_stream,
+            caption=f"📦 *Ежедневный фоновый слепок базы*\n📅 Дата: {date.today()}\n\nВсе данные успешно зарезервированы!",
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        print(f"❌ Ошибка фонового бэкапа: {e}")
+        
+async def manual_backup(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Доступ только для тебя!
+    if update.effective_user.id != ADMIN_TG_ID:
+        await update.message.reply_text("🤡 Куда руки тянешь? Эта команда только для Создателя бота!")
+        return
+        
+    await update.message.reply_text("⏳ Формирую слепок базы данных вручную, секунду...")
+    # Просто вызываем уже готовую логику бэкапа и шлем в текущий чат (или личку)
+    await silent_backup(context)
 
 # ---------------- ФРАЗЫ ----------------
 
@@ -394,6 +438,12 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if is_anniversary:
         random_sticker = random.choice(kras_stickers_pool)
         await context.bot.send_sticker(chat_id=chat_id, sticker=random_sticker)
+        
+    # --- ТИХИЙ БЭКАП ПОСЛЕ ИГРЫ ---
+    # Бот проверяет: если команду /run нажал админ, то бот молча шлет ему бэкап в личку
+    if update.effective_user.id == ADMIN_TG_ID:
+        # Запускаем фоновую задачу, чтобы она не тормозила отправку сообщений в чат
+        context.application.create_task(silent_backup(context))
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Функция get_users() уже возвращает только тех, у кого is_active == True
@@ -780,6 +830,7 @@ async def main():
     app.add_handler(CommandHandler("switch", switch))
     app.add_handler(CommandHandler("records", records))
     app.add_handler(CommandHandler("mystats", my_stats))
+    app.add_handler(CommandHandler("backup", manual_backup))
 
     if RENDER_URL:
         print("Бот запускается в режиме Webhook на Render...")
