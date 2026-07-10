@@ -254,25 +254,30 @@ async def unreg(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_sticker(sticker='CAACAgIAAxkBAAEReQ5qQ3ghClnZvA6qP2Cx0lGm8NIjBwACMlIAAv-BOEl-zu7LwscR5DwE')
 
 async def reset_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # ИСПРАВЛЕНО: Полная защита базы. Доступ только для тебя!
+    if update.effective_user.id != ADMIN_TG_ID:
+        await update.message.reply_text("🤡 Куда руки тянешь? Сбрасывать казино может только Создатель бота!")
+        return
+
     # Обнуляем счетчики побед и возвращаем базовые веса всем игрокам в Supabase
     supabase.table("users").update({
         "pidor_count": 0, 
         "kras_count": 0, 
         "pidor_weight": 100.0, 
         "kras_weight": 100.0
-    }).neq("user_id", 0).execute()  # .neq("user_id", 0) хак, чтобы обновить вообще всех юзеров разом
+    }).neq("user_id", 0).execute()
     
     # Полностью очищаем таблицу "победителей"
     supabase.table("daily_winners").delete().neq("user_id", 0).execute()
     
     await update.message.reply_text("🔄 *Вся статистика обнулена!* Счетчик подопытных сброшен, шансы участников снова равны.", parse_mode="Markdown")
-    
-    # ИСПРАВЛЕНО: Используем reply_sticker вместо send_sticker, чтобы бот не падал из-за отсутствия chat_id
     await update.message.reply_sticker(sticker='CAACAgQAAxkBAAEReRBqQ3htVR15fuIwV3C_4QUWL8_xxQACbhwAAltJOVMTctyzCRD65jwE')
 
-
 async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    users = get_users()
+    # 1. СРАЗУ ИСПРАВЛЕНО: Вытаскиваем только АКТИВНЫХ игроков (is_active == True)
+    all_users = get_users()
+    users = [u for u in all_users if u.get("is_active", True)]
+    
     if len(users) < 1:
         await update.message.reply_text("В боте еще никто не зарегистрировался. Напишите /register")
         return
@@ -291,33 +296,28 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # --- ИСПРАВЛЕННЫЙ БЛОК ЗАСТАВОК ---
-    # Отправляем фразы как обычные сообщения в чат, БЕЗ реплая на команду
     chat_id = update.effective_chat.id
     for phrase in random.sample(PIDOR_PHRASES, len(PIDOR_PHRASES)):
         await context.bot.send_message(chat_id=chat_id, text=phrase)
         await asyncio.sleep(1)
     # ----------------------------------
 
-    # Выбираем победителя, используя имя колонки весов из Supabase
+    # Выбираем победителя
     winner = weighted_choice(filtered_users, "pidor_weight")
-
-    # Рассчитываем новое количество побед
     new_count = winner["pidor_count"] + 1
 
-    # Обновляем счетчик пидоров в Supabase
+    # Обновляем счетчик в Supabase
     supabase.table("users").update({"pidor_count": new_count}).eq("user_id", winner["user_id"]).execute()
     
     redistribute_weights(winner["user_id"], "pidor_weight")
     save_daily_winner("pidor", winner["user_id"])
 
     username = f" (@{winner['username']})" if winner['username'] else ""
-    # Финальный вердикт делаем красивым ответом (реплаем) на самое первое сообщение пользователя
     await update.message.reply_text(f"🤡 Пидор дня — {winner['first_name']}{username}")
 
     # ---------------- БЛОК ЮБИЛЕЙНЫХ ПОЗДРАВЛЕНИЙ ----------------
     name = winner["first_name"]
 
-    # Мемные стикеры для пидорских юбилеев (вставь сюда 3-5 разных ID)
     pidor_stickers_pool = [
         'CAACAgIAAxkBAAEReO5qQ22SmZkDyLqKq0vP6-ELBjPTUAACjnQAAihj2EtnaWFztIKP7DwE',
         'CAACAgIAAxkBAAERePBqQ27RxFYFJcHGEaZ9kPTDkhO1EAACSk4AAuAKOUlEfzO0OLfimzwE',
@@ -327,7 +327,7 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
         'CAACAgIAAxkBAAERePhqQ29fvKDHMorjySaOzDQ013gcdgACNUoAAoRQOEkf13J-sHIrqTwE'
     ]
         
-    # Список фраз-шуток для круглых десятков
+    # ИСПРАВЛЕНО: Теперь словарь jokes создается строго ПОСЛЕ того, как объявлена переменная name
     jokes = {
         10: f"🎂 *ОГО, 10 РАЗ!* {name}, поздравляем! Первый юбилей на дне. Давай, расскажи всем, что это просто «случайность» и «рандом сломался»! 🤡",
         20: f"👑 *УЖЕ 20 ПОБЕД!* {name} официально переходит в Высшую лигу сомнительных парней. Тебе уже пора выдавать именную корону из картона и скотча! 🎪",
@@ -341,8 +341,7 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
         100: f"🏆 *ЛЕГЕНДА ВЕКА! СТО КРАТНЫЙ ПИДОР!* 🎉💥 {name} полностью прошёл эту жизнь с обратной стороны! Исторический момент, чат, салютуйте главному боссу этой игры! 👑🍾"
     }
 
-    # 1. Отправляем текст (как и было)
-    is_anniversary = False # флаг, чтобы понять, круглое ли число
+    is_anniversary = False
     
     if new_count == 5:
         await update.message.reply_text(f"🎉 *РАЗОГРЕВ ОКОНЧЕН!* {name} косячит уже 5-й раз! Начало положено, но до клуба великих данжн мастеров далеко! 🎖", parse_mode="Markdown")
@@ -350,13 +349,17 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif new_count in jokes:
         await update.message.reply_text(jokes[new_count], parse_mode="Markdown")
         is_anniversary = True
-         # 2. Если это юбилей (5 или круглый десяток) — кидаем СЛУЧАЙНЫЙ стикер!
+         
+    # ИСПРАВЛЕНО: Выровнены отступы блока отправки юбилейного стикера
     if is_anniversary:
         random_sticker = random.choice(pidor_stickers_pool)
         await context.bot.send_sticker(chat_id=chat_id, sticker=random_sticker)
 
 async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    users = get_users()
+    # 1. ИСПРАВЛЕНО: Вытаскиваем только АКТИВНЫХ игроков (is_active == True)
+    all_users = get_users()
+    users = [u for u in all_users if u.get("is_active", True)]
+    
     if len(users) < 1:
         await update.message.reply_text("В боте еще никто не зарегистрировался. Напишите /register")
         return
@@ -375,17 +378,13 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # --- ИСПРАВЛЕННЫЙ БЛОК ЗАСТАВОК ---
-    # Отправляем фразы как обычные сообщения в чат, БЕЗ реплая на команду
     chat_id = update.effective_chat.id
     for phrase in random.sample(KRAS_PHRASES, len(KRAS_PHRASES)):
         await context.bot.send_message(chat_id=chat_id, text=phrase)
         await asyncio.sleep(1)
-    # ----------------------------------
-
-    # Выбираем победителя по весам красавчика
+    
+    # Выбираем победителя по весах красавчика
     winner = weighted_choice(filtered_users, "kras_weight")
-
-    # Считаем новое значение
     new_count = winner["kras_count"] + 1
 
     # Обновляем счетчик красавчиков в Supabase
@@ -395,7 +394,6 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     save_daily_winner("krasavchik", winner["user_id"])
 
     username = f" (@{winner['username']})" if winner['username'] else ""
-    # Финальный вердикт делаем красивым ответом (реплаем) на самое первое сообщение пользователя
     await update.message.reply_text(f"😎 Красавчик дня — {winner['first_name']}{username}")
 
     # ---------------- БЛОК ЮБИЛЕЙНЫХ ПОЗДРАВЛЕНИЙ С ИЗДЁВКОЙ ----------------
@@ -440,14 +438,13 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_sticker(chat_id=chat_id, sticker=random_sticker)
         
     # --- ТИХИЙ БЭКАП ПОСЛЕ ИГРЫ ---
-    # Бот проверяет: если команду /run нажал админ, то бот молча шлет ему бэкап в личку
-    if update.effective_user.id == ADMIN_TG_ID:
-        # Запускаем фоновую задачу, чтобы она не тормозила отправку сообщений в чат
-        context.application.create_task(silent_backup(context))
+    context.application.create_task(silent_backup(context))
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Функция get_users() уже возвращает только тех, у кого is_active == True
-    users = get_users()
+    # ИСПРАВЛЕНО: Вытаскиваем всех и берем строго активных участников
+    all_users = get_users()
+    users = [u for u in all_users if u.get("is_active", True)]
+    
     if not users:
         await update.message.reply_text("В игре пока нет активных участников.")
         return
@@ -477,8 +474,10 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(message, parse_mode="Markdown")
 
 async def procents(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Функция get_users() автоматически возвращает только тех, у кого is_active == True
-    users = get_users()
+    # ИСПРАВЛЕНО: Вытаскиваем всех и считаем шансы СТРОГО среди активных участников
+    all_users = get_users()
+    users = [u for u in all_users if u.get("is_active", True)]
+    
     if not users:
         await update.message.reply_text("В игре пока нет активных участников.")
         return
@@ -523,20 +522,21 @@ async def procents(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(message, parse_mode="Markdown")
 
 async def records(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Функция get_users() автоматически возвращает только активных (is_active == True)
-    users = get_users()
+    # ИСПРАВЛЕНО: Вытаскиваем всех и ищем чемпиона СТРОГО среди активных участников
+    all_users = get_users()
+    users = [u for u in all_users if u.get("is_active", True)]
+    
     if not users:
         await update.message.reply_text("В игре пока нет активных участников для фиксации рекордов.")
         return
 
-    # Сортируем: по КРАСАВЧИКАМ (минус перед значением делает сортировку по убыванию),
-    # а при равенстве — по ПИДОРАМ (без минуса, то есть по возрастанию).
+    # Сортируем: по КРАСАВЧИКАМ (по убыванию), а при равенстве — по ПИДОРАМ (по возрастанию)
     champions_sorted = sorted(users, key=lambda x: (-x["kras_count"], x["pidor_count"]))
     
     leader = champions_sorted[0]
     leader_username = f" (@{leader['username']})" if leader['username'] else ""
 
-    # Проверяем, были ли вообще игры, чтобы не выводить пустой рекорд при нулевой статистике
+    # Проверяем, были ли вообще игры
     if leader["kras_count"] == 0 and leader["pidor_count"] == 0:
         await update.message.reply_text("⚖️ Статистика еще пуста, рекорды не зафиксированы. Пора крутить рулетку!")
         return
@@ -552,7 +552,6 @@ async def records(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     await update.message.reply_text(message, parse_mode="Markdown")
-from datetime import timedelta
 
 async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -799,8 +798,8 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if player.get("last_switch_date"):
         last_date = date.fromisoformat(player["last_switch_date"])
         days_passed = (today - last_date).days
-        if days_passed < 7:
-            days_left = 7 - days_passed
+        if days_passed < 6:
+            days_left = 6 - days_passed
             day_word = "день" if days_left == 1 else ("дня" if days_left in [2, 3, 4] else "дней")
             uno_status = f"🔴 НА ПЕРЕЗАРЯДКЕ (еще {days_left} {day_word})"
 
@@ -816,12 +815,13 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ---------------- ЗАПУСК (ВЕБХУК) ----------------
 
-# Переименуем функцию main в асинхронную
 async def main():
+    # Собираем приложение бота
     app = Application.builder().token(TOKEN).build()
-# Инициализируем очередь задач, если она не создалась автоматически
+    
+    # ИСПРАВЛЕНО: Ровный отступ для проверки планировщика
     if app.job_queue is None:
-         print("Критическая ошибка: Планировщик задач не инициализирован. Проверьте requirements.txt")
+        print("Критическая ошибка: Планировщик задач не инициализирован. Проверьте requirements.txt")
         
     # Добавляем все хэндлеры
     app.add_handler(CommandHandler("start", help_command))
@@ -842,26 +842,32 @@ async def main():
         print("Бот запускается в режиме Webhook на Render...")
         PORT = int(os.getenv("PORT", 10000))
         
+        # Правильный асинхронный запуск вебхука без зависания потока
         await app.initialize()
-        # Принудительно запускаем планировщик задач для таймеров таймаута
         if app.job_queue:
             await app.job_queue.start()
             
+        await app.start()
         await app.updater.start_webhook(
             listen="0.0.0.0",
             port=PORT,
             url_path=TOKEN,
             webhook_url=f"{RENDER_URL}/{TOKEN}"
         )
-        await app.start()
         print("Вебхук и Таймеры успешно запущены!")
         
-        while True:
-            await asyncio.sleep(3600)
+        # Вместо кривого while True используем встроенный асинхронный ожидалщик библиотеки
+        from asyncio import Event
+        await Event().wait()
     else:
+        # ИСПРАВЛЕНО: Безопасный запуск поллинга для тестов на ПК
         print("Бот запущен локально в режиме Polling!")
-        app.run_polling()
+        await app.initialize()
+        await app.start()
+        await app.updater.start_polling()
+        from asyncio import Event
+        await Event().wait()
 
 if __name__ == "__main__":
-    # Запускаем асинхронный main() через правильный asyncio.run()
+    import asyncio
     asyncio.run(main())
