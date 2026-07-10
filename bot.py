@@ -571,8 +571,8 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # 2. Проверяем КД команды (6 дней)
     user_res = supabase.table("users").select("last_switch_date").eq("user_id", user.id).execute()
-    if user_res.data and user_res.data["last_switch_date"]:
-        last_date = date.fromisoformat(user_res.data["last_switch_date"])
+    if user_res.data and user_res.data[0]["last_switch_date"]: 
+        last_date = date.fromisoformat(user_res.data[0]["last_switch_date"]) 
         days_passed = (today - last_date).days
         
         if days_passed < 6:
