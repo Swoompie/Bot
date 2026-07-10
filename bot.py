@@ -569,20 +569,25 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🤡 Ты не сегодняшний пидор дня, чтобы активировать карту UNO. Сиди тихо!")
         return
 
-    # 2. Проверяем КД команды (6 дней)
+      # 2. Проверяем КД команды (6 дней)
     user_res = supabase.table("users").select("last_switch_date").eq("user_id", user.id).execute()
-    if user_res.data and user_res.data[0]["last_switch_date"]: 
+    
+    # Проверяем, что игрок есть в базе и у него вообще заполнена дата прошлого КД
+    if user_res.data and len(user_res.data) > 0 and user_res.data[0].get("last_switch_date"): 
         last_date = date.fromisoformat(user_res.data[0]["last_switch_date"]) 
         days_passed = (today - last_date).days
         
+        # Если прошло меньше 6 дней — включаем железный отлуп со стикером
         if days_passed < 6:
             days_left = 6 - days_passed
             day_word = "день" if days_left == 1 else ("дня" if days_left in [2, 3, 4] else "дней")
-            await update.message.reply_text(f"❌ Твоя карта UNO всё еще на перезарядке! Доступ появится через {days_left} {day_word}.")
+            
+            # Бот четко выведет, сколько дней осталось ждать пацанам
+            await update.message.reply_text(f"❌ Твоя карта UNO всё еще на перезарядке! Доступ появится через *{days_left} {day_word}*.", parse_mode="Markdown")
             await update.message.reply_sticker(sticker='CAACAgIAAxkBAAEReRpqQ3-pZ9QRME44W1Es3DPWTGUPNAACkAIAAladvQoy0qlxuNTQtTwE')
             return
 
-    # 3. Парсим жертву
+     # 3. Парсим жертву
     if not context.args or not update.message.entities:
         await update.message.reply_text("❌ На кого переводим карту UNO? Тегни жертву через @username!")
         return
@@ -600,10 +605,11 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     clean_username = target_username.replace("@", "")
     target_res = supabase.table("users").select("*").eq("username", clean_username).eq("is_active", True).execute()
     
-    if not target_res.data:
+    if not target_res.data or len(target_res.data) == 0:
         await update.message.reply_text(f"❌ Юзера {target_username} нет в рулетке или он ливнул!")
         return
     
+    # ТЕПЕРЬ СОЗДАЕМ ЖЕРТВУ
     victim = target_res.data[0]
 
     if victim["user_id"] == user.id:
@@ -613,13 +619,13 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Проверяем, является ли это ВТОРОЙ попыткой перевода
     is_retry_attempt = context.user_data.get("switch_retry", False)
     
-    # 🔥 УМНАЯ ПРОВЕРКА: Кем является жертва сегодня?
+    # 🔥 И ВОТ ТЕПЕРЬ БЕЗОПАСНАЯ УМНАЯ ПРОВЕРКА КРАСАВЧИКА (Бот знает, кто такой victim)
     kras_today_res = supabase.table("daily_winners").select("*").eq("game_date", str(today)).eq("role", "krasavchik").execute()
     
-    # Флаг: Пытаемся ли мы ограбить Красавчика дня
     is_robbing_chad = False
-    if kras_today_res.data and kras_today_res.data[0]["user_id"] == victim["user_id"]:
-        is_robbing_chad = True
+    if kras_today_res.data and len(kras_today_res.data) > 0:
+        if kras_today_res.data[0]["user_id"] == victim["user_id"]:
+            is_robbing_chad = True
 
    # 4. ВЫДАЕМ ИНТРО-ТЕКСТ
     if is_robbing_chad:
