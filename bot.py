@@ -274,7 +274,9 @@ async def reset_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_sticker(sticker='CAACAgQAAxkBAAEReRBqQ3htVR15fuIwV3C_4QUWL8_xxQACbhwAAltJOVMTctyzCRD65jwE')
 
 async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # 1. СРАЗУ ИСПРАВЛЕНО: Вытаскиваем только АКТИВНЫХ игроков (is_active == True)
+    today = date.today()
+    
+    # 1. Вытаскиваем только АКТИВНЫХ игроков (is_active == True)
     all_users = get_users()
     users = [u for u in all_users if u.get("is_active", True)]
     
@@ -300,8 +302,7 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for phrase in random.sample(PIDOR_PHRASES, len(PIDOR_PHRASES)):
         await context.bot.send_message(chat_id=chat_id, text=phrase)
         await asyncio.sleep(1)
-    # ----------------------------------
-
+    
     # Выбираем победителя
     winner = weighted_choice(filtered_users, "pidor_weight")
     new_count = winner["pidor_count"] + 1
@@ -315,6 +316,26 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = f" (@{winner['username']})" if winner['username'] else ""
     await update.message.reply_text(f"🤡 Пидор дня — {winner['first_name']}{username}")
 
+    # --- МИКРО-ПОДСКАЗКА ПРО КАРТУ UNO ---
+    uno_status_text = ""
+    if winner.get("last_switch_date"):
+        last_date = date.fromisoformat(winner["last_switch_date"])
+        days_passed = (today - last_date).days
+        
+        if days_passed < 6:
+            days_left = 6 - days_passed
+            day_word = "день" if days_left == 1 else ("дня" if days_left in [2, 3, 4] else "дней")
+            uno_status_text = f"\n\n🃏 _Кстати, твоя карта UNO на перезарядке. Ждать еще {days_left} {day_word}._"
+        else:
+            uno_status_text = f"\n\n🃏 *ОП-ПА! Твоя карта UNO ПЕРЕЗАРЯЖЕНА!* Можешь попробовать защититься, пиши: `/switch @username`"
+    else:
+        # Если чел вообще ни разу не юзал карту
+        uno_status_text = f"\n\n🃏 *ОП-ПА! Твоя карта UNO ГОТОВА!* Защищайся, пиши: `/switch @username`"
+
+    # Если есть статус — докидываем его отдельным тихим сообщением для Пидора
+    if uno_status_text:
+        await context.bot.send_message(chat_id=chat_id, text=uno_status_text, parse_mode="Markdown")
+
     # ---------------- БЛОК ЮБИЛЕЙНЫХ ПОЗДРАВЛЕНИЙ ----------------
     name = winner["first_name"]
 
@@ -327,7 +348,6 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
         'CAACAgIAAxkBAAERePhqQ29fvKDHMorjySaOzDQ013gcdgACNUoAAoRQOEkf13J-sHIrqTwE'
     ]
         
-    # ИСПРАВЛЕНО: Теперь словарь jokes создается строго ПОСЛЕ того, как объявлена переменная name
     jokes = {
         10: f"🎂 *ОГО, 10 РАЗ!* {name}, поздравляем! Первый юбилей на дне. Давай, расскажи всем, что это просто «случайность» и «рандом сломался»! 🤡",
         20: f"👑 *УЖЕ 20 ПОБЕД!* {name} официально переходит в Высшую лигу сомнительных парней. Тебе уже пора выдавать именную корону из картона и скотча! 🎪",
@@ -335,7 +355,7 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
         40: f"🗄 *КРИЗИС СРЕДНЕГО ВОЗРАСТА!* {name} отмечает 40 побед! Архив компромата переполнен! 📂",
         50: f"🎖 *ПОЛУВЕКОВОЙ ЮБИЛЕЙ!* 50 раз! {name} получает золотую медаль и пожизненную путевку в гейбар! 🏅",
         60: f"🎰 *МАСТЕР СВОЕГО ДЕЛА!* 60 побед у {name}! Датчики сомнительных мыслей просто зашкаливают, не шали! ⚡️",
-        70: f"🛰 *КОСМИЧЕСКИЙ УРОВЕНЬ!* 70-й раз! {name} твоё гейство видно даже со спутников наблюдения! 🌌",
+        70: f"🚨 *КОСМИЧЕСКИЙ УРОВЕНЬ!* 70-й раз! {name} твоё гейство видно даже со спутников наблюдения! 🌌",
         80: f"🦾 *ТИФЛОНОВЫЙ СТАТУС!* 80 раз! К {name} уже просто ничего не липнет (особенно люди противоположного пола), это абсолютный иммунитет! 🛡",
         90: f"🧛‍♂️ *ДРЕВНИЙ ОЛДХЭД!* 90 побед! {name} выходит на финишную прямую к великому залу славы ГЕЙмастеров! 🏛",
         100: f"🏆 *ЛЕГЕНДА ВЕКА! СТО КРАТНЫЙ ПИДОР!* 🎉💥 {name} полностью прошёл эту жизнь с обратной стороны! Исторический момент, чат, салютуйте главному боссу этой игры! 👑🍾"
@@ -350,7 +370,6 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(jokes[new_count], parse_mode="Markdown")
         is_anniversary = True
          
-    # ИСПРАВЛЕНО: Выровнены отступы блока отправки юбилейного стикера
     if is_anniversary:
         random_sticker = random.choice(pidor_stickers_pool)
         await context.bot.send_sticker(chat_id=chat_id, sticker=random_sticker)
