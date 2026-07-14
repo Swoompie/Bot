@@ -356,7 +356,7 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_sticker(chat_id=chat_id, sticker=random_sticker)
 
 async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # 1. ИСПРАВЛЕНО: Вытаскиваем только АКТИВНЫХ игроков (is_active == True)
+    # 1. Вытаскиваем только АКТИВНЫХ игроков (is_active == True)
     all_users = get_users()
     users = [u for u in all_users if u.get("is_active", True)]
     
@@ -377,29 +377,75 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Все участники уже заняли свои титулы на сегодня! Больше выбирать некого.")
         return
 
-    # --- ИСПРАВЛЕННЫЙ БЛОК ЗАСТАВОК ---
+    # --- БЛОК ЗАСТАВОК ---
     chat_id = update.effective_chat.id
     for phrase in random.sample(KRAS_PHRASES, len(KRAS_PHRASES)):
         await context.bot.send_message(chat_id=chat_id, text=phrase)
         await asyncio.sleep(1)
     
-    # Выбираем победителя по весах красавчика
-    winner = weighted_choice(filtered_users, "kras_weight")
-    new_count = winner["kras_count"] + 1
+    # 1. Первичный честный выбор фаворита по весам красавчика
+    favorit = weighted_choice(filtered_users, "kras_weight")
+    final_winner = favorit  # По умолчанию побеждает он
+
+    # 2. КРУТИМ ШАНС АНОМАЛИИ (30%)
+    is_anomaly = random.randint(1, 100) <= 30
+    favorit_username = f" (@{favorit['username']})" if favorit['username'] else ""
+
+    if is_anomaly and len(filtered_users) > 1:
+        # ================= 🎰 ПУТЬ Б: СРАБОТАЛА АНОМАЛИЯ (30%) =================
+        # Втихую выбираем второго кандидата из оставшихся (исключая фаворита)
+        other_users = [u for u in filtered_users if u["user_id"] != favorit["user_id"]]
+        contender = random.choice(other_users)
+        contender_username = f" (@{contender['username']})" if contender['username'] else ""
+
+        # Выдаем интригующий текст аномалии в чат
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"🎰 *Красавчик дня определён... СТОП, ЧТО?!* 🎰\n\n"
+                 f"Должен был победить *{favorit['first_name']}{favorit_username}*, но монетка внезапно упала РЕБРОМ! 💥\n"
+                 f"Датчики крутости зафиксировали аномалию. На кону дикий баттл!\n\n"
+                 f"⚡️ *{favorit['first_name']}* против *{contender['first_name']}{contender_username}*! ⚡️\n"
+                 f"Бросаем финальный кубик судьбы... подкидываем монетку (50/50)...",
+            parse_mode="Markdown"
+        )
+        await asyncio.sleep(2.5) # Пауза для нагнетания валидола
+
+        # Мгновенный баттл 50/50 между ними
+        if random.randint(1, 100) <= 50:
+            final_winner = favorit
+            await update.message.reply_text(
+                f"🪙 *МОНЕТКА ОСТАЕТСЯ НА СТОРОНЕ ПЕРВОГО!*\n\n"
+                f"😎 В жестком баттле свою крутость защищает *{final_winner['first_name']}{favorit_username}*! Справедливость восторжествовала!",
+                parse_mode="Markdown"
+            )
+        else:
+            final_winner = contender
+            await update.message.reply_text(
+                f"🪙 *ОГРАБЛЕНИЕ В ФИНАЛЕ! ОНА ПЕРЕВЕРНУЛАСЬ!*\n\n"
+                f"😎 Монетка решает в пользу претендента! *{final_winner['first_name']}{contender_username}* вырывает победу из рук фаворита!",
+                parse_mode="Markdown"
+            )
+    else:
+        # ================= ✨ ПУТЬ А: СТАНДАРТНЫЙ ПРОКРУТ (70%) =================
+        await update.message.reply_text(
+            f"✨ *ФОРТУНА СДЕЛAЛA СВОЙ ВЫБОР БЕЗ КОЛЕБАНИЙ!*\n\n"
+            f"😎 Абсолютным и бесспорным сегодняшним Красавчиком дня становится — *{final_winner['first_name']}{favorit_username}*!", 
+            parse_mode="Markdown"
+        )
+
+    # Считаем новое значение побед для финального счастливчика
+    new_count = final_winner["kras_count"] + 1
 
     # Обновляем счетчик красавчиков в Supabase
-    supabase.table("users").update({"kras_count": new_count}).eq("user_id", winner["user_id"]).execute()
+    supabase.table("users").update({"kras_count": new_count}).eq("user_id", final_winner["user_id"]).execute()
     
-    redistribute_weights(winner["user_id"], "kras_weight")
-    save_daily_winner("krasavchik", winner["user_id"])
-
-    username = f" (@{winner['username']})" if winner['username'] else ""
-    await update.message.reply_text(f"😎 Красавчик дня — {winner['first_name']}{username}")
+    # Пересчитываем веса под финального победителя и сохраняем его в историю дня
+    redistribute_weights(final_winner["user_id"], "kras_weight")
+    save_daily_winner("krasavchik", final_winner["user_id"])
 
     # ---------------- БЛОК ЮБИЛЕЙНЫХ ПОЗДРАВЛЕНИЙ С ИЗДЁВКОЙ ----------------
-    name = winner["first_name"]
+    name = final_winner["first_name"]
     
-    # Мемные стикеры для пидорских юбилеев (вставь сюда 3-5 разных ID)
     kras_stickers_pool = [
         'CAACAgIAAxkBAAERePpqQ3C50Eqg_2plBXsHEFEtGOtmnQACk1QAAgmZ4EkPKsG3ATUGIDwE',
         'CAACAgIAAxkBAAERePxqQ3FkKQTrDt2Kt3E3v09Q90uUzgAC5zMAAvyF0EhRH0ZM6KsQGjwE',
@@ -422,8 +468,7 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         100: f"👑🍾 *ЛЕГЕНДА ВЕКА! СТОКРАТНЫЙ КРАСАВЧИК!* 🎉💥 {name} официально прошёл эту игру! 100 побед! Абсолютный рекордсмен, икона стиля и босс этого чата! Салют чемпиону! 🏆🌟"
     }
 
-     # 1. Отправляем текст (как и было)
-    is_anniversary = False # флаг, чтобы понять, круглое ли число
+    is_anniversary = False 
     
     if new_count == 5:
         await update.message.reply_text(f"🎉 *5 ПОБЕД!* {name} вступает в клуб самовлюбленных! Начало положено, но до настоящих победителей тебе ещё пилить и пилить! 🎖", parse_mode="Markdown")
@@ -431,12 +476,11 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif new_count in jokes:
         await update.message.reply_text(jokes[new_count], parse_mode="Markdown")
         is_anniversary = True
-        
-         # 2. Если это юбилей (5 или круглый десяток) — кидаем СЛУЧАЙНЫЙ стикер!
+
     if is_anniversary:
         random_sticker = random.choice(kras_stickers_pool)
         await context.bot.send_sticker(chat_id=chat_id, sticker=random_sticker)
-        
+
     # --- ТИХИЙ БЭКАП ПОСЛЕ ИГРЫ ---
     context.application.create_task(silent_backup(context))
 
