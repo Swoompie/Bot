@@ -427,12 +427,8 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
     else:
         # ================= ✨ ПУТЬ А: СТАНДАРТНЫЙ ПРОКРУТ (70%) =================
-        await update.message.reply_text(
-            f"✨ *ФОРТУНА СДЕЛAЛA СВОЙ ВЫБОР БЕЗ КОЛЕБАНИЙ!*\n\n"
-            f"😎 Абсолютным и бесспорным сегодняшним Красавчиком дня становится — *{final_winner['first_name']}{favorit_username}*!", 
-            parse_mode="Markdown"
-        )
-
+        await update.message.reply_text(f"😎 Красавчик дня — {final_winner['first_name']}{favorit_username}")
+        
     # Считаем новое значение побед для финального счастливчика
     new_count = final_winner["kras_count"] + 1
 
