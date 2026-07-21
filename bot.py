@@ -982,8 +982,8 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = (
         f"👤 *ЛИЧНОЕ ДОСЬЕ ИГРОКА*:\n\n"
         f"Участник: *{player['first_name']}{username}*\n"
-        f"🏆 Побед Пидора: *{player['pidor_count']}* раз(а)\n"
-        f"🏆 Побед Красавчика: *{player['kras_count']}* раз(а)\n\n"
+        f"🤡 Статус Пидора: *{player['pidor_count']}* раз(а)\n"
+        f"😎 Статус Красавчика: *{player['kras_count']}* раз(а)\n\n"
         f"📊 *ТЕКУЩИЕ ШАНСЫ*:\n"
         f" └ 🤡 Стать Пидором: `{pidor_chance:.1f}%` \n"
         f" └ 😎 Стать Красавчиком: `{kras_chance:.1f}%` \n\n"
