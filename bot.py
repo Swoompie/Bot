@@ -176,10 +176,6 @@ def redistribute_weights(winner_id, weight_column):
         # ВНУТРИ ЦИКЛА (8 пробелов слева): обновляем веса текущего перебираемого юзера
         supabase.table("users").update({weight_column: new_weight}).eq("user_id", user["user_id"]).execute()
 
-    # ВНЕ ЦИКЛА (4 пробела слева): цикл полностью закончился, ОДНИМ запросом обнуляем кубики всем
-    supabase.table("users").update({"dice_count": 0}).neq("user_id", 0).execute()
-
-
 # ---------------- КОМАНДЫ ----------------
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -192,7 +188,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/procents — Узнать свои шансы на победу 🎯\n"
         "/records — Узнать лидеров чата 👀\n"
         "/switch @username — Использовать карту UNO и перевести от себя пидора (Шанс 5/10/20%?, КД 6 дней) 🃏\n"
-        "/dice — Кинуть кубик кармы, но надо быть осторожным, возможны аномальные колебания процентов 🎲\n"
+        "/dice — Кинуть кубик кармы (2 в неделю) , но надо быть осторожным, возможны аномальные колебания процентов 🎲\n"
         "/mystats — Узнать свою статистику и карту UNO 👀\n"
         "/unreg — Выйти из рулетки и удалить данные (нет) 🚪\n"
         "/help — Показать это сообщение еще раз (но на кое хер?)"
@@ -927,14 +923,24 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             day_word = "день" if days_left == 1 else ("дня" if days_left in [2, 3, 4] else "дней")
             uno_status = f"🔴 НА ПЕРЕЗАРЯДКЕ (еще {days_left} {day_word})"
 
-    # 2. РАССЧИТЫВАЕМ ОСТАТОК КАРМИЧЕСКИХ КУБИКОВ
-    current_attempts = player.get("dice_count", 0)
-    dice_left = 3 - current_attempts
+        # 2. РАССЧИТЫВАЕМ ЕЖЕНЕДЕЛЬНЫЙ ОСТАТОК КАРМИЧЕСКИХ КУБИКОВ (ЛИМИТ 2)
+    current_week_num = today.isocalendar()[1]
+    
+    db_dice_value = player.get("dice_count", 0)
+    last_dice_week = db_dice_value // 10
+    current_attempts = db_dice_value % 10
+    
+    # Если неделя сменилась, то попыток в текущей неделе 0
+    if current_week_num != last_dice_week:
+        current_attempts = 0
+        
+    # ИСПРАВЛЕНО: Вычитаем из 2
+    dice_left = 2 - current_attempts
     
     if dice_left == 0:
-        dice_status = "🔴 ИСЧЕРПАНЫ (0 из 3)"
+        dice_status = "🔴 ИСЧЕРПАНЫ (0 из 2 на этой неделе)"
     else:
-        dice_status = f"🟢 ДОСТУПНО: {dice_left} из 3"
+        dice_status = f"🟢 ДОСТУПНО: {dice_left} из 2 на этой неделе"
 
     username = f" (@{player['username']})" if player['username'] else ""
     message = (
@@ -951,6 +957,9 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     chat_id = update.effective_chat.id
     today = date.today()
+    
+    # Получаем чистый номер текущей недели в году
+    current_week_num = today.isocalendar()[1]
 
     # 1. Вытаскиваем данные игрока из Supabase
     res = supabase.table("users").select("*").eq("user_id", user.id).execute()
@@ -965,13 +974,22 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🚪 Ты ливнул из рулетки. Сначала вернись через /register!")
         return
 
-    # 2. ПРОВЕРКА ЛИМИТА
-    current_attempts = player.get("dice_count", 0)
-    if current_attempts >= 3:
-        await update.message.reply_text("🛑 Хватит испытывать судьбу! Твой лимит (3 раза в день) исчерпан. Крупье убирает кубики до завтра! 🎲")
+    # 2. МАТЕМАТИЧЕСКИЙ РАСЧЕТ ЕЖЕНЕДЕЛЬНОГО ЛИМИТА
+    db_dice_value = player.get("dice_count", 0)
+    
+    last_dice_week = db_dice_value // 10       
+    current_attempts = db_dice_value % 10      
+
+    # Если наступила новая неделя — сбрасываем попытки на лету!
+    if current_week_num != last_dice_week:
+        current_attempts = 0
+
+    if current_attempts >= 2:
+        await update.message.reply_text("🛑 Хватит испытывать судьбу! Твой лимит (2 раза в НЕДЕЛЮ) исчерпан. Крупье убирает кубики до следующего понедельника! 🎲")
         return
 
     # -----------------------------------------------------------------
+    # Словарь твоих проверенных Telegram ID стикеров для каждой грани
     DICE_VISUAL_POOL = {
         1: 'CAACAgIAAxkBAAERk_5qX21KuAjAdNoYVo7juR7StF-tdwACYm4AAp7OCwABPf4vNIQDD-09BA',
         2: 'CAACAgIAAxkBAAERlAABal9tVSZA9B_9CaJTUQ0DV-ONxFEAAgdzAAKezgsAAR07kgHWZQ9OPQQ',
@@ -985,48 +1003,73 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 3. БРОСАЕМ КАРМИЧЕСКИЙ КУБИК
     dice_value = random.randint(1, 6)
     
-    # Сразу отправляем стикер с выпавшей гранью в чат!
     await context.bot.send_sticker(chat_id=chat_id, sticker=DICE_VISUAL_POOL[dice_value])
-    await asyncio.sleep(1) # Короткая пауза, чтобы пацаны успели увидеть грань кубика
+    await asyncio.sleep(1) 
 
-    # Считаем новые попытки и остаток бросков
+    # Считаем попытки и кодируем пак для базы
     new_attempts = current_attempts + 1
-    remains = 3 - new_attempts
-    remains_text = f" Осталось бросков на сегодня: *{remains}*." if remains > 0 else " Это был твой *последний* бросок на сегодня!"
+    remains = 2 - new_attempts
+    remains_text = f" Осталось бросков на этой неделе: *{remains}*." if remains > 0 else " Это был твой *последний* бросок на этой неделе!"
+    new_db_value = (current_week_num * 10) + new_attempts
 
+    # --- 🧮 РАССЧИТЫВАЕМ ДИНАМИЧЕСКИЕ ВЕСА И КАРМИЧЕСКИЕ ТЕКСТЫ ---
     if dice_value <= 3:
         # ======= 🤡 ВЕТКА ПОЗОРА (1, 2, 3) =======
-        new_weight = player["pidor_weight"] + 5.0
+        step = 5.0 if dice_value == 3 else (6.0 if dice_value == 2 else 7.0)
+        
+        # Втихую пересчитываем баланс весов
+        new_pidor_weight = player["pidor_weight"] + step
+        new_kras_weight = max(1.0, player["kras_weight"] - step)
         
         supabase.table("users").update({
-            "pidor_weight": new_weight,
-            "dice_count": new_attempts
+            "pidor_weight": new_pidor_weight,
+            "kras_weight": new_kras_weight,
+            "dice_count": new_db_value
         }).eq("user_id", user.id).execute()
         
+        # ИСПРАВЛЕНО: Тексты полностью замаскированы под шансы и проценты
+        if dice_value == 1:
+            power_text = "критический удар по твоей репутации! 💥 Вероятность позора взлетела на максимум, а шансы на корону Красавчика упали в стратосферу."
+        elif dice_value == 2:
+            power_text = "ощутимый удар по карме! Твои шансы проснуться Пидором дня выросли, а акции крутости знатно просели."
+        else:
+            power_text = "лёгкий сквозняк сомнительного вайба. Вероятность стать Пидором немного подросла, а шарм слегка увял."
+
         await update.message.reply_text(
-            f"🤡 *КАРМА РИКОШЕТИТ!* {user.first_name}, твои мысли затуманились сомнительным вайбом.\n"
-            f"Твой процент Пидора увеличен! Шансы попорчены. Проверь команду `/procents`.{remains_text}",
+            f"🎲 На кубике выпадает: *{dice_value}*!\n\n"
+            f"🤡 *КАРМА БЬЁТ РИКОШЕТОМ!* {user.first_name}, это {power_text} Проведи аудит в `/procents`.{remains_text}",
             parse_mode="Markdown"
         )
-        # Финальный стикер-акцент летит ТОЛЬКО на 3-й бросок
         if remains == 0:
             await update.message.reply_sticker(sticker='CAACAgIAAxkBAAERlAxqX26LTBGVSCy2dEqT3LngPAfGfAACYC0AAgHNiUlP9RIyg3n6LD0E')
             
     else:
         # ======= 😎 ВЕТКА УДАЧИ (4, 5, 6) =======
-        new_weight = player["kras_weight"] + 5.0
+        step = 5.0 if dice_value == 4 else (6.0 if dice_value == 5 else 7.0)
+        
+        # Втихую пересчитываем баланс весов
+        new_kras_weight = player["kras_weight"] + step
+        new_pidor_weight = max(1.0, player["pidor_weight"] - step)
         
         supabase.table("users").update({
-            "kras_weight": new_weight,
-            "dice_count": new_attempts
+            "kras_weight": new_kras_weight,
+            "pidor_weight": new_pidor_weight,
+            "dice_count": new_db_value
         }).eq("user_id", user.id).execute()
         
+        # ИСПРАВЛЕНО: Тексты полностью замаскированы под шансы и проценты
+        if dice_value == 6:
+            power_text = "абсолютный джекпот! 🏆 Твой нимб Красавчика засиял космическим блеском, а риски стать гэйем нехило снизились."
+        elif dice_value == 5:
+            power_text = "солидный прилив шарма! Проценты на победу поползли вверх, а вероятность поймать клеймо Пидора тает на глазах."
+        else:
+            power_text = "аккуратный шаг навстречу трону. Твои шансы на корону потихоньку ползут вверх, риски неудачного розыгрыша снижены."
+
         await update.message.reply_text(
-            f"😎 *ФОРТУНА УЛЫБАЕТСЯ ТЕБЕ!* {user.first_name}, датчики крутости фиксируют мощный прилив шарма.\n"
-            f"Твой процент Красавчика увеличен! Корона стала чуточку ближе. {remains_text}",
+            f"🎲 На кубике выпадает: *{dice_value}*!\n\n"
+            f"😎 *ФОРТУНА УЛЫБАЕТСЯ ТЕБЕ!* {user.first_name}, это {power_text} Проверь обновлённую таблицу в `/procents`.{remains_text}",
             parse_mode="Markdown"
         )
-        # Финальный стикер-акцент летит ТОЛЬКО на 3-й бросок
         if remains == 0:
             await update.message.reply_sticker(sticker='CAACAgQAAxkBAAERlA5qX28PoaHLw_vQlr61kl4t7WzyFgACUAgAAtRigFLWQCl12cGV0z0E')
 
