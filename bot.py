@@ -424,30 +424,45 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                  f"Должен был победить *{favorit['first_name']}{favorit_username}*, но монетка внезапно упала РЕБРОМ! 💥\n"
                  f"Датчики крутости зафиксировали аномалию. На кону дикий баттл!\n\n"
                  f"⚡️ *{favorit['first_name']}* против *{contender['first_name']}{contender_username}*! ⚡️\n"
-                 f"Бросаем финальный кубик судьбы... подкидываем монетку (50/50)...",
+                 f"Бросаем финальный кубик судьбы 1-3, 4-6... подкидываем монетку (50/50)...",
             parse_mode="Markdown"
         )
-        await asyncio.sleep(2.5) # Пауза для нагнетания валидола
-
+        await asyncio.sleep(3.5) # Пауза для нагнетания валидола
+        
         # Мгновенный баттл 50/50 между ними
         if random.randint(1, 100) <= 50:
             final_winner = favorit
+            coin_loser = contender  # Неудачник монетки
+            
             await update.message.reply_text(
                 f"🪙 *МОНЕТКА ОСТАЕТСЯ НА СТОРОНЕ ПЕРВОГО!*\n\n"
-                f"😎 В жестком баттле свою крутость защищает *{final_winner['first_name']}{favorit_username}*! Справедливость восторжествовала!",
+                f"😎 В жестком баттле свою крутость защищает *{final_winner['first_name']}{favorit_username}*! Справедливость восторжествовала!\n"
+                f"🤡 А проигравший *{coin_loser['first_name']}* получает утешительные повышенные шансы к Красавчику на завтра!",
                 parse_mode="Markdown"
             )
         else:
             final_winner = contender
+            coin_loser = favorit  # Неудачник монетки
+            
             await update.message.reply_text(
                 f"🪙 *ОГРАБЛЕНИЕ В ФИНАЛЕ! ОНА ПЕРЕВЕРНУЛАСЬ!*\n\n"
-                f"😎 Монетка решает в пользу претендента! *{final_winner['first_name']}{contender_username}* вырывает победу из рук фаворита!",
+                f"😎 Монетка решает в пользу претендента! *{final_winner['first_name']}{contender_username}* вырывает победу из рук фаворита!\n"
+                f"🤡 А обворованный *{coin_loser['first_name']}* получает утешительные повышенные шансы к Красавчику на завтра!",
                 parse_mode="Markdown"
             )
+
+        # 💾 СОХРАНЯЕМ НЕУДАЧНИКА В БАЗУ ДАННЫХ SUPABASE (Сейв от спячки Render)
+        save_daily_winner("coin_loser", coin_loser["user_id"])
+        
+        # ИСПРАВЛЕНО: Твой верный вариант с индексом [0]
+        loser_base = supabase.table("users").select("kras_weight").eq("user_id", coin_loser["user_id"]).execute().data
+        current_kras_weight = loser_base[0]["kras_weight"] if loser_base else 100.0
+        
+        supabase.table("users").update({"kras_weight": current_kras_weight + 50.0}).eq("user_id", coin_loser["user_id"]).execute()
     else:
         # ================= ✨ ПУТЬ А: СТАНДАРТНЫЙ ПРОКРУТ (70%) =================
         await update.message.reply_text(f"😎 Красавчик дня — {final_winner['first_name']}{favorit_username}")
-        
+
     # Считаем новое значение побед для финального счастливчика
     new_count = final_winner["kras_count"] + 1
 
@@ -685,34 +700,70 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if kras_today_res.data[0]["user_id"] == victim["user_id"]:
             is_robbing_chad = True
 
-   # 4. ВЫДАЕМ ИНТРО-ТЕКСТ
+    # 🔍 ИСПРАВЛЕНО ДЛЯ БАЗЫ ДАННЫХ: Вытаскиваем неудачника монетки напрямую из Supabase
+    coin_loser_res = supabase.table("daily_winners").select("user_id").eq("game_date", str(today)).eq("role", "coin_loser").execute()
+    
+    is_coin_loser_target = False
+    if coin_loser_res.data and len(coin_loser_res.data) > 0:
+        # ДОБАВЛЕН ИНДЕКС: база возвращает список, заходим внутрь первой строки
+        if coin_loser_res.data[0]["user_id"] == victim["user_id"]:
+            is_coin_loser_target = True
+
+    # 4. ВЫДАЕМ ИНТРО-ТЕКСТ С УЧЕТОМ ДИНАМИЧЕСКИХ ШАНСОВ
     if is_robbing_chad:
         intro = [
             f"👑 КРАЖА ВЕКА! Пидор дня {user.first_name} активирует карту «UNO» против Красавчика {target_username}!",
-            "🎲 Это Королевское Ограбление! Шанс 5%. Если сработает, титулы поменяются, а карта ОСТАНЕТСЯ ЦЕЛОЙ! Бывает только раз! 🔥",
+            "🎲 Это Королевское Ограбление! Шанс 5%. Если сработает, титулы поменяются, а карта ОСТАНЕТСЯ ЦЕЛОЙ! 🔥",
+        ]
+    elif is_coin_loser_target:
+        # Специальная жесткая фраза для добивания неудачника монетки
+        intro = [
+            f"🎯 ДОБИВАНИЕ РАНЕНОГО! {user.first_name} активирует карту «UNO» против {target_username}!",
+            "🎲 Он сегодня и так эпично проиграл в монетку, а мы решили его добить? Похвально, но наказуемо! Шанс перевода повышен до 20%! 🔥\n⚠️ Внимание: в случае провала твои шансы на Пидора взлетят до небес!",
         ]
     else:
         if is_retry_attempt:
             intro = [
                 f"🔥 ВТОРОЙ ШАНС! {user.first_name} трясущимися руками активирует карту «UNO» ПОВТОРНО против мирного {target_username}!",
-                "🎲 На этот раз боги шутить не будут. Вероятность 5%. Либо пан, либо пропал...",
+                "🎲 На этот раз боги шутить не будут. Вероятность 15%. Либо пан, либо пропал...",
             ]
         else:
             intro = [
                 f"🃏 МЕМНЫЙ РЕВЁРС! {user.first_name} активирует карту «UNO» и пытается скинуть клеймо Пидора на {target_username}!",
-                "🎲 Шанс перевода 5%... Высшие силы взвешивают шансы...",
+                "🎲 Шанс перевода 10%... Высшие силы взвешивают шансы...",
             ]
 
     for phrase in intro:
         await context.bot.send_message(chat_id=chat_id, text=phrase)
         await asyncio.sleep(1.5)
 
-    # Крутим шанс 5%
-    is_success = random.randint(1, 100) <= 5
+    # --- 🎰 РАЗДЕЛЬНЫЙ РАСЧЕТ ШАНСОВ (5% / 10% / 15% / 20%) ---
+    if is_robbing_chad:
+        success_chance = 5
+    elif is_coin_loser_target:
+        success_chance = 20  # Повышенный шанс на добивание
+    elif is_retry_attempt:
+        success_chance = 15  # Раздельный повышенный второй шанс на мирного
+    else:
+        success_chance = 10  # Раздельный базовый шанс на мирного
+
+    is_success = random.randint(1, 100) <= success_chance
     
     # Запрашиваем свежие данные стрелочника из базы для точного вычитания
     current_user_data = supabase.table("users").select("*").eq("user_id", user.id).execute().data
     current_user = current_user_data[0] if current_user_data else None
+
+    # Добавляем фиксацию штрафного веса 120.0 при провале добивания
+    if not is_success and is_coin_loser_target and current_user:
+        # Перебиваем стандартный вес на жесткие 120.0
+        supabase.table("users").update({"last_switch_date": str(today), "pidor_weight": 120.0}).eq("user_id", user.id).execute()
+        await update.message.reply_text(
+            f"❌ КАРМА СУЩЕСТВУЕТ! Карта UNO СГОРЕЛА при попытке добить раненого!\n\n"
+            f"{user.first_name}, боги рандома наказали тебя за жестокость. Карта уходит на КД, а твой штрафной процент Пидора взлетает до небес! 🤡",
+            parse_mode="Markdown"
+        )
+        await update.message.reply_sticker(sticker='CAACAgIAAxkBAAEReQpqQ3adafSczLOzJ3WEyKHoQvfvJAACNhUAAjhx-EmeBZwsT5kj1TwE')
+        return  # Прерываем функцию, провал обработан особым образом!
 
     if is_success and current_user:
         # ================= 🎉🎉🎉 УСПЕШНЫЙ ПЕРЕВОД (5%) 🎉🎉🎉 =================
@@ -771,19 +822,19 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # --- РАЗВЕТВЛЕНИЕ ТЕКСТА И СТИКЕРОВ В ЗАВИСИМОСТИ ОТ ПОПЫТКИ ---
             if is_retry_attempt:
-                # Если перевод удался СО ВТОРOГO РАЗА (Второй шанс выстрелил)
+                # ИСПРАВЛЕНО: Текст обновлен под новые 15% раздельного свитча
                 await update.message.reply_text(
                     f"🦊 *КАК ОН ЭТО ДЕЛАЕТ?! ХИТРЫЙ ЛИС В ДЕЛЕ!* 🦊\n\n"
-                    f"Первая карта порвалась, но со второго шанса {user.first_name} совершает невозможное и выбивает 5%!\n"
+                    f"Первая карта порвалась, но со второго шанса {user.first_name} совершает невозможное и выбивает 15%!\n"
                     f"👑 Ты полностью очищен от подозрений, легенда кубиков!\n\n"
                     f"🤡 А вот {victim['first_name']} ({target_username}) официально становится ПИДOPOМ ДНЯ со второй подачи! Отлетай!",
                     parse_mode="Markdown"
                 )
                 await update.message.reply_sticker(sticker='CAACAgIAAxkBAAERg8xqT1rvV4e9QOkd5krbAdwHGMbORQACrB8AAi-rqEswnXHdk_VAETwE')
             else:
-                # Стандартный перевод С ПЕРВОГО РАЗА
+                # ИСПРАВЛЕНО: Текст обновлен под новые 10% базового свитча
                 await update.message.reply_text(
-                    f"💥 *КАРТА ПЕРЕВЕДЕНА!* Магия 5% сработала!\n\n"
+                    f"💥 *КАРТА ПЕРЕВЕДЕНА!* Магия 10% сработала!\n\n"
                     f"👑 {user.first_name} полностью очищен от подозрений.\n"
                     f"🤡 Новый официальный ПИДОР ДНЯ — {victim['first_name']} ({target_username})! Смирись!",
                     parse_mode="Markdown"
@@ -794,7 +845,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data.pop("switch_retry", None)
 
     else:
-        # ================= ❌❌❌ ВЫПАЛ ПРОВАЛ 95% (КАРТА СГОРЕЛА ИЛИ ОСЕЧКА) =================
+        # ================= ❌❌❌ ВЫПАЛ ПРОВАЛ (КАРТА СГОРЕЛА ИЛИ ОСЕЧКА) =================
         if is_robbing_chad:
             # На Красавчика только ОДНА попытка. Сразу вешаем КД на 6 дней за провал!
             supabase.table("users").update({"last_switch_date": str(today), "pidor_weight": 100.0}).eq("user_id", user.id).execute()
@@ -803,7 +854,6 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"{user.first_name}, попытка ограбить Красавчика провалилась, боги рандома изымают карту на 6 дней.\n"
                 f"Титул Пидора дня остается на тебе! 🤡"
             )
-            # Вставь сюда ID стикера провала при краже красавчика (или оставь обычный провал)
             await update.message.reply_sticker(sticker='CAACAgIAAxkBAAEReQpqQ3adafSczLOzJ3WEyKHoQvfvJAACNhUAAjhx-EmeBZwsT5kj1TwE')
             
         else:
@@ -832,7 +882,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     )
                     await update.message.reply_sticker(sticker='CAACAgIAAxkBAAERg85qT110qgTm1RJWyqRuKm0QwbCoLwAC9B4AAiNcOEtYh2FNKYLHdDwE')
                 else:
-                    # Стандартный провал на мирного с первого раза (в 95% случаев)
+                    # Стандартный провал на мирного с первого раза
                     supabase.table("users").update({"last_switch_date": str(today), "pidor_weight": 90.0}).eq("user_id", user.id).execute()
                     await update.message.reply_text(
                         f"❌ КАРТА UNO ПОРВАЛАСЬ! {user.first_name}, перевод сорвался и полетел обратно в тебя.\n\n"
