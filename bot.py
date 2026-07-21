@@ -227,6 +227,7 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "pidor_count": 0,
         "kras_count": 0,
         "dice_count": 0,
+        "dice_start_balance": 0.0,
         "is_active": True  
     }).execute()
     
@@ -267,7 +268,8 @@ async def reset_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "kras_count": 0, 
         "pidor_weight": 100.0, 
         "kras_weight": 100.0,
-        "dice_count": 0
+        "dice_count": 0,
+        "dice_start_balance": 0.0
     }).neq("user_id", 0).execute()
     
     # Полностью очищаем таблицу "победителей"
@@ -1033,7 +1035,7 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     dice_value = random.randint(1, 6)
     
     await context.bot.send_sticker(chat_id=chat_id, sticker=DICE_VISUAL_POOL[dice_value])
-    await asyncio.sleep(1) 
+    await asyncio.sleep(3) 
 
     # Считаем попытки и кодируем пак для базы
     new_attempts = current_attempts + 1
@@ -1041,66 +1043,101 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     remains_text = f" Осталось бросков на этой неделе: *{remains}*." if remains > 0 else " Это был твой *последний* бросок на этой неделе!"
     new_db_value = (current_week_num * 10) + new_attempts
 
-    # --- 🧮 РАССЧИТЫВАЕМ ДИНАМИЧЕСКИЕ ВЕСА И КАРМИЧЕСКИЕ ТЕКСТЫ ---
+    # --- 🧮 РАССЧИТЫВАЕМ ПРОГРЕССИВНЫЕ ВЕСА И КАРМИЧЕСКИЕ ТЕКСТЫ ---
     if dice_value <= 3:
         # ======= 🤡 ВЕТКА ПОЗОРА (1, 2, 3) =======
-        step = 5.0 if dice_value == 3 else (6.0 if dice_value == 2 else 7.0)
+        step = 3.0 if dice_value == 3 else (7.0 if dice_value == 2 else 12.0)
+        k_minus = 1.0 if dice_value == 3 else (4.0 if dice_value == 2 else 7.0)
         
-        # Втихую пересчитываем баланс весов
         new_pidor_weight = player["pidor_weight"] + step
-        new_kras_weight = max(1.0, player["kras_weight"] - step)
+        new_kras_weight = max(1.0, player["kras_weight"] - k_minus)
         
+        # Фиксируем стартовую точку, если это ВПЕРВЫЕ за неделю
+        start_balance = player.get("dice_start_balance", 0.0)
+        if current_attempts == 0:
+            start_balance = player["kras_weight"] - player["pidor_weight"]
+
         supabase.table("users").update({
             "pidor_weight": new_pidor_weight,
             "kras_weight": new_kras_weight,
-            "dice_count": new_db_value
+            "dice_count": new_db_value,
+            "dice_start_balance": start_balance  # Сохраняем старт
         }).eq("user_id", user.id).execute()
         
-        # ИСПРАВЛЕНО: Тексты полностью замаскированы под шансы и проценты
         if dice_value == 1:
-            power_text = "критический удар по твоей репутации! 💥 Вероятность позора взлетела на максимум, а шансы на корону Красавчика упали в стратосферу."
+            power_text = "💥 КРИТИЧЕСКИЙ УДАР ПО КАРМЕ! 💥 Твоя вероятность опозориться взлетела до небес, а шансы на корону Красавчика рухнули со свистом!"
         elif dice_value == 2:
-            power_text = "ощутимый удар по карме! Твои шансы проснуться Пидором дня выросли, а акции крутости знатно просели."
+            power_text = "ощутимый заплыв в сомнительную сторону. Твои шансы стать Пидором дня подросли, а шарм заметно просел."
         else:
-            power_text = "лёгкий сквозняк сомнительного вайба. Вероятность стать Пидором немного подросла, а шарм слегка увял."
+            power_text = "микро-осечка. Косметический сдвиг: шансы на Пидора чуть-чуть подросли. Пронесло!"
 
         await update.message.reply_text(
             f"🎲 На кубике выпадает: *{dice_value}*!\n\n"
-            f"🤡 *КАРМА БЬЁТ РИКОШЕТОМ!* {user.first_name}, это {power_text} Проведи аудит в `/procents`.{remains_text}",
+            f"🤡 *КАРМА БЬЁТ РИКОШЕТОМ!* {user.first_name}, это {power_text} Проверив обновлённую таблицу в `/procents`.{remains_text}",
             parse_mode="Markdown"
         )
-        if remains == 0:
-            await update.message.reply_sticker(sticker='CAACAgIAAxkBAAERlAxqX26LTBGVSCy2dEqT3LngPAfGfAACYC0AAgHNiUlP9RIyg3n6LD0E')
             
     else:
         # ======= 😎 ВЕТКА УДАЧИ (4, 5, 6) =======
-        step = 5.0 if dice_value == 4 else (6.0 if dice_value == 5 else 7.0)
+        step = 3.0 if dice_value == 4 else (7.0 if dice_value == 5 else 12.0)
+        p_minus = 1.0 if dice_value == 4 else (4.0 if dice_value == 5 else 7.0)
         
-        # Втихую пересчитываем баланс весов
         new_kras_weight = player["kras_weight"] + step
-        new_pidor_weight = max(1.0, player["pidor_weight"] - step)
+        new_pidor_weight = max(1.0, player["pidor_weight"] - p_minus)
         
+        # Фиксируем стартовую точку, если это ВПЕРВЫЕ за неделю
+        start_balance = player.get("dice_start_balance", 0.0)
+        if current_attempts == 0:
+            start_balance = player["kras_weight"] - player["pidor_weight"]
+
         supabase.table("users").update({
             "kras_weight": new_kras_weight,
             "pidor_weight": new_pidor_weight,
-            "dice_count": new_db_value
+            "dice_count": new_db_value,
+            "dice_start_balance": start_balance  # Сохраняем старт
         }).eq("user_id", user.id).execute()
         
-        # ИСПРАВЛЕНО: Тексты полностью замаскированы под шансы и проценты
         if dice_value == 6:
-            power_text = "абсолютный джекпот! 🏆 Твой нимб Красавчика засиял космическим блеском, а риски стать гэйем нехило снизились."
+            power_text = "👑 АБСОЛЮТНЫЙ ДЖЕКПОТ! 👑 Твой нимб засиял космическим блеском, а риски позорного утра неплохзо так снизились!"
         elif dice_value == 5:
-            power_text = "солидный прилив шарма! Проценты на победу поползли вверх, а вероятность поймать клеймо Пидора тает на глазах."
+            power_text = "мощный прилив шарма! Проценты на победу уверенно поползли вверх, а вероятность поймать клеймо Пидора тает на глазах."
         else:
-            power_text = "аккуратный шаг навстречу трону. Твои шансы на корону потихоньку ползут вверх, риски неудачного розыгрыша снижены."
+            power_text = "скромный шаг к успеху. Чуть-чуть подбавил уверенности в стату, риски позора символически снижены."
 
         await update.message.reply_text(
             f"🎲 На кубике выпадает: *{dice_value}*!\n\n"
-            f"😎 *ФОРТУНА УЛЫБАЕТСЯ ТЕБЕ!* {user.first_name}, это {power_text} Проверь обновлённую таблицу в `/procents`.{remains_text}",
+            f"😎 *ФОРТУНА УЛЫБАЕТСЯ ТЕБЕ!* {user.first_name}, это {power_text} Проведи аудит в `/procents`.{remains_text}",
             parse_mode="Markdown"
         )
-        if remains == 0:
-            await update.message.reply_sticker(sticker='CAACAgQAAxkBAAERlA5qX28PoaHLw_vQlr61kl4t7WzyFgACUAgAAtRigFLWQCl12cGV0z0E')
+
+    # =================================================================
+    # 🎰 ПОДВЕДЕНИЕ ТОЧНЫХ СУММАРНЫХ ИТОГОВ НЕДЕЛИ (СТРОГО НА 2-Й БРОСОК)
+    # =================================================================
+    if remains == 0:
+        await asyncio.sleep(3) 
+        
+        # Вытаскиваем из базы финальные веса ПОСЛЕ второго броска
+        fresh_res = supabase.table("users").select("*").eq("user_id", user.id).execute()
+        if fresh_res.data:
+            fresh_player = fresh_res.data[0]
+            
+            # Финальный баланс на конец недели
+            final_balance = fresh_player["kras_weight"] - fresh_player["pidor_weight"]
+            # Стартовый баланс, зафиксированный на первом шаге
+            saved_start_balance = fresh_player.get("dice_start_balance", 0.0)
+            
+            # Чистый профит за оба кубика суммарно!
+            total_net_gain = final_balance - saved_start_balance
+            
+            if total_net_gain > 0:
+                await update.message.reply_text("📈 *ИТОГ СЕССИИ: ЧИСТЫЙ СТОНКС!*\nПо результатам двух бросков твоя недельная карма закрылась в уверенный плюс. Проценты крутости на высоте! 😎", parse_mode="Markdown")
+                await update.message.reply_sticker(sticker='CAACAgIAAxkBAAERlJpqX8w3FNDgCPWSvVnsuCCj4FRCgwACTkkAAqsfMUmHRIhIKo8OmT0E')
+            elif total_net_gain < 0:
+                await update.message.reply_text("📉 *ИТОГ СЕССИИ: NOT STONKS...*\nПо итогам двух бросков общая карма утянула тебя вниз. Риски позорного утра повышены! 🤡", parse_mode="Markdown")
+                await update.message.reply_sticker(sticker='CAACAgIAAxkBAAERlJxqX8yRTjidyacJymAE9dpIfo2cxAAC0wEAAsVnCAABVsYsrVbM7hg9BA')
+            else:
+                await update.message.reply_text("⚖️ *ИТОГ СЕССИИ: ИДЕАЛЬНЫЙ БАЛАНС!*\nТвои еженедельные броски полностью уравновесили друг друга. Карма осталась нетронутой, вселенная в равновесии! 🌌", parse_mode="Markdown")
+                await update.message.reply_sticker(sticker='CAACAgIAAxkBAAERlJ5qX8z9Vf5rs4yCRMFo0Tw2XqOetwACcgADvFR8E62VWTguIRO5PQQ')
 
 # ---------------- ЗАПУСК (ВЕБХУК) ----------------
 
