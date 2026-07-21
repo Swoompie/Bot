@@ -522,6 +522,35 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         random_sticker = random.choice(kras_stickers_pool)
         await context.bot.send_sticker(chat_id=chat_id, sticker=random_sticker)
 
+    # ================= 🎲 СВОДКА ПО ДОСТУПНЫМ КУБИКАМ СУДЬБЫ =================
+    current_week_num = today.isocalendar()[1]
+    dice_ready_players = []
+
+    # Перебираем только АКТИВНЫХ игроков из базы
+    for u in users:
+        db_dice_value = u.get("dice_count", 0)
+        last_dice_week = db_dice_value // 10
+        current_attempts = db_dice_value % 10
+
+        # Если неделя в базе старая, значит, у чела доступны все 2 попытки
+        if current_week_num != last_dice_week:
+            current_attempts = 0
+
+        dice_left = 2 - current_attempts
+        if dice_left > 0:
+            username_tag = f" (@{u['username']})" if u['username'] else ""
+            dice_ready_players.append(f" └ *{u['first_name']}{username_tag}* — доступно: {dice_left} из 2")
+
+    # Формируем сообщение крупье
+    if dice_ready_players:
+        dice_memo_text = (
+            f"\n\n🎰 *ИНФОРМАЦИЯ ОТ КРУПЬЕ:* 🎰\n"
+            f"У следующих участников на этой неделе ещё остались заряженные кубики судьбы:\n"
+            f"{'\n'.join(dice_ready_players)}\n\n"
+            f"🎲 Напиши `/dice`, чтобы подбавить себе пару процентов, а в каком именно месте - зависит от твоей удачи! 😏"
+        )
+        await context.bot.send_message(chat_id=chat_id, text=dice_memo_text, parse_mode="Markdown")
+
     # --- ТИХИЙ БЭКАП ПОСЛЕ ИГРЫ ---
     context.application.create_task(silent_backup(context))
 
