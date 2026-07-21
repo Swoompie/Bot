@@ -936,15 +936,26 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     today = date.today()
     
-    # Вытаскиваем данные конкретного юзера из Supabase
-    res = supabase.table("users").select("*").eq("user_id", user.id).execute()
-    if not res.data:
+    # 1. Вытаскиваем ВСЕХ пользователей для расчета общей суммы весов
+    all_users = get_users()
+    active_users = [u for u in all_users if u.get("is_active", True)]
+    
+    # Ищем среди них конкретно нашего игрока
+    player = next((u for u in active_users if u["user_id"] == user.id), None)
+    
+    if not player:
         await update.message.reply_text("❌ Тебя еще нет в игре! Напиши /register")
         return
-        
-    player = res.data[0]
+
+    # 2. РАССЧИТЫВАЕМ ПРОЦЕНТЫ ШАНСОВ НА ТЕКУЩИЙ МОМЕНТ (Как в /procents)
+    total_pidor_weight = sum(u.get("pidor_weight", 100.0) for u in active_users)
+    total_kras_weight = sum(u.get("kras_weight", 100.0) for u in active_users)
     
-    # 1. Проверяем статус КД карты UNO
+    # Считаем чистый процент (защита от деления на ноль)
+    pidor_chance = (player.get("pidor_weight", 100.0) / total_pidor_weight * 100) if total_pidor_weight > 0 else 0.0
+    kras_chance = (player.get("kras_weight", 100.0) / total_kras_weight * 100) if total_kras_weight > 0 else 0.0
+
+    # 3. Проверяем статус КД карты UNO
     uno_status = "🟢 ГОТОВА К БОЮ!"
     if player.get("last_switch_date"):
         last_date = date.fromisoformat(player["last_switch_date"])
@@ -954,31 +965,28 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             day_word = "день" if days_left == 1 else ("дня" if days_left in [2, 3, 4] else "дней")
             uno_status = f"🔴 НА ПЕРЕЗАРЯДКЕ (еще {days_left} {day_word})"
 
-        # 2. РАССЧИТЫВАЕМ ЕЖЕНЕДЕЛЬНЫЙ ОСТАТОК КАРМИЧЕСКИХ КУБИКОВ (ЛИМИТ 2)
+    # 4. Рассчитываем еженедельный остаток кармических кубиков (Лимит 2)
     current_week_num = today.isocalendar()[1]
-    
     db_dice_value = player.get("dice_count", 0)
     last_dice_week = db_dice_value // 10
     current_attempts = db_dice_value % 10
     
-    # Если неделя сменилась, то попыток в текущей неделе 0
     if current_week_num != last_dice_week:
         current_attempts = 0
         
-    # ИСПРАВЛЕНО: Вычитаем из 2
     dice_left = 2 - current_attempts
-    
-    if dice_left == 0:
-        dice_status = "🔴 ИСЧЕРПАНЫ (0 из 2 на этой неделе)"
-    else:
-        dice_status = f"🟢 ДОСТУПНО: {dice_left} из 2 на этой неделе"
+    dice_status = "🔴 ИСЧЕРПАНЫ (0 из 2 на этой неделе)" if dice_left == 0 else f"🟢 ДОСТУПНО: {dice_left} из 2 на этой неделе"
 
+    # 5. Собираем ультимативное досье
     username = f" (@{player['username']})" if player['username'] else ""
     message = (
         f"👤 *ЛИЧНОЕ ДОСЬЕ ИГРОКА*:\n\n"
         f"Участник: *{player['first_name']}{username}*\n"
-        f"🤡 Статус Пидора: {player['pidor_count']} раз(а)\n"
-        f"😎 Статус Красавчика: {player['kras_count']} раз(а)\n\n"
+        f"🏆 Побед Пидора: *{player['pidor_count']}* раз(а)\n"
+        f"🏆 Побед Красавчика: *{player['kras_count']}* раз(а)\n\n"
+        f"📊 *ТЕКУЩИЕ ШАНСЫ*:\n"
+        f" └ 🤡 Стать Пидором: `{pidor_chance:.1f}%` \n"
+        f" └ 😎 Стать Красавчиком: `{kras_chance:.1f}%` \n\n"
         f"🃏 *Карта UNO:* {uno_status}\n"
         f"🎲 *Кубики судьбы:* {dice_status}"
     )
