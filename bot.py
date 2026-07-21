@@ -1130,10 +1130,10 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             total_net_gain = final_balance - saved_start_balance
             
             if total_net_gain > 0:
-                await update.message.reply_text("📈 *ИТОГ СЕССИИ: ЧИСТЫЙ СТОНКС!*\nПо результатам двух бросков твоя недельная карма закрылась в уверенный плюс. Проценты крутости на высоте! 😎", parse_mode="Markdown")
+                await update.message.reply_text("📈 *ИТОГ СЕССИИ: ЧИСТЫЙ СТОНКС!*\nПо результатам двух бросков твоя карма ушла в уверенный плюс. Проценты крутости на высоте! 😎", parse_mode="Markdown")
                 await update.message.reply_sticker(sticker='CAACAgIAAxkBAAERlJpqX8w3FNDgCPWSvVnsuCCj4FRCgwACTkkAAqsfMUmHRIhIKo8OmT0E')
             elif total_net_gain < 0:
-                await update.message.reply_text("📉 *ИТОГ СЕССИИ: NOT STONKS...*\nПо итогам двух бросков общая карма утянула тебя вниз. Риски позорного утра повышены! 🤡", parse_mode="Markdown")
+                await update.message.reply_text("📉 *ИТОГ СЕССИИ: NOT STONKS...*\nПо итогам двух бросков карма утянула тебя вниз, как и твои проценты. Риск на позор повышен! 🤡", parse_mode="Markdown")
                 await update.message.reply_sticker(sticker='CAACAgIAAxkBAAERlJxqX8yRTjidyacJymAE9dpIfo2cxAAC0wEAAsVnCAABVsYsrVbM7hg9BA')
             else:
                 await update.message.reply_text("⚖️ *ИТОГ СЕССИИ: ИДЕАЛЬНЫЙ БАЛАНС!*\nТвои еженедельные броски полностью уравновесили друг друга. Карма осталась нетронутой, вселенная в равновесии! 🌌", parse_mode="Markdown")
