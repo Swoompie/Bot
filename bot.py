@@ -318,6 +318,14 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # --- МИКРО-ПОДСКАЗКА ПРО КАРТУ UNO ---
     uno_status_text = ""
+    # Изящная тактическая памятка без раскрытия сухих цифр весов
+    rules_memo = (
+        "\n\n📊 *Сетка шансов на перевод:* "
+        "\n └ 👑 На Красавчика дня — *5%*"
+        "\n └ 🃏 На обычного мирного — *10%*"
+        "\n └ 🎯 На проигравшего в монетку — *20%* _(если таковой появится, но при провале твои шансы на Пидора взлетят!)_"
+    )
+
     if winner.get("last_switch_date"):
         last_date = date.fromisoformat(winner["last_switch_date"])
         days_passed = (today - last_date).days
@@ -327,10 +335,10 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
             day_word = "день" if days_left == 1 else ("дня" if days_left in [2, 3, 4] else "дней")
             uno_status_text = f"\n\n🃏 _Кстати, твоя карта UNO на перезарядке. Ждать еще {days_left} {day_word}._"
         else:
-            uno_status_text = f"\n\n🃏 *ОП-ПА! Твоя карта UNO ПЕРЕЗАРЯЖЕНА!* Можешь попробовать защититься, пиши: `/switch @username`"
+            uno_status_text = f"\n\n🃏 *ОП-ПА! Твоя карта UNO ПЕРЕЗАРЯЖЕНА!* Можешь попробовать защититься, пиши: `/switch @username`{rules_memo}"
     else:
         # Если чел вообще ни разу не юзал карту
-        uno_status_text = f"\n\n🃏 *ОП-ПА! Твоя карта UNO ГОТОВА!* Защищайся, пиши: `/switch @username`"
+        uno_status_text = f"\n\n🃏 *ОП-ПА! Твоя карта UNO ГОТОВА!* Защищайся, пиши: `/switch @username`{rules_memo}"
 
     # Если есть статус — докидываем его отдельным тихим сообщением для Пидора
     if uno_status_text:
