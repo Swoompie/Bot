@@ -466,7 +466,7 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         loser_base = supabase.table("users").select("kras_weight").eq("user_id", coin_loser["user_id"]).execute().data
         current_kras_weight = loser_base[0]["kras_weight"] if loser_base else 100.0
         
-        supabase.table("users").update({"kras_weight": current_kras_weight + 50.0}).eq("user_id", coin_loser["user_id"]).execute()
+        supabase.table("users").update({"kras_weight": current_kras_weight + 30.0}).eq("user_id", coin_loser["user_id"]).execute()
     else:
         # ================= ✨ ПУТЬ А: СТАНДАРТНЫЙ ПРОКРУТ (70%) =================
         await update.message.reply_text(f"😎 Красавчик дня — {final_winner['first_name']}{favorit_username}")
