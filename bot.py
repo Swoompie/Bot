@@ -710,26 +710,37 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_sticker(sticker='CAACAgIAAxkBAAEReRpqQ3-pZ9QRME44W1Es3DPWTGUPNAACkAIAAladvQoy0qlxuNTQtTwE')
             return
 
-     # 3. Парсим жертву
-    if not context.args or not update.message.entities:
-        await update.message.reply_text("❌ На кого переводим карту UNO? Тегни жертву через @username!")
+    # 3. УЛЬТИМАТИВНЫЙ ПАРСИНГ ЖЕРТВЫ (Защита от юзеров без Username)
+    if not context.args and not update.message.entities:
+        await update.message.reply_text("❌ На кого перевод? Тегни жертву через @username или кликни по его имени в меню упоминаний!")
         return
 
     target_username = None
+    target_user_id = None
+
     for entity in update.message.entities:
+        # Вариант А: Игрок тегнул через классический @username
         if entity.type == "mention":
-            target_username = update.message.text[entity.offset:entity.offset + entity.length]
+            target_username = update.message.text[entity.offset:entity.offset + entity.length].replace("@", "")
+            break
+        # Вариант Б: У игрока нет юзернейма, и его тегнули по Имени (синий текст имени)
+        elif entity.type == "text_mention":
+            target_user_id = entity.user.id
             break
 
-    if not target_username:
-        await update.message.reply_text("❌ Нужно именно тегнуть игрока через /switch @упоминание.")
+    # Ищем игрока в Supabase в зависимости от того, как его тегнули
+    if target_user_id:
+        # Нашли по ID
+        target_res = supabase.table("users").select("*").eq("user_id", target_user_id).eq("is_active", True).execute()
+    elif target_username:
+        # Нашли по классическому юзернейму
+        target_res = supabase.table("users").select("*").eq("username", target_username).eq("is_active", True).execute()
+    else:
+        await update.message.reply_text("❌ Нужно именно тегнуть игрока! Выбери его имя из выпадающего списка Телеграма, когда пишешь /switch @.")
         return
-
-    clean_username = target_username.replace("@", "")
-    target_res = supabase.table("users").select("*").eq("username", clean_username).eq("is_active", True).execute()
     
     if not target_res.data or len(target_res.data) == 0:
-        await update.message.reply_text(f"❌ Юзера {target_username} нет в рулетке или он ливнул!")
+        await update.message.reply_text("❌ Этого юзера нет в рулетке, или он ливнул из игры!")
         return
     
     # ТЕПЕРЬ СОЗДАЕМ ЖЕРТВУ
@@ -742,7 +753,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Проверяем, является ли это ВТОРОЙ попыткой перевода
     is_retry_attempt = context.user_data.get("switch_retry", False)
     
-    # 🔥 И ВОТ ТЕПЕРЬ БЕЗОПАСНАЯ УМНАЯ ПРОВЕРКА КРАСАВЧИКА (Бот знает, кто такой victim)
+    # БЕЗОПАСНАЯ УМНАЯ ПРОВЕРКА КРАСАВЧИКА 
     kras_today_res = supabase.table("daily_winners").select("*").eq("game_date", str(today)).eq("role", "krasavchik").execute()
     
     is_robbing_chad = False
@@ -750,15 +761,19 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if kras_today_res.data[0]["user_id"] == victim["user_id"]:
             is_robbing_chad = True
 
-    # 🔍 ИСПРАВЛЕНО ДЛЯ БАЗЫ ДАННЫХ: Вытаскиваем неудачника монетки напрямую из Supabase
+    # Вытаскиваем неудачника монетки напрямую из Supabase
     coin_loser_res = supabase.table("daily_winners").select("user_id").eq("game_date", str(today)).eq("role", "coin_loser").execute()
     
     is_coin_loser_target = False
     if coin_loser_res.data and len(coin_loser_res.data) > 0:
-        # ДОБАВЛЕН ИНДЕКС: база возвращает список, заходим внутрь первой строки
         if coin_loser_res.data[0]["user_id"] == victim["user_id"]:
             is_coin_loser_target = True
 
+    # ================= ФИКС ОТОБРАЖЕНИЯ ИМЕНИ =================
+    # Бот создаст красивое имя жертвы для вывода в чат, даже если у него нет @username
+    username_display = f" (@{victim['username']})" if victim.get("username") else ""
+    victim_name = f"{victim['first_name']}{username_display}"
+    
     # 4. ВЫДАЕМ ИНТРО-ТЕКСТ С УЧЕТОМ ДИНАМИЧЕСКИХ ШАНСОВ
     if is_robbing_chad:
         intro = [
@@ -816,7 +831,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return  # Прерываем функцию, провал обработан особым образом!
 
     if is_success and current_user:
-        # ================= 🎉🎉🎉 УСПЕШНЫЙ ПЕРЕВОД (5%) 🎉🎉🎉 =================
+        # ================= 🎉🎉🎉 УСПЕШНЫЙ ПЕРЕВОД (10%) 🎉🎉🎉 =================
         context.user_data.pop("switch_retry", None) # очищаем память ретрая
         
         if is_robbing_chad:
@@ -846,7 +861,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"💥 БОЖЕ МОЙ, ЭТО ИСТОРИЧЕСКИЙ МОМЕНТ! КАРТА ОСТАЕТСЯ ЦЕЛОЙ! 💥\n\n"
                 f"Королевское ограбление завершилось полным триумфом!\n"
                 f"😎 {user.first_name} ворует корону и СТАНОВИТСЯ НОВЫМ КРАСАВЧИКОМ ДНЯ!\n\n"
-                f"🤡 А вот {victim['first_name']} ({target_username}) с позором падает на дно и признается ПИДОРОМ ДНЯ!"
+                f"🤡 А вот {victim_name} с позором падает на дно и признается ПИДОРОМ ДНЯ!"
             )
             await update.message.reply_sticker(sticker='CAACAgIAAxkBAAERfwtqSi0WKXA0-slyXjuDMUAC14PGkAAC6BMAAp7K8UkQAAGdV1VM7UI8BA')
 
@@ -872,21 +887,19 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # --- РАЗВЕТВЛЕНИЕ ТЕКСТА И СТИКЕРОВ В ЗАВИСИМОСТИ ОТ ПОПЫТКИ ---
             if is_retry_attempt:
-                # ИСПРАВЛЕНО: Текст обновлен под новые 15% раздельного свитча
                 await update.message.reply_text(
                     f"🦊 *КАК ОН ЭТО ДЕЛАЕТ?! ХИТРЫЙ ЛИС В ДЕЛЕ!* 🦊\n\n"
                     f"Первая карта порвалась, но со второго шанса {user.first_name} совершает невозможное и выбивает 15%!\n"
                     f"👑 Ты полностью очищен от подозрений, легенда кубиков!\n\n"
-                    f"🤡 А вот {victim['first_name']} ({target_username}) официально становится ПИДOPOМ ДНЯ со второй подачи! Отлетай!",
+                    f"🤡 А вот {victim_name} официально становится ПИДOPOМ ДНЯ со второй подачи! Отлетай!",
                     parse_mode="Markdown"
                 )
                 await update.message.reply_sticker(sticker='CAACAgIAAxkBAAERg8xqT1rvV4e9QOkd5krbAdwHGMbORQACrB8AAi-rqEswnXHdk_VAETwE')
             else:
-                # ИСПРАВЛЕНО: Текст обновлен под новые 10% базового свитча
                 await update.message.reply_text(
                     f"💥 *КАРТА ПЕРЕВЕДЕНА!* Магия 10% сработала!\n\n"
                     f"👑 {user.first_name} полностью очищен от подозрений.\n"
-                    f"🤡 Новый официальный ПИДОР ДНЯ — {victim['first_name']} ({target_username})! Смирись!",
+                    f"🤡 Новый официальный ПИДОР ДНЯ — {victim_name}! Смирись!",
                     parse_mode="Markdown"
                 )
                 await update.message.reply_sticker(sticker='CAACAgIAAxkBAAEReQxqQ3c1Ul6X4NVVPO-Fd7SdNeiqIgACx04AAnJSgEuFrKam1iO89TwE')
