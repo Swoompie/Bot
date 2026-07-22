@@ -525,31 +525,39 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_sticker(chat_id=chat_id, sticker=random_sticker)
 
     # ================= 🎲 СВОДКА ПО ДОСТУПНЫМ КУБИКАМ СУДЬБЫ =================
+    # ЖЕЛЕЗНО: Оставляем индекс [1], чтобы достать чистый номер недели!
     current_week_num = today.isocalendar()[1]
     dice_ready_players = []
 
     # Перебираем только АКТИВНЫХ игроков из базы
     for u in users:
         db_dice_value = u.get("dice_count", 0)
-        last_dice_week = db_dice_value // 10
-        current_attempts = db_dice_value % 10
+        
+        # ЗАЩИТА ОТ ДЕФОЛТНЫХ НУЛЕЙ
+        if db_dice_value == 0:
+            last_dice_week = current_week_num
+            current_attempts = 0
+        else:
+            last_dice_week = db_dice_value // 10
+            current_attempts = db_dice_value % 10
 
-        # Если неделя в базе старая, значит, у чела доступны все 2 попытки
+        # Если неделя в базе старая (прошлонедельная), сбрасываем попытки в 0
         if current_week_num != last_dice_week:
             current_attempts = 0
 
         dice_left = 2 - current_attempts
         if dice_left > 0:
-            username_tag = f" (@{u['username']})" if u['username'] else ""
+            # БЕЗОПАСНЫЙ ТЕГ: защита от пустых username в базе
+            username_tag = f" (@{u['username']})" if u.get("username") else ""
             dice_ready_players.append(f" └ *{u['first_name']}{username_tag}* — доступно: {dice_left} из 2")
 
-    # Формируем сообщение крупье
+    # Формируем сообщение крупье (только если есть активные кубики!)
     if dice_ready_players:
         dice_memo_text = (
             f"\n\n🎰 *ИНФОРМАЦИЯ ОТ КРУПЬЕ:* 🎰\n"
             f"У следующих участников на этой неделе ещё остались заряженные кубики судьбы:\n"
             f"{'\n'.join(dice_ready_players)}\n\n"
-            f"🎲 Напиши `/dice`, чтобы подбавить себе пару процентов, а в каком именно месте - зависит от твоей удачи! 😏"
+            f"🎲 Напиши `/dice`, чтобы подбавить себе пару процентов, а в каком именно месте — зависит от твоей удачи! 😏"
         )
         await context.bot.send_message(chat_id=chat_id, text=dice_memo_text, parse_mode="Markdown")
 
