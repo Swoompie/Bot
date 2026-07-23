@@ -533,8 +533,10 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_sticker(chat_id=chat_id, sticker=random_sticker)
 
     # ================= 🎲 СВОДКА ПО ДОСТУПНЫМ КУБИКАМ СУДЬБЫ =================
-    # ЖЕЛЕЗНО: Оставляем индекс [1], чтобы достать чистый номер недели!
-    current_week_num = today.isocalendar()[1]
+    # ЖЕЛЕЗНО ИСПРАВЛЕНО: Объявляем дату и используем твой рабочий вариант с!
+    from datetime import date
+    game_today = date.today()
+    current_week_num = game_today.isocalendar()[1]
     dice_ready_players = []
 
     # Перебираем только АКТИВНЫХ игроков из базы
@@ -559,7 +561,7 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             username_tag = f" (@{u['username']})" if u.get("username") else ""
             dice_ready_players.append(f" └ *{u['first_name']}{username_tag}* — доступно: {dice_left} из 2")
 
-    # Формируем сообщение крупье (только если есть активные кубики!)
+    # Формируем и отправляем сообщение крупье ТОЛЬКО если есть хотя бы один кубик!
     if dice_ready_players:
         dice_memo_text = (
             f"\n\n🎰 *ИНФОРМАЦИЯ ОТ КРУПЬЕ:* 🎰\n"
@@ -567,7 +569,17 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"{'\n'.join(dice_ready_players)}\n\n"
             f"🎲 Напиши `/dice`, чтобы подбавить себе пару процентов, а в каком именно месте — зависит от твоей удачи! 😏"
         )
-        await context.bot.send_message(chat_id=chat_id, text=dice_memo_text, parse_mode="Markdown")
+        try:
+            await context.bot.send_message(chat_id=chat_id, text=dice_memo_text, parse_mode="Markdown")
+        except Exception as e:
+            # ТИХОЕ УВЕДОМЛЕНИЕ АДМИНУ: Если отправка упадет, ошибку пришлет тебе в ЛС
+            try:
+                await context.bot.send_message(
+                    chat_id=ADMIN_TG_ID, 
+                    text=f"⚠️ Ошибка отправки крупье в чат `{chat_id}`: `{e}`"
+                )
+            except Exception:
+                print(f"Даже админу не удалось отправить лог ошибки: {e}")
 
     # --- ТИХИЙ БЭКАП ПОСЛЕ ИГРЫ ---
     context.application.create_task(silent_backup(context))
