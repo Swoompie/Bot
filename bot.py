@@ -96,6 +96,7 @@ def get_users():
     # Возвращаем в виде списка словарей
     return res.data
 
+
 def get_today_winner(role):
     today_str = str(date.today())
     # Ищем победителя на сегодня
@@ -107,11 +108,13 @@ def get_today_winner(role):
         return user_res.data[0] if user_res.data else None
     return None
 
+
 def get_opposite_winner_id(role):
     today_str = str(date.today())
     opp_role = "krasavchik" if role == "pidor" else "pidor"
     res = supabase.table("daily_winners").select("user_id").eq("game_date", today_str).eq("role", opp_role).execute()
     return res.data[0]["user_id"] if res.data else None
+
 
 def save_daily_winner(role, user_id):
     today_str = str(date.today())
@@ -120,6 +123,7 @@ def save_daily_winner(role, user_id):
         "role": role,
         "user_id": user_id
     }).execute()
+
 
 def weighted_choice(users, column_name):
     # В Supabase данные приходят как словари, поэтому заменяем индексы на ключи
@@ -133,6 +137,7 @@ def weighted_choice(users, column_name):
         current += user[column_name]
         if rnd <= current:
             return user
+
 
 def redistribute_weights(winner_id, weight_column):
     # 1. Получаем всех активных пользователей из базы
