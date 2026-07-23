@@ -149,39 +149,31 @@ def redistribute_weights(winner_id, weight_column):
     for user in users:
         if user["user_id"] == winner_id:
             current_weight = user[weight_column]
-            # Победитель получает штраф -30.0. 
-            # Ограничение в 70.0 полностью убрано, вес может падать глубоко вниз.
-            # Ставим жесткий нижний пол в 1.0, чтобы вес не ушел в минус.
-            new_winner_weight = max(1.0, current_weight - 30.0)
+            # Победитель получает штраф -30.0, но не ниже капа 70.0
+            new_winner_weight = max(70.0, current_weight - 30.0)
             supabase.table("users").update({weight_column: new_winner_weight}).eq("user_id", winner_id).execute()
             break
 
-    # 2. Пересчитываем веса для ВСЕХ ОСТАЛЬНЫХ участников розыгрыша (кто сегодня отдыхает)
+    # 2. Пересчитываем веса для ВСЕХ ОСТАЛЬНЫХ участников розыгрыша
     for user in users:
         if user["user_id"] == winner_id:
             continue  # Пропускаем сегодняшнего победителя
 
         current_weight = user[weight_column]
 
-        # === 🚨 ОБНОВЛЕННАЯ ЛОГИКА: ТУРБО-КАМБЭК ДО 80.0 🚨 ===
-        if current_weight < 80.0:
-            # На всём промежутке от 1.0 до 80.0 вес летит вверх по +10.0 за раз!
-            new_weight = min(80.0, current_weight + 10.0)
-            
-        elif current_weight < 100.0:
-            # Когда перешагнули 80.0 — плавно дотягиваем до нормы на +3.0
+        if current_weight < 100.0:
+            # Если игрок в зоне защиты (недавно выигрывал) — плавно возвращаем к норме на +3.0
             new_weight = min(100.0, current_weight + 3.0)
-            
         else:
-            # Если игрок НЕ выигрывал, и его вес равен 100 или выше — даем микро-прирост +1.0 (шанс растет).
-            # Но если его вес за прошлые дни улетел слишком высоко (выше 120.0),
-            # система плавно сдувает излишки на -2.0 обратно к балансу, чтобы не было вечных фаворитов.
+            # Если игрок НЕ выигрывал сегодня — даем ему микро-прирост +1.0 к весу (шанс растет).
+            # Но если его вес за прошлые дни уже улетел слишком высоко (например, выше 120.0),
+            # система плавно сдувает его излишки на -2.0 обратно к балансу.
             if current_weight > 120.0:
                 new_weight = max(100.0, current_weight - 2.0)
             else:
                 new_weight = current_weight + 1.0
 
-        # Обновляем веса текущего юзера в Supabase
+        # ВНУТРИ ЦИКЛА (8 пробелов слева): обновляем веса текущего перебираемого юзера
         supabase.table("users").update({weight_column: new_weight}).eq("user_id", user["user_id"]).execute()
 
 # ---------------- КОМАНДЫ ----------------
@@ -533,10 +525,8 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_sticker(chat_id=chat_id, sticker=random_sticker)
 
     # ================= 🎲 СВОДКА ПО ДОСТУПНЫМ КУБИКАМ СУДЬБЫ =================
-    # ЖЕЛЕЗНО ИСПРАВЛЕНО: Локально берем актуальную дату для этой функции
-    from datetime import date
-    game_today = date.today()
-    current_week_num = today.isocalendar().week
+    # ЖЕЛЕЗНО: Оставляем индекс [1], чтобы достать чистый номер недели!
+    current_week_num = today.isocalendar()[1]
     dice_ready_players = []
 
     # Перебираем только АКТИВНЫХ игроков из базы
@@ -561,7 +551,7 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             username_tag = f" (@{u['username']})" if u.get("username") else ""
             dice_ready_players.append(f" └ *{u['first_name']}{username_tag}* — доступно: {dice_left} из 2")
 
-    # Формируем и отправляем сообщение крупье ТОЛЬКО если есть хотя бы один кубик!
+    # Формируем сообщение крупье (только если есть активные кубики!)
     if dice_ready_players:
         dice_memo_text = (
             f"\n\n🎰 *ИНФОРМАЦИЯ ОТ КРУПЬЕ:* 🎰\n"
@@ -569,17 +559,7 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"{'\n'.join(dice_ready_players)}\n\n"
             f"🎲 Напиши `/dice`, чтобы подбавить себе пару процентов, а в каком именно месте — зависит от твоей удачи! 😏"
         )
-        try:
-            await context.bot.send_message(chat_id=chat_id, text=dice_memo_text, parse_mode="Markdown")
-        except Exception as e:
-            # ТИХОЕ УВЕДОМЛЕНИЕ АДМИНУ: Если отправка в чат упала, ошибку шлем тебе в личку
-            try:
-                await context.bot.send_message(
-                    chat_id=ADMIN_TG_ID, 
-                    text=f"⚠️ Ошибка отправки сообщения крупье в чат `{chat_id}`: `{e}`"
-                )
-            except Exception:
-                print(f"Даже админу не удалось отправить лог ошибки: {e}")
+        await context.bot.send_message(chat_id=chat_id, text=dice_memo_text, parse_mode="Markdown")
 
     # --- ТИХИЙ БЭКАП ПОСЛЕ ИГРЫ ---
     context.application.create_task(silent_backup(context))
@@ -1007,7 +987,7 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             uno_status = f"🔴 НА ПЕРЕЗАРЯДКЕ (еще {days_left} {day_word})"
 
     # 4. Рассчитываем еженедельный остаток кармических кубиков (Лимит 2)
-    current_week_num = today.isocalendar().week
+    current_week_num = today.isocalendar()[1]
     db_dice_value = player.get("dice_count", 0)
     last_dice_week = db_dice_value // 10
     current_attempts = db_dice_value % 10
@@ -1039,7 +1019,7 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     today = date.today()
     
     # Получаем чистый номер текущей недели в году
-    current_week_num = today.isocalendar().week
+    current_week_num = today.isocalendar()[1]
 
     # 1. Вытаскиваем данные игрока из Supabase
     res = supabase.table("users").select("*").eq("user_id", user.id).execute()
@@ -1194,7 +1174,7 @@ async def main():
     # Собираем приложение бота
     app = Application.builder().token(TOKEN).build()
     
-    # Проверка планировщика задач
+    # ИСПРАВЛЕНО: Ровный отступ для проверки планировщика
     if app.job_queue is None:
         print("Критическая ошибка: Планировщик задач не инициализирован. Проверьте requirements.txt")
         
@@ -1214,28 +1194,35 @@ async def main():
     app.add_handler(CommandHandler("backup", manual_backup))
     app.add_handler(CommandHandler("dice", dice_command))
 
-    # ЗАПУСКАЕМ БОТА В БЕЗОПАСНОМ РЕЖИМЕ
-    async with app:
-        if RENDER_URL:
-            print("Бот запускается в режиме Webhook на Render...")
-            PORT = int(os.getenv("PORT", 10000))
+    if RENDER_URL:
+        print("Бот запускается в режиме Webhook на Render...")
+        PORT = int(os.getenv("PORT", 10000))
+        
+        # Правильный асинхронный запуск вебхука без зависания потока
+        await app.initialize()
+        if app.job_queue:
+            await app.job_queue.start()
             
-            await app.updater.start_webhook(
-                listen="0.0.0.0",
-                port=PORT,
-                url_path=TOKEN,
-                webhook_url=f"{RENDER_URL}/{TOKEN}"
-            )
-            print("Вебхук успешно запущен!")
-            
-            from asyncio import Event
-            await Event().wait()
-        else:
-            print("Бот запущен локально в режиме Polling!")
-            await app.updater.start_polling()
-            
-            from asyncio import Event
-            await Event().wait()
+        await app.start()
+        await app.updater.start_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            url_path=TOKEN,
+            webhook_url=f"{RENDER_URL}/{TOKEN}"
+        )
+        print("Вебхук и Таймеры успешно запущены!")
+        
+        # Вместо кривого while True используем встроенный асинхронный ожидалщик библиотеки
+        from asyncio import Event
+        await Event().wait()
+    else:
+        # ИСПРАВЛЕНО: Безопасный запуск поллинга для тестов на ПК
+        print("Бот запущен локально в режиме Polling!")
+        await app.initialize()
+        await app.start()
+        await app.updater.start_polling()
+        from asyncio import Event
+        await Event().wait()
 
 if __name__ == "__main__":
     import asyncio
