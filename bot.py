@@ -197,6 +197,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/records — Узнать лидеров чата 👀\n"
         "/switch @username — Использовать карту UNO и перевести от себя пидора (Шанс 5/10/20%?, КД 6 дней) 🃏\n"
         "/dice — Кинуть кубик кармы (2 в неделю) , но надо быть осторожным, возможны аномальные колебания процентов 🎲\n"
+        "/mimic @username — Мимикрировать под другого игрока 🎭\n"
         "/mystats — Узнать свою статистику и карту UNO 👀\n"
         "/unreg — Выйти из рулетки и удалить данные (нет) 🚪\n"
         "/help — Показать это сообщение еще раз (но на кое хер?)"
@@ -236,7 +237,10 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "kras_count": 0,
         "dice_count": 0,
         "dice_start_balance": 0.0,
-        "is_active": True  
+        "is_active": True,
+        "last_switch_date": None,
+        "mimic_target_id": None,    
+        "last_mimic_date": None   
     }).execute()
     
     # Текст для абсолютного новичка
@@ -277,7 +281,10 @@ async def reset_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "pidor_weight": 100.0, 
         "kras_weight": 100.0,
         "dice_count": 0,
-        "dice_start_balance": 0.0
+        "dice_start_balance": 0.0,
+        "last_switch_date": None,
+        "mimic_target_id": None,
+        "last_mimic_date": None
     }).neq("user_id", 0).execute()
     
     # Полностью очищаем таблицу "победителей"
@@ -316,7 +323,7 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(chat_id=chat_id, text=phrase)
         await asyncio.sleep(1)
     
-    # Выбираем победителя
+    # Выбираем победителя по умолчанию
     winner = weighted_choice(filtered_users, "pidor_weight")
     new_count = winner["pidor_count"] + 1
 
@@ -326,12 +333,55 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
     redistribute_weights(winner["user_id"], "pidor_weight")
     save_daily_winner("pidor", winner["user_id"])
 
-    username = f" (@{winner['username']})" if winner['username'] else ""
-    await update.message.reply_text(f"🤡 Пидор дня — {winner['first_name']}{username}")
+    # === 🎭 БЛОК КАРТЫ МИМИКРИИ: КРАЖА ПИДОРА (ВЫНЕСЕНО ВВЕРХ!) ===
+    mimic_hunter_res = supabase.table("users").select("*").eq("mimic_target_id", winner["user_id"]).execute()
+    
+    is_mimic_triggered = False
+    celebrator_name = winner["first_name"]
+    celebrator_count = new_count
+    final_pidor_user = winner  # ЖЕЛЕЗНО ИСПРАВЛЕНО: по умолчанию Пидор — это победитель рулетки
 
-    # --- МИКРО-ПОДСКАЗКА ПРО КАРТУ UNO ---
+    if mimic_hunter_res.data and len(mimic_hunter_res.data) > 0:
+        mimic_user = mimic_hunter_res.data[0] # ЖЕЛЕЗНО ИСПРАВЛЕНО: берем индекс первого юзера из базы!
+        is_mimic_triggered = True
+        final_pidor_user = mimic_user  # ЖЕЛЕЗНО ИСПРАВЛЕНО: теперь финальный Пидор для карты UNO — это Мимик!
+        
+        # 1. ОТМЕНЯЕМ ПОЗОР ПОСТРАДАВШЕГО
+        supabase.table("users").update({"pidor_count": winner["pidor_count"]}).eq("user_id", winner["user_id"]).execute()
+        
+        # 2. УДВАИВАЕМ ПОЗОР МИМИКУ (+2 вместо +1)
+        celebrator_count = mimic_user["pidor_count"] + 2
+        supabase.table("users").update({
+            "pidor_count": celebrator_count,
+            "mimic_target_id": None
+        }).eq("user_id", mimic_user["user_id"]).execute()
+        
+        # 3. ПЕРЕБИВАЕМ ИСТОРИЮ
+        supabase.table("daily_winners").update({"user_id": mimic_user["user_id"]}).eq("game_date", str(today)).eq("role", "pidor").execute()
+        save_daily_winner("pidor", mimic_user["user_id"])
+
+        mimic_username = f" (@{mimic_user['username']})" if mimic_user.get("username") else ""
+        celebrator_name = mimic_user["first_name"]
+
+        # Текст кармической кары
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"🎪 *КАРМИЧЕСКАЯ КАРА! МИМИКРИЯ ДАЛА ОСЕЧКУ!* 🎪\n\n"
+                 f"Пидором дня должен был стать *{winner['first_name']}*...\n"
+                 f"Но *{mimic_user['first_name']}{mimic_username}* так сильно хотел украсть чужую удачу, что попал в собственную ловушку! 🎭\n\n"
+                 f"🤡 Карма удваивает позор! {celebrator_name} забирает клеймо и получает **сразу +2 к счетчику Пидоров**! Клоун года! \n"
+                 f"👑 А чистый перед законом {winner['first_name']} выходит сухоньким из воды с каменным лицом!",
+            parse_mode="Markdown"
+        )
+        await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERl4dqYxpwoMRaj3A9CUnnJrevQTll7AACUncAAoWfcEkaYUBMkirIqT0E')
+
+    # --- ТЕКСТ ПО УМОЛЧАНИЮ (Только если мимик НЕ сработал, чтобы не дублировать фразы) ---
+    if not is_mimic_triggered:
+        username = f" (@{winner['username']})" if winner['username'] else ""
+        await update.message.reply_text(f"🤡 Пидор дня — {winner['first_name']}{username}")
+
+    # --- МИКРО-ПОДСКАЗКА ПРО КАРТУ UNO (ТЕПЕРЬ УЧИТЫВАЕТ РЕАЛЬНОГО ПИДОРА) ---
     uno_status_text = ""
-    # Изящная тактическая памятка без раскрытия сухих цифр весов
     rules_memo = (
         "\n\n📊 *Сетка шансов на перевод:* "
         "\n └ 👑 На Красавчика дня — *5%*"
@@ -339,8 +389,8 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "\n └ 🎯 На проигравшего в монетку — *20%* _(если таковой появится, но при провале твои шансы на Пидора взлетят!)_"
     )
 
-    if winner.get("last_switch_date"):
-        last_date = date.fromisoformat(winner["last_switch_date"])
+    if final_pidor_user.get("last_switch_date"):
+        last_date = date.fromisoformat(final_pidor_user["last_switch_date"])
         days_passed = (today - last_date).days
         
         if days_passed < 6:
@@ -350,16 +400,13 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             uno_status_text = f"\n\n🃏 *ОП-ПА! Твоя карта UNO ПЕРЕЗАРЯЖЕНА!* Можешь попробовать защититься, пиши: `/switch @username`{rules_memo}"
     else:
-        # Если чел вообще ни разу не юзал карту
         uno_status_text = f"\n\n🃏 *ОП-ПА! Твоя карта UNO ГОТОВА!* Защищайся, пиши: `/switch @username`{rules_memo}"
 
-    # Если есть статус — докидываем его отдельным тихим сообщением для Пидора
     if uno_status_text:
         await context.bot.send_message(chat_id=chat_id, text=uno_status_text, parse_mode="Markdown")
 
-    # ---------------- БЛОК ЮБИЛЕЙНЫХ ПОЗДРАВЛЕНИЙ ----------------
-    name = winner["first_name"]
-
+    # ---------------- БЛОК ЮБИЛЕЙНЫХ ПОЗДРАВЛЕНИЙ ПИДОРА ----------------
+    # ЖЕЛЕЗНО ИСПРАВЛЕНО: Убрали затирание имени, celebrator_name берется из логики Мимика выше!
     pidor_stickers_pool = [
         'CAACAgIAAxkBAAEReO5qQ22SmZkDyLqKq0vP6-ELBjPTUAACjnQAAihj2EtnaWFztIKP7DwE',
         'CAACAgIAAxkBAAERePBqQ27RxFYFJcHGEaZ9kPTDkhO1EAACSk4AAuAKOUlEfzO0OLfimzwE',
@@ -370,31 +417,32 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
         
     jokes = {
-        10: f"🎂 *ОГО, 10 РАЗ!* {name}, поздравляем! Первый юбилей на дне. Давай, расскажи всем, что это просто «случайность» и «рандом сломался»! 🤡",
-        20: f"👑 *УЖЕ 20 ПОБЕД!* {name} официально переходит в Высшую лигу сомнительных парней. Тебе уже пора выдавать именную корону из картона и скотча! 🎪",
-        30: f"🚨 *30-й СТРАЙК!* {name}, это уже не шутка, это карьера. Ты стабилен как швейцарские часы. Стабильно плох, но всё же! 🛑",
-        40: f"🗄 *КРИЗИС СРЕДНЕГО ВОЗРАСТА!* {name} отмечает 40 побед! Архив компромата переполнен! 📂",
-        50: f"🎖 *ПОЛУВЕКОВОЙ ЮБИЛЕЙ!* 50 раз! {name} получает золотую медаль и пожизненную путевку в гейбар! 🏅",
-        60: f"🎰 *МАСТЕР СВОЕГО ДЕЛА!* 60 побед у {name}! Датчики сомнительных мыслей просто зашкаливают, не шали! ⚡️",
-        70: f"🚨 *КОСМИЧЕСКИЙ УРОВЕНЬ!* 70-й раз! {name} твоё гейство видно даже со спутников наблюдения! 🌌",
-        80: f"🦾 *ТИФЛОНОВЫЙ СТАТУС!* 80 раз! К {name} уже просто ничего не липнет (особенно люди противоположного пола), это абсолютный иммунитет! 🛡",
-        90: f"🧛‍♂️ *ДРЕВНИЙ ОЛДХЭД!* 90 побед! {name} выходит на финишную прямую к великому залу славы ГЕЙмастеров! 🏛",
-        100: f"🏆 *ЛЕГЕНДА ВЕКА! СТО КРАТНЫЙ ПИДОР!* 🎉💥 {name} полностью прошёл эту жизнь с обратной стороны! Исторический момент, чат, салютуйте главному боссу этой игры! 👑🍾"
+        10: f"🎂 *ОГО, 10 РАЗ!* {celebrator_name}, поздравляем! Первый юбилей на дне. Давай, расскажи всем, что это просто «случайность»! 🤡",
+        20: f"👑 *УЖЕ 20 ПОБЕД!* {celebrator_name} официально переходит в Высльную лигу сомнительных парней. Корона из картона готова! 🎪",
+        30: f"🚨 *30-й СТРАЙК!* {celebrator_name}, это уже карьера. Ты стабилен как швейцарские часы. Стабильно плох! 🛑",
+        40: f"🗄 *КРИЗИС СРЕДНЕГО ВОЗРАСТА!* {celebrator_name} отмечает 40 побед! Архив компромата переполнен! 📂",
+        50: f"🎖 *ПОЛУВЕКОВОЙ ЮБИЛЕЙ!* 50 раз! {celebrator_name} получает золотую медаль и пожизненную путевку в гейбар! 🏅",
+        60: f"🎰 *МАСТЕР СВОЕГО ДЕЛА!* 60 побед у {celebrator_name}! Датчики сомнительных мыслей зашкаливают! ⚡️",
+        70: f"🚨 *КОСМИЧЕСКИЙ УРОВЕНЬ!* 70-й раз! {celebrator_name} твоё гейство видно даже со спутников наблюдения! 🌌",
+        80: f"🦾 *ТИФЛОНОВЫЙ СТАТУС!* 80 раз! К {celebrator_name} уже просто ничего не липнет, это абсолютный иммунитет! 🛡",
+        90: f"🧛‍♂️ *ДРЕВНИЙ ОЛДХЭД!* 90 побед! {celebrator_name} выходит на финишную прямую к великому залу славы ГЕЙмастеров! 🏛",
+        100: f"🏆 *ЛЕГЕНДА ВЕКА! СТО КРАТНЫЙ ПИДОР!* 🎉💥 {celebrator_name} полностью прошёл эту жизнь с обратной стороны! 👑🍾"
     }
 
     is_anniversary = False
     
-    if new_count == 5:
-        await update.message.reply_text(f"🎉 *РАЗОГРЕВ ОКОНЧЕН!* {name} косячит уже 5-й раз! Начало положено, но до клуба великих данжн мастеров далеко! 🎖", parse_mode="Markdown")
+    if celebrator_count == 5 or (is_mimic_triggered and celebrator_count == 6):
+        await update.message.reply_text(f"🎉 *РАЗОГРЕВ ОКОНЧЕН!* {celebrator_name} косячит уже 5-й раз! Начало положено, но до клуба великих данжн мастеров далеко! 🎖", parse_mode="Markdown")
         is_anniversary = True
-    elif new_count in jokes:
-        await update.message.reply_text(jokes[new_count], parse_mode="Markdown")
+    elif celebrator_count in jokes or (is_mimic_triggered and (celebrator_count - 1) in jokes):
+        actual_joke_count = celebrator_count if celebrator_count in jokes else (celebrator_count - 1)
+        await update.message.reply_text(jokes[actual_joke_count], parse_mode="Markdown")
         is_anniversary = True
          
     if is_anniversary:
         random_sticker = random.choice(pidor_stickers_pool)
         await context.bot.send_sticker(chat_id=chat_id, sticker=random_sticker)
-
+        
 async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 1. Вытаскиваем только АКТИВНЫХ игроков (is_active == True)
     all_users = get_users()
@@ -484,19 +532,60 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # ================= ✨ ПУТЬ А: СТАНДАРТНЫЙ ПРОКРУТ (70%) =================
         await update.message.reply_text(f"😎 Красавчик дня — {final_winner['first_name']}{favorit_username}")
 
-    # Считаем новое значение побед для финального счастливчика
+    # Считаем базовое новое значение побед для первичного счастливчика
     new_count = final_winner["kras_count"] + 1
 
-    # Обновляем счетчик красавчиков в Supabase
+    # Обновляем счетчик красавчиков в Supabase по умолчанию
     supabase.table("users").update({"kras_count": new_count}).eq("user_id", final_winner["user_id"]).execute()
     
     # Пересчитываем веса под финального победителя и сохраняем его в историю дня
     redistribute_weights(final_winner["user_id"], "kras_weight")
     save_daily_winner("krasavchik", final_winner["user_id"])
 
-    # ---------------- БЛОК ЮБИЛЕЙНЫХ ПОЗДРАВЛЕНИЙ С ИЗДЁВКОЙ ----------------
-    name = final_winner["first_name"]
+    # === 🎭 БЛОК КАРТЫ МИМИКРИИ: КРАЖА КРАСАВЧИКА (ВЫНЕСЕНО ВВЕРХ!) ===
+    mimic_hunter_res = supabase.table("users").select("*").eq("mimic_target_id", final_winner["user_id"]).execute()
     
+    is_mimic_triggered = False
+    celebrator_name = final_winner["first_name"]
+    celebrator_count = new_count
+
+    if mimic_hunter_res.data and len(mimic_hunter_res.data) > 0:
+        mimic_user = mimic_hunter_res.data[0]
+        is_mimic_triggered = True
+        
+        # 1. ОТМЕНЯЕМ ПОБЕДУ ПОСТРАДАВШЕГО (Срезаем обратно начисленный +1)
+        supabase.table("users").update({"kras_count": final_winner["kras_count"]}).eq("user_id", final_winner["user_id"]).execute()
+        
+        # 2. УДВАИВАЕМ КУШ МИМИКУ (+2 победы вместо +1) и сбрасываем цель
+        celebrator_count = mimic_user["kras_count"] + 2
+        supabase.table("users").update({
+            "kras_count": celebrator_count,
+            "mimic_target_id": None
+        }).eq("user_id", mimic_user["user_id"]).execute()
+        
+        # 3. ПЕРЕБИВАЕМ ИСТОРИЮ НА МИМИКА
+        supabase.table("daily_winners").update({"user_id": mimic_user["user_id"]}).eq("game_date", str(today)).eq("role", "krasavchik").execute()
+        save_daily_winner("krasavchik", mimic_user["user_id"])
+
+        mimic_username = f" (@{mimic_user['username']})" if mimic_user.get("username") else ""
+        celebrator_name = mimic_user["first_name"]
+
+        # Текст перехвата
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"💥 **МИМИКРИЯ СРАБОТАЛА УХА-ХА-ХА!* 💥\n\n"
+                 f"Красавчиком дня должен был стать *{final_winner['first_name']}*...\n"
+                 f"Но *{mimic_user['first_name']}{mimic_username}* - чёртов мимик предсказал твою победу! 🎭\n\n"
+                 f"👑 Куш удваивается! {celebrator_name} ворует корону и получает **сразу +2 победы** к статусу! 😎\n"
+                 f"А обворованный {final_winner['first_name']} остаётся с каменным лицом 🗿 и с абсолютным ничем!",
+            parse_mode="Markdown"
+        )
+        await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERl5ZqYzAUBU7z06cdM38fa4YZfog1xAACYwEAAnHpkDYtQnUiFYhhSj0E')
+    else:
+        # Если никто победителя не мимикрировал, сжигаем все остальные сегодняшние ставки участников
+        supabase.table("users").update({"mimic_target_id": None}).neq("user_id", 0).execute()
+
+    # ---------------- БЛОК ЮБИЛЕЙНЫХ ПОЗДРАВЛЕНИЙ С ИЗДЁВКОЙ ----------------
     kras_stickers_pool = [
         'CAACAgIAAxkBAAERePpqQ3C50Eqg_2plBXsHEFEtGOtmnQACk1QAAgmZ4EkPKsG3ATUGIDwE',
         'CAACAgIAAxkBAAERePxqQ3FkKQTrDt2Kt3E3v09Q90uUzgAC5zMAAvyF0EhRH0ZM6KsQGjwE',
@@ -507,25 +596,28 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
 
     jokes = {
-        10: f"👑 *ОГО, 10 РАЗ!* {name}, аккуратнее на поворотах, а то нимб упадёт и ноги отдавит! Чат, расступаемся, тут идёт мисс/мистер Обаяние! 📸",
-        20: f"🎩 *20 ПОБЕД!* {name} так часто выигрывает, что уже целует своё отражение в зеркале по утрам. Завязывай с самолюбованием, нам завидно! 🔥",
-        30: f"🏆 *30-й СТРАЙК!* {name}, признайся, ты подкрутил этот код или просто подкупил бота? Чат требует проверку на коддинг! 🚨",
-        40: f"✨ *40 РАЗ КРАСАВЧИК!* Уровень эго {name} превысил все допустимые нормы. Скоро тебе понадобится отдельная комната для твоей короны! 🗄",
-        50: f"🎖 *ПОЛУВЕКОВОЙ ЮБИЛЕЙ!* 50 побед! {name}, мы скидываемся тебе на памятник при жизни в полный рост. Из чистого золота, естественно! 🏅",
-        60: f"🎰 *60 ПОБЕД!* {name} официально признан главным нарциссом этого чата. Датчики привлекательности сгорели от такого пафоса! ⚡️",
-        70: f"🛰 *КОСМИЧЕСКИЙ КРАСАВЧИК!* 70-й раз! {name}, твоё великолепие ослепляет даже спутники наблюдения! Надень маску, побереги наши глаза! 🌌",
-        80: f"🛡 *80 РАЗ! СВЕРХЛЮДИ СРЕДИ НАС!* К {name} уже выстроилась очередь за автографами. Не забудь упомянуть этот чат, когда поедешь на Мисс/Мистер Вселенная! 🦾",
-        90: f"🏛 *90 ПОБЕД!* {name} одной ногой в зале славы великих Победителей. Ещё чуть-чуть, и твоё лицо напечатают на обложках всех журналов! 🧛‍♂️",
-        100: f"👑🍾 *ЛЕГЕНДА ВЕКА! СТОКРАТНЫЙ КРАСАВЧИК!* 🎉💥 {name} официально прошёл эту игру! 100 побед! Абсолютный рекордсмен, икона стиля и босс этого чата! Салют чемпиону! 🏆🌟"
+        10: f"👑 *ОГО, 10 РАЗ!* {celebrator_name}, аккуратнее на поворотах, а то нимб упадёт и ноги отдавит! Чат, расступаемся, тут идёт мисс/мистер Обаяние! 📸",
+        20: f"🎩 *20 ПОБЕД!* {celebrator_name} так часто выигрывает, что уже целует своё отражение в зеркале по утрам. Завязывай с самолюбованием, нам завидно! 🔥",
+        30: f"🏆 *30-й СТРАЙК!* {celebrator_name}, признайся, ты подкрутил этот код или просто подкупил бота? Чат требует проверку на коддинг! 🚨",
+        40: f"✨ *40 РАЗ КРАСАВЧИК!* Уровень эго {celebrator_name} превысил все допустимые нормы. Скоро тебе понадобится отдельная комната для твоей короны! 🗄",
+        50: f"🎖 *ПОЛУВЕКОВОЙ ЮБИЛЕЙ!* 50 побед! {celebrator_name}, мы скидываемся тебе на памятник при жизни в полный рост. Из чистого золота, естественно! 🏅",
+        60: f"🎰 *60 ПОБЕД!* {celebrator_name} официально признан главным нарциссом этого чата. Датчики привлекательности сгорели от такого пафоса! ⚡️",
+        70: f"🛰 *КОСМИЧЕСКИЙ КРАСАВЧИК!* 70-й раз! {celebrator_name}, твоё великолепие ослепляет даже спутники наблюдения! Надень маску, побереги наши глаза! 🌌",
+        80: f"🛡 *80 РАЗ! СВЕРХЛЮДИ СРЕДИ НАС!* К {celebrator_name} уже выстроилась очередь за автографами. Не забудь упомянуть этот чат, когда поедешь на Мистер Вселенная! 🦾",
+        90: f"🏛 *90 ПОБЕД!* {celebrator_name} одной ногой в зале славы великих Победителей. Ещё чуть-чуть, и твоё лицо напечатают на обложках всех журналов! 🧛‍♂️",
+        100: f"👑🍾 *ЛЕГЕНДА ВЕКА! СТОКРАТНЫЙ КРАСАВЧИК!* 🎉💥 {celebrator_name} официально прошёл эту игру! 100 побед! Абсолютный рекордсмен, икона стиля и босс этого чата! Салют чемпиону! 🏆🌟"
     }
 
     is_anniversary = False 
     
-    if new_count == 5:
-        await update.message.reply_text(f"🎉 *5 ПОБЕД!* {name} вступает в клуб самовлюбленных! Начало положено, но до настоящих победителей тебе ещё пилить и пилить! 🎖", parse_mode="Markdown")
+    # ИСПРАВЛЕНО: Если сработал Мимик и пролетел мимо 5, проверим точечно юбилеи или прыжок через него
+    if celebrator_count == 5 or (is_mimic_triggered and celebrator_count == 6):
+        await update.message.reply_text(f"🎉 *5 ПОБЕД!* {celebrator_name} вступает в клуб самовлюбленных! Начало положено! 🎖", parse_mode="Markdown")
         is_anniversary = True
-    elif new_count in jokes:
-        await update.message.reply_text(jokes[new_count], parse_mode="Markdown")
+    elif celebrator_count in jokes or (is_mimic_triggered and (celebrator_count - 1) in jokes):
+        # Защита на случай если из-за +2 мимик перешагнул точную цифру юбилея (например с 9 сразу на 11)
+        actual_joke_count = celebrator_count if celebrator_count in jokes else (celebrator_count - 1)
+        await update.message.reply_text(jokes[actual_joke_count], parse_mode="Markdown")
         is_anniversary = True
 
     if is_anniversary:
@@ -696,7 +788,106 @@ async def records(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     await update.message.reply_text(message, parse_mode="Markdown")
+    
+async def mimic(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    chat_id = update.effective_chat.id
+    today = date.today()
 
+    if update.effective_chat.type == "private":
+        await update.message.reply_text("❌ Активировать Мимика можно только в групповых чатах!")
+        return
+
+    # 1. Вытаскиваем данные Стрелочника из базы
+    user_res = supabase.table("users").select("*").eq("user_id", user.id).execute()
+    if not user_res.data:
+        await update.message.reply_text("❌ Тебя нет в рулетке! Напиши /register")
+        return
+    current_user = user_res.data[0]
+
+    # 2. ПРОВЕРКА КУЛДАУНА (14 ДНЕЙ) С УМНЫМ ПАРСИНГОМ ТИПА DATE
+    if current_user.get("last_mimic_date"):
+        last_db_date = current_user["last_mimic_date"]
+        last_date = date.fromisoformat(last_db_date) if isinstance(last_db_date, str) else last_db_date
+        days_passed = (today - last_date).days
+        
+        if days_passed < 14:
+            days_left = 14 - days_passed
+            day_word = "день" if days_left == 1 else ("дня" if days_left in [2, 3, 4] else "дней")
+            await update.message.reply_text(f"❌ Способность Мимикрия еще на перезарядке! Доступ появится через *{days_left} {day_word}*.", parse_mode="Markdown")
+            await update.message.reply_sticker(sticker='CAACAgIAAxkBAAEReRpqQ3-pZ9QRME44W1Es3DPWTGUPNAACkAIAAladvQoy0qlxuNTQtTwE')
+            return
+
+    # 3. УЛЬТИМАТИВНЫЙ ПАРСИНГ ЖЕРТВЫ (Твоя схема из карты UNO)
+    if not context.args and not update.message.entities:
+        await update.message.reply_text("❌ Под кого мимикрируем? Тегни цель: `/mimic @username` или кликни по имени в списке!")
+        return
+
+    target_username = None
+    target_user_id = None
+
+    for entity in update.message.entities:
+        if entity.type == "mention":
+            target_username = update.message.text[entity.offset:entity.offset + entity.length].replace("@", "")
+            break
+        elif entity.type == "text_mention":
+            target_user_id = entity.user.id
+            break
+
+    # Ищем жертву в базе
+    if target_user_id:
+        target_res = supabase.table("users").select("*").eq("user_id", target_user_id).eq("is_active", True).execute()
+    elif target_username:
+        target_res = supabase.table("users").select("*").eq("username", target_username).eq("is_active", True).execute()
+    else:
+        await update.message.reply_text("❌ Нужно именно тегнуть игрока!")
+        return
+    
+    if not target_res.data or len(target_res.data) == 0:
+        await update.message.reply_text("❌ Этого юзера нет в рулетке, или он ливнул!")
+        return
+    
+    victim = target_res.data[0]
+
+    if victim["user_id"] == user.id:
+        await update.message.reply_text("🎭 Мимикрировать под самого себя? Ну ты мегомозг ничего не скажешь, выбери другую цель.")
+        return
+
+    # 4. ЗАЩИТА ОТ ПЕРЕКРЁСТНОЙ МИМИКРИИ И ЛИМИТОВ
+    # Проверяем, не нацелилась ли ЖЕРТВА уже на кого-то сегодня
+    if victim.get("mimic_target_id"):
+        await update.message.reply_text("🗿 *ОПОЗДАЛ!* Эта жертва уже активировала свои датчики маскировки и сама вышла на охоту! Перекрёстная мимикрия заблокирована!")
+        return
+
+    # Проверяем, не занята ли жертва кем-то другим сегодня
+    all_users = supabase.table("users").select("*").eq("is_active", True).execute().data
+    for u in all_users:
+        if u.get("mimic_target_id") == victim["user_id"]:
+            await update.message.reply_text("🙅‍♂️ На этого игрока уже нацелен другой Мимик! Кто первый успел, того и тапки.")
+            return
+
+    # 5. ЗАПИСЫВАЕМ СТАВКУ В БАЗУ SUPABASE (Строго на 1 день)
+    supabase.table("users").update({
+        "mimic_target_id": victim["user_id"],
+        "last_mimic_date": str(today)
+    }).eq("user_id", user.id).execute()
+
+    username_display = f" (@{victim['username']})" if victim.get("username") else ""
+    victim_name = f"{victim['first_name']}{username_display}"
+
+    # Интригующие фразы
+    mimic_phrases = [
+        f"🎭 *ЗЕРКАЛЬНЫЙ ПРОТОКОЛ ЗАПУЩЕН!* {user.first_name} разворачивает карту Мимика!",
+        f"📡 Подключаемся к датчикам удачи *{victim_name}*... Ставка принята! Куда упадёт монета рулетки - туда улетит и твоя карма! 🗿"
+    ]
+    
+    for phrase in mimic_phrases:
+        await context.bot.send_message(chat_id=chat_id, text=phrase, parse_mode="Markdown")
+        await asyncio.sleep(1.5)
+
+    # Мемный стикер наведения цели
+    await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERl5RqYy9g5SuIKeL-HYdt9H78f80S9wACGTkAAnsn4UlP1wuYX7Od8j0E')
+    
 async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     chat_id = update.effective_chat.id
@@ -1006,7 +1197,20 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             day_word = "день" if days_left == 1 else ("дня" if days_left in [2, 3, 4] else "дней")
             uno_status = f"🔴 НА ПЕРЕЗАРЯДКЕ (еще {days_left} {day_word})"
 
+    # === 🎭 3.5 Проверяем статус КД МИМИКРИИ (14 ДНЕЙ) ===
+    mimic_status = "🟢 ГОТОВА!"
+    if player.get("last_mimic_date"):
+        last_m_db = player["last_mimic_date"]
+        # Умный парсинг даты из Supabase (если пришла строкой — переведем, если датой — оставим)
+        last_m_date = date.fromisoformat(last_m_db) if isinstance(last_m_db, str) else last_m_db
+        m_days_passed = (today - last_m_date).days
+        if m_days_passed < 14:
+            m_days_left = 14 - m_days_passed
+            m_day_word = "день" if m_days_left == 1 else ("дня" if m_days_left in [2, 3, 4] else "дней")
+            mimic_status = f"🔴 НА ПЕРЕЗАРЯДКЕ (еще {m_days_left} {m_day_word})"
+
     # 4. Рассчитываем еженедельный остаток кармических кубиков (Лимит 2)
+    # Используем твой железно рабочий вариант с индексом!
     current_week_num = today.isocalendar()[1]
     db_dice_value = player.get("dice_count", 0)
     last_dice_week = db_dice_value // 10
@@ -1029,6 +1233,7 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f" └ 🤡 Стать Пидором: `{pidor_chance:.1f}%` \n"
         f" └ 😎 Стать Красавчиком: `{kras_chance:.1f}%` \n\n"
         f"🃏 *Карта UNO:* {uno_status}\n"
+        f"🎭 *Мимикрия:* {mimic_status}\n"
         f"🎲 *Кубики судьбы:* {dice_status}"
     )
     await update.message.reply_text(message, parse_mode="Markdown")
@@ -1213,6 +1418,7 @@ async def main():
     app.add_handler(CommandHandler("pidor", pidor))
     app.add_handler(CommandHandler("run", run_command))
     app.add_handler(CommandHandler("stats", stats))
+    app.add_handler(CommandHandler("mimic", mimic))
     app.add_handler(CommandHandler("procents", procents))
     app.add_handler(CommandHandler("switch", switch))
     app.add_handler(CommandHandler("records", records))
