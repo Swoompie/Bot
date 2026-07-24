@@ -1102,9 +1102,7 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         new_kras_weight = max(1.0, player["kras_weight"] - k_minus)
         
         # Фиксируем стартовую точку, если это ВПЕРВЫЕ за неделю
-        start_balance = player.get("dice_start_balance", 0.0)
-        if current_attempts == 0:
-            start_balance = player["kras_weight"] - player["pidor_weight"]
+        start_balance = 0.0 if current_attempts == 0 else player.get("dice_start_balance", 0.0)
 
         supabase.table("users").update({
             "pidor_weight": new_pidor_weight,
@@ -1135,9 +1133,7 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         new_pidor_weight = max(1.0, player["pidor_weight"] - p_minus)
         
         # Фиксируем стартовую точку, если это ВПЕРВЫЕ за неделю
-        start_balance = player.get("dice_start_balance", 0.0)
-        if current_attempts == 0:
-            start_balance = player["kras_weight"] - player["pidor_weight"]
+        start_balance = 0.0 if current_attempts == 0 else player.get("dice_start_balance", 0.0)
 
         supabase.table("users").update({
             "kras_weight": new_kras_weight,
