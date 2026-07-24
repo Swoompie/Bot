@@ -1104,11 +1104,16 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Фиксируем стартовую точку, если это ВПЕРВЫЕ за неделю
         start_balance = 0.0 if current_attempts == 0 else player.get("dice_start_balance", 0.0)
 
+        # Считаем чистый вес текущего кубика
+        current_dice_gain = -4.0 if dice_value == 3 else (-11.0 if dice_value == 2 else -19.0)
+        # Если это первый бросок — пишем его вес, если второй — сохраняем старый из базы
+        saved_balance = current_dice_gain if current_attempts == 0 else player.get("dice_start_balance", 0.0)
+
         supabase.table("users").update({
             "pidor_weight": new_pidor_weight,
             "kras_weight": new_kras_weight,
             "dice_count": new_db_value,
-            "dice_start_balance": start_balance  # Сохраняем старт
+            "dice_start_balance": saved_balance
         }).eq("user_id", user.id).execute()
         
         if dice_value == 1:
@@ -1135,11 +1140,16 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Фиксируем стартовую точку, если это ВПЕРВЫЕ за неделю
         start_balance = 0.0 if current_attempts == 0 else player.get("dice_start_balance", 0.0)
 
+        # Считаем чистый вес текущего кубика
+        current_dice_gain = 4.0 if dice_value == 4 else (11.0 if dice_value == 5 else 19.0)
+        # Если это первый бросок — пишем его вес, если второй — сохраняем старый из базы
+        saved_balance = current_dice_gain if current_attempts == 0 else player.get("dice_start_balance", 0.0)
+
         supabase.table("users").update({
             "kras_weight": new_kras_weight,
             "pidor_weight": new_pidor_weight,
             "dice_count": new_db_value,
-            "dice_start_balance": start_balance  # Сохраняем старт
+            "dice_start_balance": saved_balance
         }).eq("user_id", user.id).execute()
         
         if dice_value == 6:
@@ -1166,13 +1176,13 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if fresh_res.data:
             fresh_player = fresh_res.data[0]
             
-            # Финальный баланс на конец недели
-            final_balance = fresh_player["kras_weight"] - fresh_player["pidor_weight"]
-            # Стартовый баланс, зафиксированный на первом шаге
-            saved_start_balance = fresh_player.get("dice_start_balance", 0.0)
+            # Узнаем вес ВТОРОГО кубика (вычитаем из новых весов старые)
+            second_dice_gain = (fresh_player["kras_weight"] - fresh_player["pidor_weight"]) - (player["kras_weight"] - player["pidor_weight"])
+            # Берем из базы чистый вес ПЕРВОГО кубика
+            first_dice_gain = fresh_player.get("dice_start_balance", 0.0)
             
-            # Чистый профит за оба кубика суммарно!
-            total_net_gain = final_balance - saved_start_balance
+            # Чистый профит — это строго сумма весов двух кубиков!
+            total_net_gain = first_dice_gain + second_dice_gain
             
             if total_net_gain > 0:
                 await update.message.reply_text("📈 *ИТОГ СЕССИИ: ЧИСТЫЙ СТОНКС!*\nПо результатам двух бросков твоя карма ушла в уверенный плюс. Проценты крутости на высоте! 😎", parse_mode="Markdown")
