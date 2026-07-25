@@ -443,6 +443,8 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_sticker(chat_id=chat_id, sticker=random_sticker)
         
 async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from datetime import date
+    game_today = date.today()
     # 1. Вытаскиваем только АКТИВНЫХ игроков (is_active == True)
     all_users = get_users()
     users = [u for u in all_users if u.get("is_active", True)]
@@ -624,8 +626,6 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ================= 🎲 СВОДКА ПО ДОСТУПНЫМ КУБИКАМ СУДЬБЫ =================
     # ЖЕЛЕЗНО ИСПРАВЛЕНО: Объявляем дату и используем твой рабочий вариант с!
-    from datetime import date
-    game_today = date.today()
     current_week_num = game_today.isocalendar()[1]
     dice_ready_players = []
 
