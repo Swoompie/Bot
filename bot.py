@@ -563,7 +563,7 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }).eq("user_id", mimic_user["user_id"]).execute()
         
         # 3. ПЕРЕБИВАЕМ ИСТОРИЮ НА МИМИКА
-        supabase.table("daily_winners").update({"user_id": mimic_user["user_id"]}).eq("game_date", str(today)).eq("role", "krasavchik").execute()
+        supabase.table("daily_winners").update({"user_id": mimic_user["user_id"]}).eq("game_date", str(game_today)).eq("role", "krasavchik").execute()
 
         mimic_username = f" (@{mimic_user['username']})" if mimic_user.get("username") else ""
         celebrator_name = mimic_user["first_name"]
