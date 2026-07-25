@@ -573,7 +573,7 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Текст перехвата
         await context.bot.send_message(
             chat_id=chat_id,
-            text=f"💥 **МИМИКРИЯ СРАБОТАЛА УХА-ХА-ХА!* 💥\n\n"
+            text=f"💥 *МИМИКРИЯ СРАБОТАЛА УХА-ХА-ХА!* 💥\n\n"
                  f"Красавчиком дня должен был стать *{final_winner['first_name']}*...\n"
                  f"Но *{mimic_user['first_name']}{mimic_username}* - чёртов мимик предсказал твою победу! 🎭\n\n"
                  f"👑 Куш удваивается! {celebrator_name} ворует корону и получает **сразу +2 победы** к статусу! 😎\n"
