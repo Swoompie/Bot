@@ -333,18 +333,22 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
     redistribute_weights(winner["user_id"], "pidor_weight")
     save_daily_winner("pidor", winner["user_id"])
 
-    # === 🎭 БЛОК КАРТЫ МИМИКРИИ: КРАЖА ПИДОРА (ВЫНЕСЕНО ВВЕРХ!) ===
+    # === 🎉 ОБЪЯВЛЕНИЕ ПЕРВИЧНОГО ПИДОРА (ТЕПЕРЬ ВЫВОДИТСЯ СРАЗУ, КАК В КРАСАВЧИКЕ) ===
+    username = f" (@{winner['username']})" if winner['username'] else ""
+    await update.message.reply_text(f"🤡 Пидор дня — {winner['first_name']}{username}")
+
+    # === 🎭 БЛОК КАРТЫ МИМИКРИИ: КРАЖА ПИДОРА ===
     mimic_hunter_res = supabase.table("users").select("*").eq("mimic_target_id", winner["user_id"]).execute()
     
     is_mimic_triggered = False
     celebrator_name = winner["first_name"]
     celebrator_count = new_count
-    final_pidor_user = winner  # ЖЕЛЕЗНО ИСПРАВЛЕНО: по умолчанию Пидор — это победитель рулетки
+    final_pidor_user = winner  # по умолчанию Пидор — это победитель рулетки
 
     if mimic_hunter_res.data and len(mimic_hunter_res.data) > 0:
-        mimic_user = mimic_hunter_res.data[0] # ЖЕЛЕЗНО ИСПРАВЛЕНО: берем индекс первого юзера из базы!
+        mimic_user = mimic_hunter_res.data[0] # берем индекс первого юзера из базы!
         is_mimic_triggered = True
-        final_pidor_user = mimic_user  # ЖЕЛЕЗНО ИСПРАВЛЕНО: теперь финальный Пидор для карты UNO — это Мимик!
+        final_pidor_user = mimic_user  # теперь финальный Пидор для карты UNO — это Мимик!
         
         # 1. ОТМЕНЯЕМ ПОЗОР ПОСТРАДАВШЕГО
         supabase.table("users").update({"pidor_count": winner["pidor_count"]}).eq("user_id", winner["user_id"]).execute()
@@ -373,11 +377,6 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown"
         )
         await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERl4dqYxpwoMRaj3A9CUnnJrevQTll7AACUncAAoWfcEkaYUBMkirIqT0E')
-
-    # --- ТЕКСТ ПО УМОЛЧАНИЮ (Только если мимик НЕ сработал, чтобы не дублировать фразы) ---
-    if not is_mimic_triggered:
-        username = f" (@{winner['username']})" if winner['username'] else ""
-        await update.message.reply_text(f"🤡 Пидор дня — {winner['first_name']}{username}")
 
     # --- МИКРО-ПОДСКАЗКА ПРО КАРТУ UNO (ТЕПЕРЬ УЧИТЫВАЕТ РЕАЛЬНОГО ПИДОРА) ---
     uno_status_text = ""
@@ -581,9 +580,9 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown"
         )
         await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERl5ZqYzAUBU7z06cdM38fa4YZfog1xAACYwEAAnHpkDYtQnUiFYhhSj0E')
-    else:
-        # Если никто победителя не мимикрировал, сжигаем все остальные сегодняшние ставки участников
-        supabase.table("users").update({"mimic_target_id": None}).neq("user_id", 0).execute()
+
+    # Если никто победителя не мимикрировал, сжигаем все остальные сегодняшние ставки участников
+    supabase.table("users").update({"mimic_target_id": None}).neq("user_id", 0).execute()
 
     # ---------------- БЛОК ЮБИЛЕЙНЫХ ПОЗДРАВЛЕНИЙ С ИЗДЁВКОЙ ----------------
     kras_stickers_pool = [
