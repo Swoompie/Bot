@@ -358,7 +358,6 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # 3. ПЕРЕБИВАЕМ ИСТОРИЮ
         supabase.table("daily_winners").update({"user_id": mimic_user["user_id"]}).eq("game_date", str(today)).eq("role", "pidor").execute()
-        save_daily_winner("pidor", mimic_user["user_id"])
 
         mimic_username = f" (@{mimic_user['username']})" if mimic_user.get("username") else ""
         celebrator_name = mimic_user["first_name"]
@@ -565,7 +564,6 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # 3. ПЕРЕБИВАЕМ ИСТОРИЮ НА МИМИКА
         supabase.table("daily_winners").update({"user_id": mimic_user["user_id"]}).eq("game_date", str(today)).eq("role", "krasavchik").execute()
-        save_daily_winner("krasavchik", mimic_user["user_id"])
 
         mimic_username = f" (@{mimic_user['username']})" if mimic_user.get("username") else ""
         celebrator_name = mimic_user["first_name"]
