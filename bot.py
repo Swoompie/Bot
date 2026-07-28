@@ -183,6 +183,11 @@ def redistribute_weights(winner_id, weight_column):
 
         # Обновляем веса текущего юзера в Supabase
         supabase.table("users").update({weight_column: new_weight}).eq("user_id", user["user_id"]).execute()
+    
+    # === 📅 ЕЖЕНЕДЕЛЬНЫЙ АВТОСБРОС ЗАВИСШИХ ДУЭЛЕЙ ПО ПОНЕДЕЛЬНИКАМ ===
+    # weekday() == 0 — это строго понедельник. Сжигаем несыгранные перчатки.
+    if date.today().weekday() == 0:
+        supabase.table("users").update({"duel_target_id": None}).neq("user_id", 0).execute()
 
 # ---------------- КОМАНДЫ ----------------
 
