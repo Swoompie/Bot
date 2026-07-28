@@ -1475,6 +1475,11 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     duel_bullets_left = 6 - current_duel_attempts
     duel_bullet_status = f"🟢 ДОСТУПНО: {duel_bullets_left} из 6 выстрелов" if duel_bullets_left > 0 else "🔴 ОБОЙМА ПУСТА (0 из 6)"
 
+    # Вытаскиваем дуэльные очки из карточки игрока (дефолт 0, если пусто)
+    d_wins = player.get("duel_wins", 0) if player.get("duel_wins") is not None else 0
+    d_losses = player.get("duel_losses", 0) if player.get("duel_losses") is not None else 0
+    d_total = d_wins + d_losses
+
     # 5. Собираем ультимативное досье
     username = f" (@{player['username']})" if player['username'] else ""
     message = (
