@@ -197,6 +197,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/records — Узнать лидеров чата 👀\n"
         "/switch @username — Использовать карту UNO и перевести от себя пидора (Шанс 5/10/20%?, КД 6 дней) 🃏\n"
         "/dice — Кинуть кубик кармы (2 в неделю) , но надо быть осторожным, возможны аномальные колебания процентов 🎲\n"
+        "/duel @username — Устроить дикую перестрелку, за честь 🔫\n"
         "/mimic @username — Мимикрировать под другого игрока с удвоением статуса, КД 14 дней 🎭\n"
         "/mystats — Узнать свою статистику и карту UNO 👀\n"
         "/unreg — Выйти из рулетки и удалить данные (нет) 🚪\n"
@@ -240,7 +241,11 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "is_active": True,
         "last_switch_date": None,
         "mimic_target_id": None,    
-        "last_mimic_date": None   
+        "last_mimic_date": None,
+        "duel_target_id": None,
+        "duel_wins": 0,
+        "duel_losses": 0,
+        "duel_count": 0
     }).execute()
     
     # Текст для абсолютного новичка
@@ -284,7 +289,11 @@ async def reset_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "dice_start_balance": 0.0,
         "last_switch_date": None,
         "mimic_target_id": None,
-        "last_mimic_date": None
+        "last_mimic_date": None,
+        "duel_target_id": None,
+        "duel_wins": 0,
+        "duel_losses": 0,
+        "duel_count": 0
     }).neq("user_id", 0).execute()
     
     # Полностью очищаем таблицу "победителей"
@@ -884,6 +893,224 @@ async def mimic(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Мемный стикер наведения цели
     await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERl5RqYy9g5SuIKeL-HYdt9H78f80S9wACGTkAAnsn4UlP1wuYX7Od8j0E')
+
+async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    chat_id = update.effective_chat.id
+    today = date.today()
+
+    if update.effective_chat.type == "private":
+        await update.message.reply_text("❌ Устраивать дуэли можно только в групповых чатах!")
+        return
+
+    # 1. Вытаскиваем данные стрелка из базы
+    shooter_res = supabase.table("users").select("*").eq("user_id", user.id).execute()
+    if not shooter_res.data:
+        await update.message.reply_text("❌ Тебя нет в рулетке! Напиши /register")
+        return
+    shooter = shooter_res.data[0]
+
+    # 2. УЛЬТИМАТИВНЫЙ ПАРСИНГ ЖЕРТВЫ (Твоя схема из карты UNO)
+    if not context.args and not update.message.entities:
+        await update.message.reply_text("❌ Кого вызываем на дуэль? Тегни цель: `/duel @username` или выбери имя из списка!")
+        return
+
+    target_username = None
+    target_user_id = None
+
+    for entity in update.message.entities:
+        if entity.type == "mention":
+            target_username = update.message.text[entity.offset:entity.offset + entity.length].replace("@", "")
+            break
+        elif entity.type == "text_mention":
+            target_user_id = entity.user.id
+            break
+
+    # Ищем жертву в базе
+    if target_user_id:
+        target_res = supabase.table("users").select("*").eq("user_id", target_user_id).eq("is_active", True).execute()
+    elif target_username:
+        target_res = supabase.table("users").select("*").eq("username", target_username).eq("is_active", True).execute()
+    else:
+        await update.message.reply_text("❌ Нужно именно тегнуть игрока!")
+        return
+    
+    if not target_res.data or len(target_res.data) == 0:
+        await update.message.reply_text("❌ Этого юзера нет в рулетке, или он ливнул!")
+        return
+    
+    victim = target_res.data[0]
+    victim_id = victim["user_id"]
+
+    if victim_id == user.id:
+        await update.message.reply_text("🎯 Стрелять в самого себя? Казино такого не одобряет, выбери другую цель.")
+        return
+
+    # 3. ЛОГИКА ВЗАИМНОГО ВЫЗОВА
+    # Проверяем, не вызвала ли жертва уже нашего стрелка ранее
+    if victim.get("duel_target_id") == user.id:
+        # МАТЧ! Взаимный вызов зафиксирован -> Запуск дуэли!
+        
+        # Сразу очищаем цели дуэлей у обоих в базе, чтобы закрыть лазейки для спама
+        supabase.table("users").update({"duel_target_id": None}).eq("user_id", user.id).execute()
+        supabase.table("users").update({"duel_target_id": None}).eq("user_id", victim_id).execute()
+
+        # Красивые имена для вывода
+        v_username_display = f" (@{victim['username']})" if victim.get("username") else ""
+        v_name = f"{victim['first_name']}{v_username_display}"
+        
+        await update.message.reply_text(
+            f"💥 *ВЗАИМНЫЙ ВЫЗОВ ПРИНЯТ!* 💥\n\n"
+            f"Ковбои {user.first_name} и {v_name} сходятся у барьера...\n"
+            f"Атмосфера накалена до предела! Слышны взводы курков! 🔫",
+            parse_mode="Markdown"
+        )
+        await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERnotqaMvN6_wsk1CPke39HxtwJyuPDwACUhEAArywIErXQg4EzgXGxj0E')
+        await asyncio.sleep(3.5) # Валидольная пауза для нагнетания
+
+        # === 🎰 ЛОГИКА ЕЖЕНЕДЕЛЬНОЙ ОБОЙМЫ (6 ПАТРОНОВ В НЕДЕЛЮ) ===
+        current_week_num = today.isocalendar()[1]
+
+        # Разбираем обойму ПРИНЯВШЕГО дуэль (shooter)
+        db_shooter_duel = shooter.get("duel_count", 0)
+        shooter_week = db_shooter_duel // 10 if db_shooter_duel != 0 else current_week_num
+        shooter_attempts = db_shooter_duel % 10 if db_shooter_duel != 0 else 0
+        if current_week_num != shooter_week:
+            shooter_attempts = 0
+
+        # Разбираем обойму ВЫЗВАВШЕГО дуэль (victim)
+        db_victim_duel = victim.get("duel_count", 0)
+        victim_week = db_victim_duel // 10 if db_victim_duel != 0 else current_week_num
+        victim_attempts = db_victim_duel % 10 if db_victim_duel != 0 else 0
+        if current_week_num != victim_week:
+            victim_attempts = 0
+
+        # ПРОВЕРКА ЛИМИТОВ: Если у кого-то пустой барабан — дуэль отменяется!
+        if shooter_attempts >= 6:
+            await update.message.reply_text(f"❌ *Дуэль сорвалась!* У {user.first_name} кончились патроны на этой неделе! Барабан пуст. 🤷‍♂️", parse_mode="Markdown")
+            return
+        if victim_attempts >= 6:
+            await update.message.reply_text(f"❌ *Дуэль сорвалась!* У {victim['first_name']} кончились патроны на этой неделе! Барабан пуст. 🤷‍♂️", parse_mode="Markdown")
+            return
+
+        # === 🎰 ЛОГИКА ЕЖЕНЕДЕЛЬНОЙ ОБОЙМЫ (6 ПАТРОНОВ В НЕДЕЛЮ) ===
+        current_week_num = today.isocalendar()[1]
+
+        # Разбираем обойму ПРИНЯВШЕГО дуэль (shooter)
+        db_shooter_duel = shooter.get("duel_count", 0)
+        shooter_week = db_shooter_duel // 10 if db_shooter_duel != 0 else current_week_num
+        shooter_attempts = db_shooter_duel % 10 if db_shooter_duel != 0 else 0
+        if current_week_num != shooter_week:
+            shooter_attempts = 0
+
+        # Разбираем обойму ВЫЗВАВШЕГО дуэль (victim)
+        db_victim_duel = victim.get("duel_count", 0)
+        victim_week = db_victim_duel // 10 if db_victim_duel != 0 else current_week_num
+        victim_attempts = db_victim_duel % 10 if db_victim_duel != 0 else 0
+        if current_week_num != victim_week:
+            victim_attempts = 0
+
+        # ПРОВЕРКА ЛИМИТОВ: Если у кого-то пустой барабан — дуэль отменяется!
+        if shooter_attempts >= 6:
+            await update.message.reply_text(f"❌ *Дуэль сорвалась!* У {user.first_name} кончились патроны на этой неделе! Барабан пуст. 🤷‍♂️", parse_mode="Markdown")
+            return
+        if victim_attempts >= 6:
+            await update.message.reply_text(f"❌ *Дуэль сорвалась!* У {victim['first_name']} кончились патроны на этой неделе! Барабан пуст. 🤷‍♂️", parse_mode="Markdown")
+            return
+
+        # Рандом боя 50/50
+        if random.randint(1, 100) <= 50:
+            winner = shooter
+            loser = victim
+        else:
+            winner = victim
+            loser = shooter
+
+        # Списываем по одному патрону у обоих участников (записываем новую неделю + попытку)
+        new_db_shooter = (current_week_num * 10) + (shooter_attempts + 1)
+        new_db_victim = (current_week_num * 10) + (victim_attempts + 1)
+        supabase.table("users").update({"duel_count": new_db_shooter}).eq("user_id", shooter["user_id"]).execute()
+        supabase.table("users").update({"duel_count": new_db_victim}).eq("user_id", victim_id).execute()
+
+        # Сколько патронов осталось у каждого ковбоя на этой неделе
+        shooter_bullets_left = 6 - (shooter_attempts + 1)
+        victim_bullets_left = 6 - (victim_attempts + 1)
+
+        # Обновляем статистику побед и поражений
+        new_wins = winner.get("duel_wins", 0) + 1
+        supabase.table("users").update({"duel_wins": new_wins}).eq("user_id", winner["user_id"]).execute()
+
+        new_losses = loser.get("duel_losses", 0) + 1
+        supabase.table("users").update({"duel_losses": new_losses}).eq("user_id", loser["user_id"]).execute()
+
+        # Считаем остаток патронов для вывода конкретно для победителя и лузера
+        winner_left = shooter_bullets_left if winner["user_id"] == shooter["user_id"] else victim_bullets_left
+        loser_left = victim_bullets_left if winner["user_id"] == shooter["user_id"] else shooter_bullets_left
+
+        # Текст исхода дуэли
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"🎰 *ДУЭЛЬ СВЕРШИЛАСЬ! КОВБОЙ ПАЛ С ЧЕСТЬЮ!* 🎰\n\n"
+                 f"🎯 Метким выстрелом победу вырывает *{winner['first_name']}*! _(осталось патронов: {winner_left}/6)_\n"
+                 f"🐌 А раненый *{loser['first_name']}* отправляется зализывать раны! _(осталось патронов: {loser_left}/6)_\n\n"
+                 f"📊 _Турнирная таблица обновлена. Очки зачислены, дуэлянты продолжают копить серии для получения наград от казино!_ 🏆",
+            parse_mode="Markdown"
+        )
+        await asyncio.sleep(1.5)
+
+        # === 🏆 ПРОВЕРКА НАКОПИТЕЛЬНЫХ БОНУСОВ СЕРИИ ПОВТОРОВ (КРАТНО 5) ===
+        if new_wins % 5 == 0:
+            supabase.table("users").update({
+                "kras_weight": winner.get("kras_weight", 100.0) + 10.0,
+                "pidor_weight": max(50.0, winner.get("pidor_weight", 100.0) - 5.0)
+            }).eq("user_id", winner["user_id"]).execute()
+
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"🔥 *НЕУДЕРЖИМЫЙ ЧЕМПИОН ЛИГИ ДУЭЛЕЙ!* 🔥\n\n"
+                     f"Ковбой *{winner['first_name']}* набивает юбилейную серию из *{new_wins} побед*!\n"
+                     f"Турнирный комитет казино активирует тайное благословение:\n"
+                     f"👑 Твоя базовая удача стать Красавчиком дня ВЫРОСЛА, а шансы стать Пидором - чутка снизились! 🎰",
+                parse_mode="Markdown"
+            )
+            await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERnoVqaMte344WUNdSgVyflZHrOJlKuQACVh8AAkl06UqcZ7snP84WFz0E')
+
+        if new_losses % 5 == 0:
+            supabase.table("users").update({
+                "pidor_weight": loser.get("pidor_weight", 100.0) + 10.0,
+                "kras_weight": max(50.0, loser.get("kras_weight", 100.0) - 5.0)
+            }).eq("user_id", loser["user_id"]).execute()
+
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"🎪 *МЕШОК ТЫ ДЛЯ ТРЕНИРОВОК!* 🎪\n\n"
+                     f"Бедолага *{loser['first_name']}* умудряется слить уже *{new_losses} дуэлей* за season!\n"
+                     f"Высшие силы казино наказывают за слабость:\n"
+                     f"🤡 Проклятие рулетки активировано! Твоя притягательность к позорному титулу Пидора дня стала выше! Берегись следующего прокрута! 🛑",
+                parse_mode="Markdown"
+            )
+            await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERnolqaMu2DjAqCDeG0IT2CB73uWoaawACZRIAAq7CwUpOdz-pcVw-UT0E')
+
+    else:
+        # Обычный первичный вызов: записываем цель дуэли стрелку в базу
+        supabase.table("users").update({"duel_target_id": victim_id}).eq("user_id", user.id).execute()
+        
+        # Проверяем лимит патронов стрелка ДЛЯ ТЕКСТА первичного вызова
+        db_shooter_duel = shooter.get("duel_count", 0)
+        shooter_attempts = db_shooter_duel % 10 if (db_shooter_duel != 0 and (db_shooter_duel // 10) == current_week_num) else 0
+        bullets_now = 6 - shooter_attempts
+
+        v_username_display = f" (@{victim['username']})" if victim.get("username") else ""
+        v_name = f"{victim['first_name']}{v_username_display}"
+
+        await update.message.reply_text(
+            f"⚔️ *ВЫЗОВ БРОШЕН! ПЕРЧАТКА В ЛИЦО!* ⚔️\n\n"
+            f"Игрок {user.first_name} вызывает на дуэль *{v_name}*!\n"
+            f"🎯 Твой остаток патронов: *{bullets_now}/6*\n"
+            f"Ждем ответного вызова от цели. Напиши: `/duel @{user.username or user.first_name}`, чтобы спустить курок! 🔫",
+            parse_mode="Markdown"
+        )
+        await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERnnhqaMio_yi6YSjV0Ysi5q16lPq1ogAC9xIAAvmEAUtGFDZQ8K2jFj0E')
     
 async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -1236,19 +1463,33 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     dice_left = 2 - current_attempts
     dice_status = "🔴 ИСЧЕРПАНЫ (0 из 2 на этой неделе)" if dice_left == 0 else f"🟢 ДОСТУПНО: {dice_left} из 2 на этой неделе"
 
+    # Рассчитываем еженедельный остаток патронов для дуэлей
+    current_week_num = today.isocalendar()[1]
+    db_duel_value = player.get("duel_count", 0)
+    last_duel_week = db_duel_value // 10
+    current_duel_attempts = db_duel_value % 10
+    
+    if current_week_num != last_duel_week:
+        current_duel_attempts = 0
+        
+    duel_bullets_left = 6 - current_duel_attempts
+    duel_bullet_status = f"🟢 ДОСТУПНО: {duel_bullets_left} из 6 выстрелов" if duel_bullets_left > 0 else "🔴 ОБОЙМА ПУСТА (0 из 6)"
+
     # 5. Собираем ультимативное досье
     username = f" (@{player['username']})" if player['username'] else ""
     message = (
         f"👤 *ЛИЧНОЕ ДОСЬЕ ИГРОКА*:\n\n"
         f"Участник: *{player['first_name']}{username}*\n"
         f"🤡 Статус Пидора: *{player['pidor_count']}* раз(а)\n"
-        f"😎 Статус Красавчика: *{player['kras_count']}* раз(а)\n\n"
+        f"😎 Статус Красавчика: *{player['kras_count']}* раз(а)\n"
+        f"⚔️ Лига Дуэлей: *{d_total}* боёв _({d_wins} В / {d_losses} П)_\n\n"
         f"📊 *ТЕКУЩИЕ ШАНСЫ*:\n"
         f" └ 🤡 Стать Пидором: `{pidor_chance:.1f}%` \n"
         f" └ 😎 Стать Красавчиком: `{kras_chance:.1f}%` \n\n"
         f"🃏 *Карта UNO:* {uno_status}\n"
-        f"🎭 *Мимикрия:* {mimic_status}\n"
-        f"🎲 *Кубики судьбы:* {dice_status}"
+        f"🎭 *Карта Мимик:* {mimic_status}\n"
+        f"🎲 *Кубики судьбы:* {dice_status}\n"
+        f"🔫 *Патроны дуэлей:* {duel_bullet_status}" # <--- ВОТ ОНА, ТВОЯ ТАКТИЧЕСКАЯ СТРОЧКА!
     )
     await update.message.reply_text(message, parse_mode="Markdown")
 
@@ -1439,6 +1680,8 @@ async def main():
     app.add_handler(CommandHandler("mystats", my_stats))
     app.add_handler(CommandHandler("backup", manual_backup))
     app.add_handler(CommandHandler("dice", dice_command))
+    app.add_handler(CommandHandler("duel", duel))
+
 
     if RENDER_URL:
         print("Бот запускается в режиме Webhook на Render...")
