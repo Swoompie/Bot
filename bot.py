@@ -1029,8 +1029,8 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(
             chat_id=chat_id,
             text=f"🎰 *ДУЭЛЬ СВЕРШИЛАСЬ! КОВБОЙ ПАЛ С ЧЕСТЬЮ!* 🎰\n\n"
-                 f"🎯 Метким выстрелом победу вырывает *{winner['first_name']}*! _(осталось патронов: {winner_left}/6)_\n"
-                 f"🐌 А раненый *{loser['first_name']}* отправляется зализывать раны! _(осталось патронов: {loser_left}/6)_\n\n"
+                 f"🎯 Метким выстрелом победу вырывает {winner['first_name']}! (осталось патронов: {winner_left}/6)\n"
+                 f"🐌 А раненый {loser['first_name']} отправляется зализывать раны! (осталось патронов: {loser_left}/6)\n\n"
                  f"📊 _Турнирная таблица обновлена. Очки зачислены, дуэлянты продолжают копить серии для получения наград от казино!_ 🏆",
             parse_mode="Markdown"
         )
