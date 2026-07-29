@@ -1078,18 +1078,19 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         shooter_attempts = db_shooter_duel % 10 if (db_shooter_duel != 0 and (db_shooter_duel // 10) == current_week_num) else 0
         bullets_now = 6 - shooter_attempts
 
-        # ЖЕЛЕЗНО ИСПРАВЛЕНО: Создаем красивое имя жертвы для этой ветки кода!
+        # Создаем красивое имя жертвы для этой ветки кода
         v_username_display = f" (@{victim['username']})" if victim.get("username") else ""
         v_name = f"{victim['first_name']}{v_username_display}"
 
+        # УЛЬТРА-ФИКС: Полностью убрали ВСЕ звёздочки из этого текста. Теперь подчёркивания (_) в никах ничего не сломают!
         await update.message.reply_text(
-            f"⚔️ *ВЫЗОВ БРОШЕН! ПЕРЧАТКА В ЛИЦО!* ⚔️\n\n"
-            f"Игрок {user.first_name} вызывает на дуэль *{v_name}*!\n"
-            f"🎯 Твой остаток патронов: *{bullets_now}/6*\n"
-            f"Ждем ответного вызова от цели. Напиши: `/duel @{user.username or user.first_name}`, чтобы спустить курок! 🔫",
-            parse_mode="Markdown"
+            f"⚔️ ВЫЗОВ БРОШЕН! ПЕРЧАТКА В ЛИЦО! ⚔️\n\n"
+            f"Игрок {user.first_name} вызывает на дуэль {v_name}!\n"
+            f"🎯 Твой остаток патронов: {bullets_now} из 6\n\n"
+            f"Ждем ответного вызова от цели. Напиши команду /duel на этого игрока, чтобы спустить курок! 🔫"
         )
         await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERnnhqaMio_yi6YSjV0Ysi5q16lPq1ogAC9xIAAvmEAUtGFDZQ8K2jFj0E')
+
     
 async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
