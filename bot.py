@@ -989,12 +989,11 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if current_week_num != victim_week:
             victim_attempts = 0
 
-        # ПРОВЕРКА ЛИМИТОВ: Если у кого-то пустой барабан — дуэль отменяется!
         if shooter_attempts >= 6:
-            await update.message.reply_text(f"❌ *Дуэль сорвалась!* У {user.first_name} кончились патроны на этой неделе! Барабан пуст. 🤷‍♂️", parse_mode="Markdown")
+            await update.message.reply_text(f"❌ <b>Дуэль сорвалась!</b> У {user.first_name} кончились патроны на этой неделе! Барабан пуст. 🤷‍♂️", parse_mode="HTML")
             return
         if victim_attempts >= 6:
-            await update.message.reply_text(f"❌ *Дуэль сорвалась!* У {victim['first_name']} кончились патроны на этой неделе! Барабан пуст. 🤷‍♂️", parse_mode="Markdown")
+            await update.message.reply_text(f"❌ <b>Дуэль сорвалась!</b> У {victim['first_name']} кончились патроны на этой неделе! Барабан пуст. 🤷‍♂️", parse_mode="HTML")
             return
 
         # Рандом боя 50/50
@@ -1029,11 +1028,11 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Текст исхода дуэли
         await context.bot.send_message(
             chat_id=chat_id,
-            text=f"🎰 *ДУЭЛЬ СВЕРШИЛАСЬ! КОВБОЙ ПАЛ С ЧЕСТЬЮ!* 🎰\n\n"
+            text=f"🎰 <b>ДУЭЛЬ СВЕРШИЛАСЬ! КОВБОЙ ПАЛ С ЧЕСТЬЮ!</b> 🎰\n\n"
                  f"🎯 Метким выстрелом победу вырывает {winner['first_name']}! (осталось патронов: {winner_left}/6)\n"
                  f"🐌 А раненый {loser['first_name']} отправляется зализывать раны! (осталось патронов: {loser_left}/6)\n\n"
-                 f"📊 _Турнирная таблица обновлена. Очки зачислены, дуэлянты продолжают копить серии для получения наград от казино!_ 🏆",
-            parse_mode="Markdown"
+                 f"📊 <i>Турнирная таблица обновлена. Очки зачислены, дуэлянты продолжают копить серии для получения наград от казино!</i> 🏆",
+            parse_mode="HTML"
         )
         await asyncio.sleep(1.5)
 
@@ -1043,14 +1042,14 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "kras_weight": winner.get("kras_weight", 100.0) + 10.0,
                 "pidor_weight": max(50.0, winner.get("pidor_weight", 100.0) - 5.0)
             }).eq("user_id", winner["user_id"]).execute()
-
+            
             await context.bot.send_message(
                 chat_id=chat_id,
-                text=f"🔥 *НЕУДЕРЖИМЫЙ ЧЕМПИОН ЛИГИ ДУЭЛЕЙ!* 🔥\n\n"
-                     f"Ковбой *{winner['first_name']}* набивает юбилейную серию из *{new_wins} побед*!\n"
+                text=f"🔥 <b>НЕУДЕРЖИМЫЙ ЧЕМПИОН ЛИГИ ДУЭЛЕЙ!</b> 🔥\n\n"
+                     f"Ковбой <b>{winner['first_name']}</b> набивает юбилейную серию из <b>{new_wins} побед</b>!\n"
                      f"Турнирный комитет казино активирует тайное благословение:\n"
-                     f"👑 Твоя базовая удача стать Красавчиком дня ВЫРОСЛА, а шансы стать Пидором - чутка снизились! 🎰",
-                parse_mode="Markdown"
+                     f"👑 Твоя базовая удача стать Красавчиком дня ВЫРОСЛА, а шансы стать Пидором — чутка снизились! 🎰",
+                parse_mode="HTML"
             )
             await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERnoVqaMte344WUNdSgVyflZHrOJlKuQACVh8AAkl06UqcZ7snP84WFz0E')
 
@@ -1062,11 +1061,11 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             await context.bot.send_message(
                 chat_id=chat_id,
-                text=f"🎪 *МЕШОК ТЫ ДЛЯ ТРЕНИРОВОК!* 🎪\n\n"
-                     f"Бедолага *{loser['first_name']}* умудряется слить уже *{new_losses} дуэлей* за season!\n"
+                text=f"🎪 <b>МЕШОК ТЫ ДЛЯ ТРЕНИРОВОК!</b> 🎪\n\n"
+                     f"Бедолага <b>{loser['first_name']}</b> умудряется слить уже <b>{new_losses} дуэлей</b> за сезон!\n"
                      f"Высшие силы казино наказывают за слабость:\n"
                      f"🤡 Проклятие рулетки активировано! Твоя притягательность к позорному титулу Пидора дня стала выше! Берегись следующего прокрута! 🛑",
-                parse_mode="Markdown"
+                parse_mode="HTML"
             )
             await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERnolqaMu2DjAqCDeG0IT2CB73uWoaawACZRIAAq7CwUpOdz-pcVw-UT0E')
 
