@@ -965,11 +965,12 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         v_username_display = f" (@{victim['username']})" if victim.get("username") else ""
         v_name = f"{victim['first_name']}{v_username_display}"
         
+        # ЖЕЛЕЗНО ИСПРАВЛЕНО: Перевели на HTML, чтобы нижние подчёркивания у @Aiar_bro не взрывали парсер Телеграма!
         await update.message.reply_text(
-            f"💥 *ВЗАИМНЫЙ ВЫЗОВ ПРИНЯТ!* 💥\n\n"
+            f"💥 <b>ВЗАИМНЫЙ ВЫЗОВ ПРИНЯТ!</b> 💥\n\n"
             f"Ковбои {user.first_name} и {v_name} сходятся у барьера...\n"
             f"Атмосфера накалена до предела! Слышны взводы курков! 🔫",
-            parse_mode="Markdown"
+            parse_mode="HTML"
         )
         await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERnotqaMvN6_wsk1CPke39HxtwJyuPDwACUhEAArywIErXQg4EzgXGxj0E')
         await asyncio.sleep(3.5) # Валидольная пауза для нагнетания
