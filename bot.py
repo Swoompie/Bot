@@ -903,6 +903,7 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     chat_id = update.effective_chat.id
     today = date.today()
+    current_week_num = today.isocalendar()[1]
 
     if update.effective_chat.type == "private":
         await update.message.reply_text("❌ Устраивать дуэли можно только в групповых чатах!")
@@ -972,34 +973,6 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERnotqaMvN6_wsk1CPke39HxtwJyuPDwACUhEAArywIErXQg4EzgXGxj0E')
         await asyncio.sleep(3.5) # Валидольная пауза для нагнетания
-
-        # === 🎰 ЛОГИКА ЕЖЕНЕДЕЛЬНОЙ ОБОЙМЫ (6 ПАТРОНОВ В НЕДЕЛЮ) ===
-        current_week_num = today.isocalendar()[1]
-
-        # Разбираем обойму ПРИНЯВШЕГО дуэль (shooter)
-        db_shooter_duel = shooter.get("duel_count", 0)
-        shooter_week = db_shooter_duel // 10 if db_shooter_duel != 0 else current_week_num
-        shooter_attempts = db_shooter_duel % 10 if db_shooter_duel != 0 else 0
-        if current_week_num != shooter_week:
-            shooter_attempts = 0
-
-        # Разбираем обойму ВЫЗВАВШЕГО дуэль (victim)
-        db_victim_duel = victim.get("duel_count", 0)
-        victim_week = db_victim_duel // 10 if db_victim_duel != 0 else current_week_num
-        victim_attempts = db_victim_duel % 10 if db_victim_duel != 0 else 0
-        if current_week_num != victim_week:
-            victim_attempts = 0
-
-        # ПРОВЕРКА ЛИМИТОВ: Если у кого-то пустой барабан — дуэль отменяется!
-        if shooter_attempts >= 6:
-            await update.message.reply_text(f"❌ *Дуэль сорвалась!* У {user.first_name} кончились патроны на этой неделе! Барабан пуст. 🤷‍♂️", parse_mode="Markdown")
-            return
-        if victim_attempts >= 6:
-            await update.message.reply_text(f"❌ *Дуэль сорвалась!* У {victim['first_name']} кончились патроны на этой неделе! Барабан пуст. 🤷‍♂️", parse_mode="Markdown")
-            return
-
-        # === 🎰 ЛОГИКА ЕЖЕНЕДЕЛЬНОЙ ОБОЙМЫ (6 ПАТРОНОВ В НЕДЕЛЮ) ===
-        current_week_num = today.isocalendar()[1]
 
         # Разбираем обойму ПРИНЯВШЕГО дуэль (shooter)
         db_shooter_duel = shooter.get("duel_count", 0)
@@ -1105,6 +1078,7 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         shooter_attempts = db_shooter_duel % 10 if (db_shooter_duel != 0 and (db_shooter_duel // 10) == current_week_num) else 0
         bullets_now = 6 - shooter_attempts
 
+        # ЖЕЛЕЗНО ИСПРАВЛЕНО: Создаем красивое имя жертвы для этой ветки кода!
         v_username_display = f" (@{victim['username']})" if victim.get("username") else ""
         v_name = f"{victim['first_name']}{v_username_display}"
 
