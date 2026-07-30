@@ -915,6 +915,23 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Тебя нет в рулетке! Напиши /register")
         return
     shooter = shooter_res.data[0]
+    
+    # === 🛡 ПРОВЕРКА ПУСТОГО СТВОЛА СТРЕЛКА (На взлёте) ===
+    db_shooter_duel = shooter.get("duel_count", 0)
+    shooter_week = db_shooter_duel // 100 if db_shooter_duel != 0 else current_week_num
+    shooter_attempts = db_shooter_duel % 100 if db_shooter_duel != 0 else 0
+    if current_week_num != shooter_week:
+        shooter_attempts = 0
+
+    if shooter_attempts >= 6:
+        await update.message.reply_text(
+            f"💨 <b>Осечка! Курок щёлкнул впустую...</b>\n\n"
+            f"{user.first_name}, ты пришёл на перестрелку с пустым револьвером! Все 6 патронов на этой неделе ты уже расстрелял. 🤦‍♂️\n"
+            f"❌ ШЕРИФ ИЗЫМАЕТ СТВОЛ! Иди трезвей в камеру до понедельника и не позорься!",
+            parse_mode="HTML"
+        )
+        await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERocZqavV1gUjQriQqP3uLpw6uz9qdAwAChhEAAoC6wEokCKx8CQHogD0E')
+        return
 
     # 2. УЛЬТИМАТИВНЫЙ ПАРСИНГ ЖЕРТВЫ (Твоя схема из карты UNO)
     if not context.args and not update.message.entities:
@@ -951,6 +968,25 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if victim_id == user.id:
         await update.message.reply_text("🎯 Стрелять в самого себя? Казино такого не одобряет, выбери другую цель.")
         return
+        
+    # === 🛡 ПРОВЕРКА РОМЫ: Есть ли вообще патроны у жертвы на этой неделе? ===
+    db_victim_duel = victim.get("duel_count", 0)
+    victim_week = db_victim_duel // 100 if db_victim_duel != 0 else current_week_num
+    victim_attempts = db_victim_duel % 100 if db_victim_duel != 0 else 0
+    
+    if current_week_num != victim_week:
+        victim_attempts = 0
+
+    # Если у цели уже отстреляно 6 патронов, сразу даем отлуп на взлёте!
+    if victim_attempts >= 6:
+        await update.message.reply_text(
+            f"🥃 <b>Священный барный час!</b> Друг <b>{victim['first_name']}</b> отстрелял свою обойму подчистую. "
+            f"Сейчас он закинул ноги на стол, цедит виски и не настроен на глупости. 🍻\n"
+            f"❌ Отставить стрельбу! Дай человеку спокойно допить свой бурбон.",
+            parse_mode="HTML"
+        )
+        await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERocRqavSrSDLKuprwdNbdTUucfvAVIgACkREAAj7PkUlwAAH9MmAfvmE9BA')
+        return
 
     # 3. ЛОГИКА ВЗАИМНОГО ВЫЗОВА
     # Проверяем, не вызвала ли жертва уже нашего стрелка ранее
@@ -977,24 +1013,17 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Разбираем обойму ПРИНЯВШЕГО дуэль (shooter)
         db_shooter_duel = shooter.get("duel_count", 0)
-        shooter_week = db_shooter_duel // 10 if db_shooter_duel != 0 else current_week_num
-        shooter_attempts = db_shooter_duel % 10 if db_shooter_duel != 0 else 0
+        shooter_week = db_shooter_duel // 100 if db_shooter_duel != 0 else current_week_num
+        shooter_attempts = db_shooter_duel % 100 if db_shooter_duel != 0 else 0
         if current_week_num != shooter_week:
             shooter_attempts = 0
 
         # Разбираем обойму ВЫЗВАВШЕГО дуэль (victim)
         db_victim_duel = victim.get("duel_count", 0)
-        victim_week = db_victim_duel // 10 if db_victim_duel != 0 else current_week_num
-        victim_attempts = db_victim_duel % 10 if db_victim_duel != 0 else 0
+        victim_week = db_victim_duel // 100 if db_victim_duel != 0 else current_week_num
+        victim_attempts = db_victim_duel % 100 if db_victim_duel != 0 else 0
         if current_week_num != victim_week:
             victim_attempts = 0
-
-        if shooter_attempts >= 6:
-            await update.message.reply_text(f"❌ <b>Дуэль сорвалась!</b> У {user.first_name} кончились патроны на этой неделе! Барабан пуст. 🤷‍♂️", parse_mode="HTML")
-            return
-        if victim_attempts >= 6:
-            await update.message.reply_text(f"❌ <b>Дуэль сорвалась!</b> У {victim['first_name']} кончились патроны на этой неделе! Барабан пуст. 🤷‍♂️", parse_mode="HTML")
-            return
 
         # Рандом боя 50/50
         if random.randint(1, 100) <= 50:
@@ -1005,8 +1034,8 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             loser = shooter
 
         # Списываем по одному патрону у обоих участников (записываем новую неделю + попытку)
-        new_db_shooter = (current_week_num * 10) + (shooter_attempts + 1)
-        new_db_victim = (current_week_num * 10) + (victim_attempts + 1)
+        new_db_shooter = (current_week_num * 100) + (shooter_attempts + 1)
+        new_db_victim = (current_week_num * 100) + (victim_attempts + 1)
         supabase.table("users").update({"duel_count": new_db_shooter}).eq("user_id", shooter["user_id"]).execute()
         supabase.table("users").update({"duel_count": new_db_victim}).eq("user_id", victim_id).execute()
 
@@ -1073,9 +1102,9 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Обычный первичный вызов: записываем цель дуэли стрелку в базу
         supabase.table("users").update({"duel_target_id": victim_id}).eq("user_id", user.id).execute()
         
-        # Проверяем лимит патронов стрелка ДЛЯ ТЕКСТА первичного вызова
+        # ЖЕЛЕЗНО ИСПРАВЛЕНО: Перешли на стандарт 100, чтобы остаток патронов выводился честно!
         db_shooter_duel = shooter.get("duel_count", 0)
-        shooter_attempts = db_shooter_duel % 10 if (db_shooter_duel != 0 and (db_shooter_duel // 10) == current_week_num) else 0
+        shooter_attempts = db_shooter_duel % 100 if (db_shooter_duel != 0 and (db_shooter_duel // 100) == current_week_num) else 0
         bullets_now = 6 - shooter_attempts
 
         # Создаем красивое имя жертвы для этой ветки кода
@@ -1090,7 +1119,6 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Ждем ответного вызова от цели. Напиши команду /duel на этого игрока, чтобы спустить курок! 🔫"
         )
         await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERnnhqaMio_yi6YSjV0Ysi5q16lPq1ogAC9xIAAvmEAUtGFDZQ8K2jFj0E')
-
     
 async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -1446,8 +1474,8 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Рассчитываем еженедельный остаток патронов для дуэлей
     current_week_num = today.isocalendar()[1]
     db_duel_value = player.get("duel_count", 0)
-    last_duel_week = db_duel_value // 10
-    current_duel_attempts = db_duel_value % 10
+    last_duel_week = db_duel_value // 100
+    current_duel_attempts = db_duel_value % 100
     
     if current_week_num != last_duel_week:
         current_duel_attempts = 0
