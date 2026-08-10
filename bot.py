@@ -339,17 +339,78 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Выбираем победителя по умолчанию
     winner = weighted_choice(filtered_users, "pidor_weight")
-    new_count = winner["pidor_count"] + 1
 
-    # Обновляем счетчик в Supabase
-    supabase.table("users").update({"pidor_count": new_count}).eq("user_id", winner["user_id"]).execute()
-    
-    redistribute_weights(winner["user_id"], "pidor_weight")
-    save_daily_winner("pidor", winner["user_id"])
-
-    # === 🎉 ОБЪЯВЛЕНИЕ ПЕРВИЧНОГО ПИДОРА (ТЕПЕРЬ ВЫВОДИТСЯ СРАЗУ, КАК В КРАСАВЧИКЕ) ===
+    # СРАЗУ ОБЪЯВЛЯЕМ СТАНДАРТНОГО ПИДОРА (Чтобы хайп шёл по порядку, как в Красавчике)
     username = f" (@{winner['username']})" if winner['username'] else ""
     await update.message.reply_text(f"🤡 Пидор дня — {winner['first_name']}{username}")
+
+    # === 🤡 МНОЖИТЕЛЬ ПОЗОРА С ПРОВЕРКОЙ НА НАКОПЛЕНИЕ (3-4 ДНЯ НЕУДАЧ) ===
+    # 1. Находим сумму весов и максимальный вес среди участников клейма на сегодня
+    total_pidor_weight = sum(u["pidor_weight"] for u in filtered_users)
+    max_chat_pidor_weight = max(u["pidor_weight"] for u in filtered_users)
+    
+    # 2. Считаем точный процент победителя
+    pidor_chance = (winner["pidor_weight"] / total_pidor_weight) * 100
+    
+    multiplier = 1
+    multiplier_text = ""
+    is_accumulated_loser = False
+
+    # Если победитель — это именно тот человек, у которого сегодня БЫЛ САМЫЙ ВЫСОКИЙ ШАНС стать Пидором
+    if winner["pidor_weight"] == max_chat_pidor_weight:
+        # Вытаскиваем последние 3 записи пидоров дня из истории
+        history_res = supabase.table("daily_winners").select("*").eq("role", "pidor").order("game_date", ascending=False).limit(3).execute()
+        
+        was_winner_recently = False
+        if history_res.data:
+            for record in history_res.data:
+                if record["user_id"] == winner["user_id"]:
+                    was_winner_recently = True
+                    break
+        
+        # Если за последние 3 дня его в пидорах дня НЕ БЫЛО!
+        if not was_winner_recently:
+            is_accumulated_loser = True
+            
+            # Крутим скрытую кость от 1 до 100
+            bonus_roll = random.randint(1, 100)
+            
+            if bonus_roll <= 50:
+                multiplier = 2
+                multiplier_text = "🔥 *ДВОЙНОЙ ПОЗОР (х2)!!!* Скрытая кость упала максимально неудачно - лови сразу *+2 пидора* в досье! "
+            elif bonus_roll <= 80:
+                multiplier = 3
+                multiplier_text = "🚀 *ТРИУМФ КЛОУНА (х3)!!!* Матрица казино раздавила фаворита - забирай сразу *+3 пидора* в статистику! "
+            elif bonus_roll <= 95:
+                multiplier = 1  # Осечка множителя, бот промолчит для секретности!
+            else:
+                multiplier = 5
+                multiplier_text = "💀 *УЛЬТРА-ГЕНОЦИД КАЗИНО (х5)!!!!!* Колесо фортуны зафиксировало тотальный застой и выдало максимальное наказание - лови сразу *+5 пидоров* на счёт! 🎪🤡"
+
+    # Рассчитываем итоговую статистику с учётом множителя позора
+    new_count = winner["pidor_count"] + multiplier
+    supabase.table("users").update({"pidor_count": new_count}).eq("user_id", winner["user_id"]).execute()
+
+    # Полная изоляция никнейма от багов разметки Телеграма (в скобки)
+    w_username_display = f" (@{winner['username']})" if winner.get('username') else ""
+    safe_winner_name = f"{winner['first_name']}{w_username_display}"
+
+    # Бот подаст голос только в том случае, если МНОЖИТЕЛЬ ПОЗОРА СРАБОТАЛ (х2, х3, х5)
+    if is_accumulated_loser and multiplier > 1 and multiplier_text:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"🎰 *АКТИВАЦИЯ МНОЖИТЕЛЯ ПОЗОРА!* 🎰\n\n"
+                 f"Поскольку *{safe_winner_name}* умудрялся выживать последние 3+ дня, имея максимальный шанс стать Пидором дня (*{pidor_chance:.1f}%*), казино активирует бонусное колесо наказаний!\n\n"
+                 f"{multiplier_text}\n\n"
+                 f"📊 _Личная статистика обновлена. Текущий позорный счёт: {new_count}_",
+            parse_mode="Markdown"
+        )
+        if multiplier == 5:
+            await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgUAAxkBAAERr4pqeX-dpAQpHvj3CZnAcPY0_UmGSQACgggAAjiksVVM5Vj4fvPn0z0E')
+
+    # Пересчитываем веса под финального победителя и сохраняем его в историю дня
+    redistribute_weights(winner["user_id"], "pidor_weight")
+    save_daily_winner("pidor", winner["user_id"])
 
     # === 🎭 БЛОК КАРТЫ МИМИКРИИ: КРАЖА ПИДОРА ===
     mimic_hunter_res = supabase.table("users").select("*").eq("mimic_target_id", winner["user_id"]).execute()
@@ -546,11 +607,68 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # ================= ✨ ПУТЬ А: СТАНДАРТНЫЙ ПРОКРУТ (70%) =================
         await update.message.reply_text(f"😎 Красавчик дня — {final_winner['first_name']}{favorit_username}")
 
-    # Считаем базовое новое значение побед для первичного счастливчика
-    new_count = final_winner["kras_count"] + 1
+    # === 👑 МНОЖИТЕЛЬ ЧЕМПИОНА С ПРОВЕРКОЙ НА НАКОПЛЕНИЕ (3-4 ДНЯ НЕУДАЧ) ===
+    # 1. Считаем сумму весов и находим максимальный личный вес среди участников на сегодня
+    total_kras_weight = sum(u["kras_weight"] for u in filtered_users)
+    max_chat_weight = max(u["kras_weight"] for u in filtered_users)
+    
+    # 2. Считаем точный процент победителя
+    kras_chance = (final_winner["kras_weight"] / total_kras_weight) * 100
+    
+    multiplier = 1
+    multiplier_text = ""
+    is_accumulated_champion = False
 
-    # Обновляем счетчик красавчиков в Supabase по умолчанию
+    # Если победитель — это именно тот человек, у которого сегодня БЫЛ САМЫЙ ВЫСОКИЙ ШАНС в чате
+    if final_winner["kras_weight"] == max_chat_weight:
+        # Вытаскиваем последние 3 записи красавчиков из истории
+        history_res = supabase.table("daily_winners").select("*").eq("role", "krasavchik").order("game_date", ascending=False).limit(3).execute()
+        
+        was_winner_recently = False
+        if history_res.data:
+            for record in history_res.data:
+                if record["user_id"] == final_winner["user_id"]:
+                    was_winner_recently = True
+                    break
+        
+        # Если за последние 3 дня его в победителях НЕ БЫЛО — значит, накопление сработало!
+        if not was_winner_recently:
+            is_accumulated_champion = True
+            
+            # Крутим скрытую кость от 1 до 100
+            bonus_roll = random.randint(1, 100)
+            
+            if bonus_roll <= 50:
+                multiplier = 2
+                multiplier_text = "🔥 *КРАТНЫЙ УДАР (х2)!* Монетка упала удачно — лови сразу *+2 к счётчику* в досье! "
+            elif bonus_roll <= 80:
+                multiplier = 3
+                multiplier_text = "🚀 *КОРОЛЕВСКИЙ ТРИУМФ (х3)!* Матрица казино взломана фаворитом — забирай *+3*! "
+            elif bonus_roll <= 95:
+                multiplier = 1  # Осечка джекпота, бот промолчит для секретности!
+            else:
+                multiplier = 5
+                multiplier_text = "💥 *ЛЕГЕНДАРНЫЙ ДЖЕКПОТ (х5)!!!* История чата переписана! Колесо фортуны выдало максимальный сектор — лови сразу *+5*, красавчик! 👑🥂"
+
+    # Рассчитываем итоговое начисление с учётом множителя
+    new_count = final_winner["kras_count"] + multiplier
     supabase.table("users").update({"kras_count": new_count}).eq("user_id", final_winner["user_id"]).execute()
+
+    # Защищаем никнейм от багов разметки Телеграма (изолируем в скобки)
+    safe_winner_name = f"{final_winner['first_name']}{favorit_username}"
+
+    # Бот подаст голос только в том случае, если МНОЖИТЕЛЬ СРАБОТАЛ (х2, х3, х5)
+    if is_accumulated_champion and multiplier > 1 and multiplier_text:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"🎰 *АКТИВАЦИЯ МНОЖИТЕЛЯ ЧЕМПИОНА!* 🎰\n\n"
+                 f"Поскольку *{safe_winner_name}* упорно не выпадает вот уже последние 3+ дня, и имея максимальный шанс в чате (*{kras_chance:.1f}%*), казино активирует бонусное колесо фортуны!\n\n"
+                 f"{multiplier_text}\n\n"
+                 f"📊 _Личная статистика обновлена. Текущие красавчики: {new_count}_",
+            parse_mode="Markdown"
+        )
+        if multiplier == 5:
+            await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERr31qeWv80Ku9FF7n2t9x4eyLRpX9eAAC1jcAAvbPQUmGw6z4J9_owD0E')
     
     # Пересчитываем веса под финального победителя и сохраняем его в историю дня
     redistribute_weights(final_winner["user_id"], "kras_weight")
