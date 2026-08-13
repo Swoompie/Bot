@@ -359,7 +359,7 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Если победитель — это именно тот человек, у которого сегодня БЫЛ САМЫЙ ВЫСОКИЙ ШАНС стать Пидором
     if winner["pidor_weight"] == max_chat_pidor_weight:
         # Вытаскиваем последние 3 записи пидоров дня из истории
-        history_res = supabase.table("daily_winners").select("*").eq("role", "pidor").order("game_date", ascending=False).limit(3).execute()
+        history_res = supabase.table("daily_winners").select("*").eq("role", "pidor").order("game_date", desc=True).limit(3).execute()
         
         was_winner_recently = False
         if history_res.data:
@@ -374,7 +374,7 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # --- 🎢 ТУРБО-ПОД КРУТКА ШАНСОВ: 3 / 5 / 7 ДНЕЙ ЗАСТОЯ ---
             # Запрашиваем глубокую историю до 8 дней
-            deep_history = supabase.table("daily_winners").select("*").eq("role", "pidor").order("game_date", ascending=False).limit(8).execute()
+            deep_history = supabase.table("daily_winners").select("*").eq("role", "pidor").order("game_date", desc=True).limit(8).execute()
             
             streak_days = 0
             if deep_history.data:
@@ -662,7 +662,7 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Если победитель — это именно тот человек, у которого сегодня БЫЛ САМЫЙ ВЫСОКИЙ ШАНС в чате
     if final_winner["kras_weight"] == max_chat_weight:
         # Вытаскиваем последние 3 записи красавчиков из истории
-        history_res = supabase.table("daily_winners").select("*").eq("role", "krasavchik").order("game_date", ascending=False).limit(3).execute()
+        history_res = supabase.table("daily_winners").select("*").eq("role", "krasavchik").order("game_date", desc=True).limit(3).execute()
         
         was_winner_recently = False
         if history_res.data:
@@ -677,7 +677,7 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             # --- 🎢 ТУРБО-ПОД КРУТКА ШАНСОВ: 3 / 5 / 7 ДНЕЙ ЗАСТОЯ ---
             # Запрашиваем глубокую историю до 8 дней, чтобы посчитать точную серию неудач
-            deep_history = supabase.table("daily_winners").select("*").eq("role", "krasavchik").order("game_date", ascending=False).limit(8).execute()
+            deep_history = supabase.table("daily_winners").select("*").eq("role", "krasavchik").order("game_date", desc=True).limit(8).execute()
             
             streak_days = 0
             if deep_history.data:
