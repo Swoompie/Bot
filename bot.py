@@ -321,7 +321,11 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
     already_winner = get_today_winner("pidor")
     if already_winner:
         username = f" (@{already_winner['username']})" if already_winner['username'] else ""
-        await update.message.reply_text(f"Сегодня этот выбор уже сделан! 🤡 Пидор дня — {already_winner['first_name']}{username}")
+        # ЖЕЛЕЗНЫЙ ФИКС: Явно заставляем Telegram читать строку как HTML. Теперь подчёркивания бессильны!
+        await update.message.reply_text(
+            f"Сегодня этот выбор уже сделан! 🤡 Пидор дня — {already_winner['first_name']}{username}",
+            parse_mode="HTML"
+        )
         return
 
     opposite_id = get_opposite_winner_id("pidor")
@@ -345,8 +349,8 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"🤡 Пидор дня — {winner['first_name']}{username}")
 
     # === 🤡 МНОЖИТЕЛЬ ПОЗОРА С ПРОВЕРКОЙ НА НАКОПЛЕНИЕ (3-4 ДНЯ НЕУДАЧ) ===
-    # 1. Находим сумму весов и максимальный вес среди участников клейма на сегодня
-    total_pidor_weight = sum(u["pidor_weight"] for u in filtered_users)
+    # Тут тоже считаем по полному списку users для честности процентов!
+    total_pidor_weight = sum(u["pidor_weight"] for u in users)
     max_chat_pidor_weight = max(u["pidor_weight"] for u in filtered_users)
     
     # 2. Считаем точный процент победителя
@@ -444,7 +448,7 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(
             chat_id=chat_id,
             text=f"🎰 *АКТИВАЦИЯ МНОЖИТЕЛЯ ПОЗОРА!* 🎰\n\n"
-                 f"Поскольку *{safe_winner_name}* умудрялся выживать последние 3+ дня, имея максимальный шанс стать Пидором дня (*{pidor_chance:.1f}%*), казино активирует бонусное колесо наказаний!\n\n"
+                 f"Поскольку *{safe_winner_name}* умудрялся выживать последние 5+ дней, имея максимальный шанс стать Пидором дня (*{pidor_chance:.1f}%*), казино активирует бонусное колесо наказаний!\n\n"
                  f"{multiplier_text}\n\n"
                  f"📊 _Личная статистика обновлена. Текущий позорный счёт: {new_count}_",
             parse_mode="Markdown"
@@ -574,7 +578,10 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     already_winner = get_today_winner("krasavchik")
     if already_winner:
         username = f" (@{already_winner['username']})" if already_winner['username'] else ""
-        await update.message.reply_text(f"Сегодня этот выбор уже сделан! 😎 Красавчик дня — {already_winner['first_name']}{username}")
+        await update.message.reply_text(
+            f"Сегодня этот выбор уже сделан! 😎 Красавчик дня — {already_winner['first_name']}{username}",
+            parse_mode="HTML"
+        )
         return
 
     opposite_id = get_opposite_winner_id("krasavchik")
@@ -652,8 +659,8 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"😎 Красавчик дня — {final_winner['first_name']}{favorit_username}")
 
     # === 👑 МНОЖИТЕЛЬ ЧЕМПИОНА С ПРОВЕРКОЙ НА НАКОПЛЕНИЕ (3-4 ДНЯ НЕУДАЧ) ===
-    # 1. Считаем сумму весов и находим максимальный личный вес среди участников на сегодня
-    total_kras_weight = sum(u["kras_weight"] for u in filtered_users)
+    # ЖЕЛЕЗНО ИСПРАВЛЕНО: Считаем сумму по ПОЛНОМУ списку users, чтобы процент не завышался искусственно!
+    total_kras_weight = sum(u["kras_weight"] for u in users)
     max_chat_weight = max(u["kras_weight"] for u in filtered_users)
     
     # 2. Считаем точный процент победителя
@@ -750,7 +757,7 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(
             chat_id=chat_id,
             text=f"🎰 *АКТИВАЦИЯ МНОЖИТЕЛЯ ЧЕМПИОНА!* 🎰\n\n"
-                 f"Поскольку *{safe_winner_name}* упорно не выпадает вот уже последние 3+ дня, и имея максимальный шанс в чате (*{kras_chance:.1f}%*), казино активирует бонусное колесо фортуны!\n\n"
+                 f"Поскольку *{safe_winner_name}* упорно не выпадает вот уже последние 5+ дней, и имея максимальный шанс в чате (*{kras_chance:.1f}%*), казино активирует бонусное колесо фортуны!\n\n"
                  f"{multiplier_text}\n\n"
                  f"📊 _Личная статистика обновлена. Текущие красавчики: {new_count}_",
             parse_mode="Markdown"
