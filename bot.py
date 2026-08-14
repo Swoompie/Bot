@@ -348,96 +348,81 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = f" (@{winner['username']})" if winner['username'] else ""
     await update.message.reply_text(f"🤡 Пидор дня — {winner['first_name']}{username}")
 
-    # === 🤡 МНОЖИТЕЛЬ ПОЗОРА С ПРОВЕРКОЙ НА НАКОПЛЕНИЕ (3-4 ДНЯ НЕУДАЧ) ===
-    # Тут тоже считаем по полному списку users для честности процентов!
+    # === 🤡 МНОЖИТЕЛЬ ПОЗОРА С ПОД КРУТКОЙ ОТ СТРИКА МАКС-ШАНСА В SUPABASE ===
     total_pidor_weight = sum(u["pidor_weight"] for u in users)
     max_chat_pidor_weight = max(u["pidor_weight"] for u in filtered_users)
-    
-    # 2. Считаем точный процент победителя
     pidor_chance = (winner["pidor_weight"] / total_pidor_weight) * 100
     
     multiplier = 1
     multiplier_text = ""
     is_accumulated_loser = False
 
-    # Если победитель — это именно тот человек, у которого сегодня БЫЛ САМЫЙ ВЫСОКИЙ ШАНС стать Пидором
-    if winner["pidor_weight"] == max_chat_pidor_weight:
-        # Вытаскиваем последние 3 записи пидоров дня из истории
-        history_res = supabase.table("daily_winners").select("*").eq("role", "pidor").order("game_date", desc=True).limit(3).execute()
-        
-        was_winner_recently = False
-        if history_res.data:
-            for record in history_res.data:
-                if record["user_id"] == winner["user_id"]:
-                    was_winner_recently = True
-                    break
-        
-        # Если за последние 3 дня его в пидорах дня НЕ БЫЛО — накопление Ромы сработало!
-        if not was_winner_recently:
-            is_accumulated_loser = True
-            
-            # --- 🎢 ТУРБО-ПОД КРУТКА ШАНСОВ: 5 / 10 / 15 ДНЕЙ ЗАСТОЯ ---
-            # Запрашиваем глубокую историю до 20 дней
-            deep_history = supabase.table("daily_winners").select("*").eq("role", "pidor").order("game_date", desc=True).limit(20).execute()
-            
-            streak_days = 0
-            if deep_history.data:
-                for record in deep_history.data:
-                    if record["user_id"] == winner["user_id"]:
-                        break
-                    streak_days += 1
+    # Обновляем стрики максимального шанса в Supabase для ВСЕХ участников на сегодня
+    for u in filtered_users:
+        if u["pidor_weight"] == max_chat_pidor_weight:
+            current_streak = u.get("max_chance_streak", 0) or 0
+            supabase.table("users").update({"max_chance_streak": current_streak + 1}).eq("user_id", u["user_id"]).execute()
+        else:
+            supabase.table("users").update({"max_chance_streak": 0}).eq("user_id", u["user_id"]).execute()
 
-            # Крутим скрытую кость от 1 до 100
-            bonus_roll = random.randint(1, 100)
-            
-            # Зеркальная настройка весов позора на основе твоей новой шкалы (5 / 10 / 15)
-            if streak_days >= 15:
-                # 15+ дней простоя: Осечки нет! По полной программе ровно 15% на х5
-                if bonus_roll <= 35:
-                    multiplier = 2
-                    multiplier_text = "🔥 *ДВОЙНОЙ ПОЗОР (х2)!!!* Скрытая кость упала максимально неудачно - лови сразу *+2 к счётчику* в досье! "
-                elif bonus_roll <= 85:
-                    multiplier = 3
-                    multiplier_text = "🚀 *ТРИУМФ КЛОУНА (х3)!!!* Матрица казино раздавила фаворита - забирай сразу *+3*! "
-                else:
-                    multiplier = 5
-                    multiplier_text = "💀 *УЛЬТРА-ГЕНОЦИД КАЗИНО (х5)!!!!!* История чата уничтожена! Лови сразу *+5*, неудачник! 🎪🤡"
-            
-            elif streak_days >= 10:
-                # 10-14 дней простоя: Осечка падает до 5%
-                if bonus_roll <= 45:
-                    multiplier = 2
-                    multiplier_text = "🔥 *ДВОЙНОЙ ПОЗОР (х2)!!!* Скрытая кость упала максимально неудачно - лови сразу *+2 к счётчику* в досье! "
-                elif bonus_roll <= 85:
-                    multiplier = 3
-                    multiplier_text = "🚀 *ТРИУМФ КЛОУНА (х3)!!!* Матрица казино раздавила фаворита - забирай сразу *+3*! "
-                elif bonus_roll <= 90:
-                    multiplier = 1  # Осечка, бот промолчит для секретности!
-                else:
-                    multiplier = 5
-                    multiplier_text = "💀 *УЛЬТРА-ГЕНОЦИД КАЗИНО (х5)!!!!!* История чата уничтожена! Лови сразу *+5*, неудачник! 🎪🤡"
-            
-            elif streak_days >= 5:
-                # 5-9 дней простоя: Твои стандартные шансы
-                if bonus_roll <= 50:
-                    multiplier = 2
-                    multiplier_text = "🔥 *ДВОЙНОЙ ПОЗОР (х2)!!!* Скрытая кость упала максимально неудачно - лови сразу *+2 к счётчику* в досье! "
-                elif bonus_roll <= 80:
-                    multiplier = 3
-                    multiplier_text = "🚀 *ТРИУМФ КЛОУНА (х3)!!!* Матрица казино раздавила фаворита - забирай сразу *+3*! "
-                elif bonus_roll <= 95:
-                    multiplier = 1  # Осечка, бот промолчит для секретности!
-                else:
-                    multiplier = 5
-                    multiplier_text = "💀 *УЛЬТРА-ГЕНОЦИД КАЗИНО (х5)!!!!!* История чата уничтожена! Лови сразу *+5*, неудачник! 🎪🤡"
-            
+    # Считываем свежий стрик макс-шанса для победителя
+    winner_res = supabase.table("users").select("max_chance_streak").eq("user_id", winner["user_id"]).execute()
+    streak_days = winner_res.data[0]["max_chance_streak"] if winner_res.data else 0
+
+    # Если победитель — это фаворит, и его стрик удержания топа длится 3 дня или дольше
+    if winner["pidor_weight"] == max_chat_pidor_weight and streak_days >= 3:
+        is_accumulated_loser = True
+        
+        # Крутим скрытую кость от 1 до 100
+        bonus_roll = random.randint(1, 100)
+        
+        # === 🤡 ЗЕРКАЛЬНАЯ НАСТРОЙКА ВЕСОВ ПОЗОРА (ШКАЛА 5 / 10 / 15 ДНЕЙ) ===
+        if streak_days >= 15:
+            # 15+ дней удержания Топ-1 шанса: Осечки нет! х5 равен ровно 15% (от 86 до 100)
+            if bonus_roll <= 35:
+                multiplier = 2
+                multiplier_text = "🎪 *ЦИРКОВАЯ КУРТКА (х2)!!!* Скрытая кость бьёт наотмашь — лови двойной позор и *+2 к счётчику* позора! "
+            elif bonus_roll <= 85:
+                multiplier = 3
+                multiplier_text = "📣 *ПАРАД ПОЗОРА (х3)!!!* Матрица казино взломана мега-застоем — забирай сразу *+3 пидора* в досье! "
             else:
-                # МИКРО-ЗАСТОЙ (меньше 5 дней): Наказания заблокированы, только стандартный +1 позор
-                multiplier = 1
+                multiplier = 5
+                multiplier_text = "💀 *ТОТАЛЬНЫЙ АПОКАЛИПСИС СТАТИСТИКИ (х5)!!!!!* Смертельный джекпот за рекордные 15+ дней топа! Получай *+5 позоров* разом! 🎪🤡"
+        
+        elif streak_days >= 10:
+            # 10-14 дней удержания Топ-1 шанса: Осечка падает до 5%, х5 поднят до 10%
+            if bonus_roll <= 45:
+                multiplier = 2
+                multiplier_text = "🎪 *ЦИРКОВАЯ КУРТКА (х2)!!!* Скрытая кость бьёт наотмашь — лови двойной позор и *+2 к счётчику* позора! "
+            elif bonus_roll <= 85:
+                multiplier = 3
+                multiplier_text = "📣 *ПАРАД ПОЗОРА (х3)!!!* Матрица казино взломана мега-застоем — забирай сразу *+3 пидора* в досье! "
+            elif bonus_roll <= 90:
+                multiplier = 1  # Осечка множителя, бот промолчит для секретности!
+            else:
+                multiplier = 5
+                multiplier_text = "💀 *ТОТАЛЬНЫЙ АПОКАЛИПСИС СТАТИСТИКИ (х5)!!!!!* Смертельный джекпот за рекордные 10+ дней топа! Получай *+5 позоров* разом! 🎪🤡"
+        
+        elif streak_days >= 5:
+            # 5-9 дней удержания Топ-1 шанса: Базовые шансы для запуска колеса
+            if bonus_roll <= 50:
+                multiplier = 2
+                multiplier_text = "🎪 *ЦИРКОВАЯ КУРТКА (х2)!!!* Скрытая кость бьёт наотмашь — лови двойной позор и *+2 к счётчику* позора! "
+            elif bonus_roll <= 80:
+                multiplier = 3
+                multiplier_text = "📣 *ПАРАД ПОЗОРА (х3)!!!* Матрица казино взломана мега-застоем — забирай сразу *+3 пидора* в досье! "
+            elif bonus_roll <= 95:
+                multiplier = 1  # Осечка множителя, бот промолчит для секретности!
+            else:
+                multiplier = 5
+                multiplier_text = "💀 *ТОТАЛЬНЫЙ АПОКАЛИПСИС СТАТИСТИКИ (х5)!!!!!* Смертельный джекпот за рекордные 5+ дней топа! Получай *+5 позоров* разом! 🎪🤡"
 
     # Рассчитываем итоговую статистику с учётом множителя позора
     new_count = winner["pidor_count"] + multiplier
     supabase.table("users").update({"pidor_count": new_count}).eq("user_id", winner["user_id"]).execute()
+    
+    # Сбрасываем стрик победителя обратно в 0
+    supabase.table("users").update({"max_chance_streak": 0}).eq("user_id", winner["user_id"]).execute()
 
     # Полная изоляция никнейма от багов разметки Телеграма (в скобки)
     w_username_display = f" (@{winner['username']})" if winner.get('username') else ""
@@ -448,7 +433,7 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(
             chat_id=chat_id,
             text=f"🎰 *АКТИВАЦИЯ МНОЖИТЕЛЯ ПОЗОРА!* 🎰\n\n"
-                 f"Поскольку *{safe_winner_name}* умудрялся выживать последние 5+ дней, имея максимальный шанс стать Пидором дня (*{pidor_chance:.1f}%*), казино активирует бонусное колесо наказаний!\n\n"
+                 f"Поскольку накопленный фаворит клейма *{safe_winner_name}* удерживал максимальный шанс стать Пидором дня уже *{streak_days} дн.* подряд, казино активирует бонусное колесо наказаний!\n\n"
                  f"{multiplier_text}\n\n"
                  f"📊 _Личная статистика обновлена. Текущий позорный счёт: {new_count}_",
             parse_mode="Markdown"
@@ -658,96 +643,83 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # ================= ✨ ПУТЬ А: СТАНДАРТНЫЙ ПРОКРУТ (70%) =================
         await update.message.reply_text(f"😎 Красавчик дня — {final_winner['first_name']}{favorit_username}")
 
-    # === 👑 МНОЖИТЕЛЬ ЧЕМПИОНА С ПРОВЕРКОЙ НА НАКОПЛЕНИЕ (3-4 ДНЯ НЕУДАЧ) ===
-    # ЖЕЛЕЗНО ИСПРАВЛЕНО: Считаем сумму по ПОЛНОМУ списку users, чтобы процент не завышался искусственно!
+    # === 👑 МНОЖИТЕЛЬ ЧЕМПИОНА С ПОД КРУТКОЙ ОТ СТРИКА МАКС-ШАНСА В SUPABASE ===
     total_kras_weight = sum(u["kras_weight"] for u in users)
     max_chat_weight = max(u["kras_weight"] for u in filtered_users)
-    
-    # 2. Считаем точный процент победителя
     kras_chance = (final_winner["kras_weight"] / total_kras_weight) * 100
     
     multiplier = 1
     multiplier_text = ""
     is_accumulated_champion = False
 
-    # Если победитель — это именно тот человек, у которого сегодня БЫЛ САМЫЙ ВЫСОКИЙ ШАНС в чате
-    if final_winner["kras_weight"] == max_chat_weight:
-        # Вытаскиваем последние 3 записи красавчиков из истории
-        history_res = supabase.table("daily_winners").select("*").eq("role", "krasavchik").order("game_date", desc=True).limit(3).execute()
-        
-        was_winner_recently = False
-        if history_res.data:
-            for record in history_res.data:
-                if record["user_id"] == final_winner["user_id"]:
-                    was_winner_recently = True
-                    break
-        
-        # Если за последние 3 дня его в победителях НЕ БЫЛО — значит, накопление сработало!
-        if not was_winner_recently:
-            is_accumulated_champion = True
-            
-            # --- 🎢 ТУРБО-ПОД КРУТКА ШАНСОВ: 5 / 10 / 15 ДНЕЙ ЗАСТОЯ ---
-            # Запрашиваем глубокую историю до 20 дней, чтобы отсчитать рекордный застой
-            deep_history = supabase.table("daily_winners").select("*").eq("role", "krasavchik").order("game_date", desc=True).limit(20).execute()
-            
-            streak_days = 0
-            if deep_history.data:
-                for record in deep_history.data:
-                    if record["user_id"] == final_winner["user_id"]:
-                        break
-                    streak_days += 1
+    # Обновляем стрики максимального шанса в Supabase для ВСЕХ участников на сегодня
+    for u in filtered_users:
+        if u["kras_weight"] == max_chat_weight:
+            # Накидываем +1 день удержания Топ-1 фаворита в базу
+            current_streak = u.get("max_chance_streak", 0) or 0
+            supabase.table("users").update({"max_chance_streak": current_streak + 1}).eq("user_id", u["user_id"]).execute()
+        else:
+            # Всем остальным сбрасываем стрик фаворита в 0, так как они не Топ-1
+            supabase.table("users").update({"max_chance_streak": 0}).eq("user_id", u["user_id"]).execute()
 
-            # Крутим скрытую кость от 1 до 100
-            bonus_roll = random.randint(1, 100)
-            
-            # Настройка весов колеса фортуны на основе твоей новой шкалы (5 / 10 / 15)
-            if streak_days >= 15:
-                # ХАРДКОРНЫЙ МЕГА-ВЗРЫВ (15+ дней простоя): Осечки нет вообще! х5 увеличен до 25%!
-                if bonus_roll <= 30:
-                    multiplier = 2
-                    multiplier_text = "🔥 *КРАТНЫЙ УДАР (х2)!* Монетка упала удачно — лови сразу *+2 к счётчику* в досье! "
-                elif bonus_roll <= 75:
-                    multiplier = 3
-                    multiplier_text = "🚀 *КОРОЛЕВСКИЙ ТРИУМФ (х3)!* Матрица казино взломана фаворитом — забирай *+3*! "
-                else:
-                    multiplier = 5
-                    multiplier_text = "💥 *ЛЕГЕНДАРНЫЙ ДЖЕКПОТ (х5)!!!* История чата переписана! Колесо фортуны выдало максимальный сектор — лови сразу *+5*, красавчик! 👑🥂"
-            
-            elif streak_days >= 10:
-                # ТУРБО-РЕЖИМ (10-14 дней простоя): Осечка падает до 5%, шансы на х3 и х5 повышены
-                if bonus_roll <= 45:
-                    multiplier = 2
-                    multiplier_text = "🔥 *КРАТНЫЙ УДАР (х2)!* Монетка упала удачно — лови сразу *+2 к счётчику* в досье! "
-                elif bonus_roll <= 85:
-                    multiplier = 3
-                    multiplier_text = "🚀 *КОРОЛЕВСКИЙ ТРИУМФ (х3)!* Матрица казино взломана фаворитом — забирай *+3*! "
-                elif bonus_roll <= 90:
-                    multiplier = 1  # Осечка джекпота, бот промолчит для секретности!
-                else:
-                    multiplier = 5
-                    multiplier_text = "💥 *ЛЕГЕНДАРНЫЙ ДЖЕКПОТ (х5)!!!* История чата переписана! Колесо фортуны выдало максимальный сектор — лови сразу *+5*, красавчик! 👑🥂"
-            
-            elif streak_days >= 5:
-                # БАЗОВЫЙ БАЛАНС (5-9 дней простоя): Твои стандартные шансы
-                if bonus_roll <= 50:
-                    multiplier = 2
-                    multiplier_text = "🔥 *КРАТНЫЙ УДАР (х2)!* Монетка упала удачно — лови сразу *+2 к счётчику* в досье! "
-                elif bonus_roll <= 80:
-                    multiplier = 3
-                    multiplier_text = "🚀 *КОРОЛЕВСКИЙ ТРИУМФ (х3)!* Матрица казино взломана фаворитом — забирай *+3*! "
-                elif bonus_roll <= 95:
-                    multiplier = 1  # Осечка джекпота, бот промолчит для секретности!
-                else:
-                    multiplier = 5
-                    multiplier_text = "💥 *ЛЕГЕНДАРНЫЙ ДЖЕКПОТ (х5)!!!* История чата переписана! Колесо фортуны выдало максимальный сектор — лови сразу *+5*, красавчик! 👑🥂"
-            
+    # Считываем свежий, только что обновлённый стрик максимального шанса для победителя
+    winner_res = supabase.table("users").select("max_chance_streak").eq("user_id", final_winner["user_id"]).execute()
+    streak_days = winner_res.data[0]["max_chance_streak"] if winner_res.data else 0
+
+    # Если победитель — это именно фаворит, и его стрик удержания топа длится 3 дня или дольше
+    if final_winner["kras_weight"] == max_chat_weight and streak_days >= 3:
+        is_accumulated_champion = True
+        
+        # Крутим скрытую кость от 1 до 100
+        bonus_roll = random.randint(1, 100)
+        
+        # === 👑 ЗЕРКАЛЬНАЯ НАСТРОЙКА ВЕСОВ ЧЕМПИОНА (ШКАЛА 5 / 10 / 15 ДНЕЙ) ===
+        if streak_days >= 15:
+            # 15+ дней удержания Топ-1 шанса: Осечки нет вообще! Шанс на х5 увеличен до 25%!
+            if bonus_roll <= 30:
+                multiplier = 2
+                multiplier_text = "🔥 *КРАТНЫЙ УДАР (х2)!* Монетка упала удачно — лови сразу *+2 к счётчику* в досье! "
+            elif bonus_roll <= 75:
+                multiplier = 3
+                multiplier_text = "🚀 *КОРОЛЕВСКИЙ ТРИУМФ (х3)!* Матрица казино взломана фаворитом — забирай *+3*! "
             else:
-                # МИКРО-ЗАСТОЙ (меньше 5 дней): Множители заблокированы, только стандартная +1 корона
-                multiplier = 1
+                multiplier = 5
+                multiplier_text = "💥 *ЛЕГЕНДАРНЫЙ ДЖЕКПОТ (х5)!!!* История чата переписана! Колесо фортуны выдало максимальный сектор — лови сразу *+5*, красавчик! 👑🥂"
+        
+        elif streak_days >= 10:
+            # 10-14 дней удержания Топ-1 шанса: Осечка падает до 5%, шансы на х3 и х5 повышены
+            if bonus_roll <= 45:
+                multiplier = 2
+                multiplier_text = "🔥 *КРАТНЫЙ УДАР (х2)!* Монетка упала удачно — лови сразу *+2 к счётчику* в досье! "
+            elif bonus_roll <= 85:
+                multiplier = 3
+                multiplier_text = "🚀 *КОРОЛЕВСКИЙ ТРИУМФ (х3)!* Матрица казино взломана фаворитом — забирай *+3*! "
+            elif bonus_roll <= 90:
+                multiplier = 1  # Осечка джекпота, бот промолчит для секретности!
+            else:
+                multiplier = 5
+                multiplier_text = "💥 *ЛЕГЕНДАРНЫЙ ДЖЕКПОТ (х5)!!!* История чата переписана! Колесо фортуны выдало максимальный сектор — лови сразу *+5*, красавчик! 👑🥂"
+        
+        elif streak_days >= 5:
+            # 5-9 дней удержания Топ-1 шанса: Базовые шансы для запуска колеса
+            if bonus_roll <= 50:
+                multiplier = 2
+                multiplier_text = "🔥 *КРАТНЫЙ УДАР (х2)!* Монетка упала удачно — лови сразу *+2 к счётчику* в досье! "
+            elif bonus_roll <= 80:
+                multiplier = 3
+                multiplier_text = "🚀 *КОРОЛЕВСКИЙ ТРИУМФ (х3)!* Матрица казино взломана фаворитом — забирай *+3*! "
+            elif bonus_roll <= 95:
+                multiplier = 1  # Осечка джекпота, бот промолчит для секретности!
+            else:
+                multiplier = 5
+                multiplier_text = "💥 *ЛЕГЕНДАРНЫЙ ДЖЕКПОТ (х5)!!!* История чата переписана! Колесо фортуны выдало максимальный сектор — лови сразу *+5*, красавчик! 👑🥂"
 
     # Рассчитываем итоговое начисление с учётом множителя
     new_count = final_winner["kras_count"] + multiplier
     supabase.table("users").update({"kras_count": new_count}).eq("user_id", final_winner["user_id"]).execute()
+    
+    # После победы фаворита сбрасываем его личный стрик макс-шанса обратно в 0
+    supabase.table("users").update({"max_chance_streak": 0}).eq("user_id", final_winner["user_id"]).execute()
 
     # Защищаем никнейм от багов разметки Телеграма (изолируем в скобки)
     safe_winner_name = f"{final_winner['first_name']}{favorit_username}"
@@ -757,7 +729,7 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(
             chat_id=chat_id,
             text=f"🎰 *АКТИВАЦИЯ МНОЖИТЕЛЯ ЧЕМПИОНА!* 🎰\n\n"
-                 f"Поскольку *{safe_winner_name}* упорно не выпадает вот уже последние 5+ дней, и имея максимальный шанс в чате (*{kras_chance:.1f}%*), казино активирует бонусное колесо фортуны!\n\n"
+                 f"Поскольку накопленный фаворит дня *{safe_winner_name}* удерживал максимальный шанс в чате уже *{streak_days} дн.* подряд, казино активирует бонусное колесо фортуны!\n\n"
                  f"{multiplier_text}\n\n"
                  f"📊 _Личная статистика обновлена. Текущие красавчики: {new_count}_",
             parse_mode="Markdown"
