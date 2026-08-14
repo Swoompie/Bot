@@ -360,14 +360,14 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Обновляем стрики максимального шанса в Supabase для ВСЕХ участников на сегодня
     for u in filtered_users:
         if u["pidor_weight"] == max_chat_pidor_weight:
-            current_streak = u.get("max_chance_streak", 0) or 0
-            supabase.table("users").update({"max_chance_streak": current_streak + 1}).eq("user_id", u["user_id"]).execute()
+            current_streak = u.get("pidor_streak", 0) or 0
+            supabase.table("users").update({"pidor_streak": current_streak + 1}).eq("user_id", u["user_id"]).execute()
         else:
-            supabase.table("users").update({"max_chance_streak": 0}).eq("user_id", u["user_id"]).execute()
+            supabase.table("users").update({"pidor_streak": 0}).eq("user_id", u["user_id"]).execute()
 
-    # Считываем свежий стрик макс-шанса для победителя
-    winner_res = supabase.table("users").select("max_chance_streak").eq("user_id", winner["user_id"]).execute()
-    streak_days = winner_res.data[0]["max_chance_streak"] if winner_res.data else 0
+    # Считываем свежий стрик Пидора
+    winner_res = supabase.table("users").select("pidor_streak").eq("user_id", winner["user_id"]).execute()
+    streak_days = winner_res.data[0]["pidor_streak"] if winner_res.data else 0
 
     # Если победитель — это фаворит, и его стрик удержания топа длится 3 дня или дольше
     if winner["pidor_weight"] == max_chat_pidor_weight and streak_days >= 3:
@@ -422,7 +422,7 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
     supabase.table("users").update({"pidor_count": new_count}).eq("user_id", winner["user_id"]).execute()
     
     # Сбрасываем стрик победителя обратно в 0
-    supabase.table("users").update({"max_chance_streak": 0}).eq("user_id", winner["user_id"]).execute()
+    supabase.table("users").update({"pidor_streak": 0}).eq("user_id", winner["user_id"]).execute()
 
     # Полная изоляция никнейма от багов разметки Телеграма (в скобки)
     w_username_display = f" (@{winner['username']})" if winner.get('username') else ""
@@ -655,16 +655,14 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Обновляем стрики максимального шанса в Supabase для ВСЕХ участников на сегодня
     for u in filtered_users:
         if u["kras_weight"] == max_chat_weight:
-            # Накидываем +1 день удержания Топ-1 фаворита в базу
-            current_streak = u.get("max_chance_streak", 0) or 0
-            supabase.table("users").update({"max_chance_streak": current_streak + 1}).eq("user_id", u["user_id"]).execute()
+            current_streak = u.get("kras_streak", 0) or 0
+            supabase.table("users").update({"kras_weight" if False else "kras_streak": current_streak + 1}).eq("user_id", u["user_id"]).execute()
         else:
-            # Всем остальным сбрасываем стрик фаворита в 0, так как они не Топ-1
-            supabase.table("users").update({"max_chance_streak": 0}).eq("user_id", u["user_id"]).execute()
+            supabase.table("users").update({"kras_streak": 0}).eq("user_id", u["user_id"]).execute()
 
-    # Считываем свежий, только что обновлённый стрик максимального шанса для победителя
-    winner_res = supabase.table("users").select("max_chance_streak").eq("user_id", final_winner["user_id"]).execute()
-    streak_days = winner_res.data[0]["max_chance_streak"] if winner_res.data else 0
+    # Считываем свежий стрик Красавчика
+    winner_res = supabase.table("users").select("kras_streak").eq("user_id", final_winner["user_id"]).execute()
+    streak_days = winner_res.data[0]["kras_streak"] if winner_res.data else 0
 
     # Если победитель — это именно фаворит, и его стрик удержания топа длится 3 дня или дольше
     if final_winner["kras_weight"] == max_chat_weight and streak_days >= 3:
@@ -719,7 +717,7 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     supabase.table("users").update({"kras_count": new_count}).eq("user_id", final_winner["user_id"]).execute()
     
     # После победы фаворита сбрасываем его личный стрик макс-шанса обратно в 0
-    supabase.table("users").update({"max_chance_streak": 0}).eq("user_id", final_winner["user_id"]).execute()
+    supabase.table("users").update({"kras_streak": 0}).eq("user_id", final_winner["user_id"]).execute()
 
     # Защищаем никнейм от багов разметки Телеграма (изолируем в скобки)
     safe_winner_name = f"{final_winner['first_name']}{favorit_username}"
