@@ -395,9 +395,13 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Выбираем победителя по умолчанию
     winner = weighted_choice(filtered_users, "pidor_weight")
 
-    # СРАЗУ ОБЪЯВЛЯЕМ СТАНДАРТНОГО ПИДОРА (Чтобы хайп шёл по порядку, как в Красавчике)
+    # ЖЕЛЕЗНО ИСПРАВЛЕНО: Отправляем напрямую через send_message по chat_id!
+    # Теперь удаление сообщения Артёма больше никогда не подвесит бота.
     username = f" (@{winner['username']})" if winner['username'] else ""
-    await update.message.reply_text(f"🤡 Пидор дня — {winner['first_name']}{username}")
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=f"🤡 Пидор дня — {winner['first_name']}{username}"
+    )
 
     # === 🤡 МНОЖИТЕЛЬ ПОЗОРА С ПОД КРУТКОЙ ОТ СТРИКА МАКС-ШАНСА В SUPABASE ===
     total_pidor_weight = sum(u["pidor_weight"] for u in users)
@@ -692,7 +696,11 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         supabase.table("users").update({"kras_weight": current_kras_weight + 30.0}).eq("user_id", coin_loser["user_id"]).execute()
     else:
         # ================= ✨ ПУТЬ А: СТАНДАРТНЫЙ ПРОКРУТ (70%) =================
-        await update.message.reply_text(f"😎 Красавчик дня — {final_winner['first_name']}{favorit_username}")
+        # Тут тоже отправляем напрямую в чат, чтобы застраховаться от удаления сообщений!
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"😎 Красавчик дня — {final_winner['first_name']}{favorit_username}"
+        )
 
     # === 👑 МНОЖИТЕЛЬ ЧЕМПИОНА С ПОД КРУТКОЙ ОТ СТРИКА МАКС-ШАНСА В SUPABASE ===
     total_kras_weight = sum(u["kras_weight"] for u in users)
