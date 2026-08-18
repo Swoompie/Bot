@@ -496,6 +496,33 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if multiplier == 5:
             await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgUAAxkBAAERr4pqeX-dpAQpHvj3CZnAcPY0_UmGSQACgggAAjiksVVM5Vj4fvPn0z0E')
 
+    # === 🎪 ПОЗОРНЫЙ ВИНСТРИК ПИДОРА (С ФИКСАЦИЕЙ АНТИРЕКОРДОВ В SUPABASE) ===
+    # 1. Всем остальным сбрасываем позорный стрик в 0
+    for u in filtered_users:
+        if u["user_id"] != winner["user_id"]:
+            supabase.table("users").update({"pidor_win_streak": 0}).eq("user_id", u["user_id"]).execute()
+
+    # 2. Победителю накидываем +1 к позорному стрику
+    current_win_streak = winner.get("pidor_win_streak", 0) or 0
+    new_win_streak = current_win_streak + 1
+    supabase.table("users").update({"pidor_win_streak": new_win_streak}).eq("user_id", winner["user_id"]).execute()
+
+    # 3. Проверяем и обновляем ВЕЧНЫЙ ИСТОРИЧЕСКИЙ АНТИРЕКОРД подряд в базе данных
+    max_pidor_streak = winner.get("max_pidor_win_streak", 0) or 0
+    if new_win_streak > max_pidor_streak:
+        supabase.table("users").update({"max_pidor_win_streak": new_win_streak}).eq("user_id", winner["user_id"]).execute()
+
+    # 4. Если бедолага ловит клеймо 3 дня подряд или дольше — закидываем мемами!
+    if new_win_streak >= 3:
+        await asyncio.sleep(1)
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"🚨 *КОНЦЕНТРАЦИЯ НЕВЕЗЕНИЯ ПОЛУЧЕНА!* 🎪\n\n"
+                 f"Это историческое пробитие дна! *{safe_winner_name}* умудряется стать Пидором дня уже *{new_win_streak} дня подряд*! 😭\n"
+                 f"Его проценты сдулись до минимума, но проклятие рандома неумолимо! Запишите эту легенду в анналы позора чата! 🤡💣",
+            parse_mode="Markdown"
+        )
+
     # Пересчитываем веса под финального победителя и сохраняем его в историю дня
     redistribute_weights(winner["user_id"], "pidor_weight")
     save_daily_winner("pidor", winner["user_id"])
@@ -794,6 +821,33 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if multiplier == 5:
             await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERr31qeWv80Ku9FF7n2t9x4eyLRpX9eAAC1jcAAvbPQUmGw6z4J9_owD0E')
     
+    # === 🏆 УЛЬТРА-ВИНСТРИК КРАСАВЧИКА (С ФИКСАЦИЕЙ РЕКОРДОВ В SUPABASE) ===
+    # 1. Всем остальным участникам сегодняшней рулетки сбрасываем победный стрик в 0
+    for u in filtered_users:
+        if u["user_id"] != final_winner["user_id"]:
+            supabase.table("users").update({"kras_win_streak": 0}).eq("user_id", u["user_id"]).execute()
+
+    # 2. Победителю накидываем +1 к его текущему победному стрику
+    current_win_streak = final_winner.get("kras_win_streak", 0) or 0
+    new_win_streak = current_win_streak + 1
+    supabase.table("users").update({"kras_win_streak": new_win_streak}).eq("user_id", final_winner["user_id"]).execute()
+
+    # 3. Проверяем и обновляем ВЕЧНЫЙ ИСТОРИЧЕСКИЙ РЕКОРД подряд в базе данных
+    max_kras_streak = final_winner.get("max_kras_win_streak", 0) or 0
+    if new_win_streak > max_kras_streak:
+        supabase.table("users").update({"max_kras_win_streak": new_win_streak}).eq("user_id", final_winner["user_id"]).execute()
+
+    # 4. Если везунчик забирает титул 3 дня подряд или дольше — взрываем чат!
+    if new_win_streak >= 3:
+        await asyncio.sleep(1) # Небольшая пауза для эффекта сюрприза
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"🎰 *БОЖЕСТВЕННЫЙ ХЕТ-ТРИК КАЗИНО!* 👑\n\n"
+                 f"Да как он это делает?! *{safe_winner_name}* умудряется забрать титул Красавчика дня аж *{new_win_streak} дня подряд*! 🤯\n"
+                 f"Имея минимальный процент, он всё равно взломал рандом! Настоящий любимчик фортуны! 🥂✨",
+            parse_mode="Markdown"
+        )
+
     # Пересчитываем веса под финального победителя и сохраняем его в историю дня
     redistribute_weights(final_winner["user_id"], "kras_weight")
     save_daily_winner("krasavchik", final_winner["user_id"])
@@ -1729,7 +1783,10 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     d_wins = player.get("duel_wins", 0) if player.get("duel_wins") is not None else 0
     d_losses = player.get("duel_losses", 0) if player.get("duel_losses") is not None else 0
     d_total = d_wins + d_losses
-
+    
+    max_k_streak = player.get("max_kras_win_streak", 0) or 0
+    max_p_streak = player.get("max_pidor_win_streak", 0) or 0
+    
     # 5. Собираем ультимативное досье
     username = f" (@{player['username']})" if player['username'] else ""
     message = (
@@ -1741,10 +1798,12 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📊 *ТЕКУЩИЕ ШАНСЫ*:\n"
         f" └ 🤡 Стать Пидором: `{pidor_chance:.1f}%` \n"
         f" └ 😎 Стать Красавчиком: `{kras_chance:.1f}%` \n\n"
+        f"📈 Рекорд Красавчика подряд: {max_k_streak} дн.\n"
+        f"📉 Рекорд Пидора подряд: {max_p_streak} дн.\n"
         f"🃏 *Карта UNO:* {uno_status}\n"
         f"🎭 *Карта Мимик:* {mimic_status}\n"
         f"🎲 *Кубики судьбы:* {dice_status}\n"
-        f"🔫 *Патроны дуэлей:* {duel_bullet_status}" # <--- ВОТ ОНА, ТВОЯ ТАКТИЧЕСКАЯ СТРОЧКА!
+        f"🔫 *Патроны дуэлей:* {duel_bullet_status}"
     )
     await update.message.reply_text(message, parse_mode="Markdown")
 
