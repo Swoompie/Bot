@@ -1799,7 +1799,7 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f" └ 🤡 Стать Пидором: `{pidor_chance:.1f}%` \n"
         f" └ 😎 Стать Красавчиком: `{kras_chance:.1f}%` \n\n"
         f"📈 Рекорд Красавчика подряд: {max_k_streak} дн.\n"
-        f"📉 Рекорд Пидора подряд: {max_p_streak} дн.\n"
+        f"📉 Рекорд Пидора подряд: {max_p_streak} дн.\n\n"
         f"🃏 *Карта UNO:* {uno_status}\n"
         f"🎭 *Карта Мимик:* {mimic_status}\n"
         f"🎲 *Кубики судьбы:* {dice_status}\n"
