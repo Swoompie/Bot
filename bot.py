@@ -412,17 +412,17 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
     multiplier_text = ""
     is_accumulated_loser = False
 
-    # Обновляем стрики максимального шанса в Supabase для ВСЕХ участников на сегодня
+    # ЖЕЛЕЗНО ИСПРАВЛЕНО: При равном максимальном позоре стрик капает обоим!
     for u in filtered_users:
-        if u["pidor_weight"] == max_chat_pidor_weight:
+        if u["pidor_weight"] >= max_chat_pidor_weight:
             current_streak = u.get("pidor_streak", 0) or 0
             supabase.table("users").update({"pidor_streak": current_streak + 1}).eq("user_id", u["user_id"]).execute()
         else:
             supabase.table("users").update({"pidor_streak": 0}).eq("user_id", u["user_id"]).execute()
 
-    # Считываем свежий стрик Пидора
+    # Считываем свежий стрик Пидора для победителя
     winner_res = supabase.table("users").select("pidor_streak").eq("user_id", winner["user_id"]).execute()
-    streak_days = winner_res.data[0]["pidor_streak"] if winner_res.data else 0
+    streak_days = winner_res.data[0]["pidor_streak"] if (winner_res.data and len(winner_res.data) > 0) else 0
 
     # Если победитель — это фаворит, и его стрик удержания топа длится 3 дня или дольше
     if winner["pidor_weight"] == max_chat_pidor_weight and streak_days >= 3:
@@ -711,17 +711,17 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     multiplier_text = ""
     is_accumulated_champion = False
 
-    # Обновляем стрики максимального шанса в Supabase для ВСЕХ участников на сегодня
+    # ЖЕЛЕЗНО ИСПРАВЛЕНО: Если у нескольких людей макс вес одинаковый — стрик капает ВСЕМ!
     for u in filtered_users:
-        if u["kras_weight"] == max_chat_weight:
+        if u["kras_weight"] >= max_chat_weight: # Используем >= на случай микро-погрешностей
             current_streak = u.get("kras_streak", 0) or 0
-            supabase.table("users").update({"kras_weight" if False else "kras_streak": current_streak + 1}).eq("user_id", u["user_id"]).execute()
+            supabase.table("users").update({"kras_streak": current_streak + 1}).eq("user_id", u["user_id"]).execute()
         else:
             supabase.table("users").update({"kras_streak": 0}).eq("user_id", u["user_id"]).execute()
 
-    # Считываем свежий стрик Красавчика
+    # Считываем свежий стрик Красавчика для победителя
     winner_res = supabase.table("users").select("kras_streak").eq("user_id", final_winner["user_id"]).execute()
-    streak_days = winner_res.data[0]["kras_streak"] if winner_res.data else 0
+    streak_days = winner_res.data[0]["kras_streak"] if (winner_res.data and len(winner_res.data) > 0) else 0
 
     # Если победитель — это именно фаворит, и его стрик удержания топа длится 3 дня или дольше
     if final_winner["kras_weight"] == max_chat_weight and streak_days >= 3:
