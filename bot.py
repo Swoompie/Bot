@@ -1617,8 +1617,15 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 parse_mode="HTML"
             )
             await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERfwtqSi0WKXA0-slyXjuDMUAC14PGkAAC6BMAAp7K8UkQAAGdV1VM7UI8BA')
+            
         except Exception as e:
             print(f"Ошибка вывода триумфа UNO: {e}")
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text="🔧 <b>Сука, опять вы всё сломали!</b> 🤦‍♂️\n\nКоролевское ограбление Красавчика зависло в текстурах Телеграма! Корона украдена, админ пошёл чинить!",
+                parse_mode="HTML"
+            )
+            await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERv_1qh-RMBre9eek9ykdsovu3gf-SvwACCnUAAlgXsEkCKvJjaqw9iT0E')
 
     # 🃏 ПУТЬ Б: УСПЕШНЫЙ ОБЫЧНЫЙ ПЕРЕВОД / ДОБИВАНИЕ (ЗАМЕНИЛИ ELSE НА НЕЗАВИСИМЫЙ IF!)
     if is_success and current_user and not is_robbing_chad:
@@ -1684,6 +1691,13 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         except Exception as e:
             print(f"Ошибка вывода результата UNO: {e}")
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text="🔧 <b>Сука, опять вы всё сломали!</b> 🤦‍♂️\n\nКарта UNO отработала в базе, но сообщение улетело в молоко. Щас починим!",
+                parse_mode="HTML"
+            )
+            await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERv_1qh-RMBre9eek9ykdsovu3gf-SvwACCnUAAlgXsEkCKvJjaqw9iT0E')
+
 
 # ================= ❌❌❌ ВЫПАЛ ПРОВАЛ (ТОЖЕ ЗАМЕНИЛИ НА ЧЁТКИЙ И НЕЗАВИСИМЫЙ IF!) =================
     if not is_success:
@@ -1747,6 +1761,13 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         except Exception as e:
             print(f"Ошибка вывода провала UNO: {e}")
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text="🔧 <b>Сука, опять вы всё сломали!</b> 🤦‍♂️\n\nПровал карты UNO застрял в текстурах Телеграма. Кулдаун записан, админ уже чинит!",
+                parse_mode="HTML"
+            )
+            await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERv_1qh-RMBre9eek9ykdsovu3gf-SvwACCnUAAlgXsEkCKvJjaqw9iT0E')
+
 
 async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
