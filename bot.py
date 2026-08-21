@@ -959,23 +959,26 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # БЕЗОПАСНЫЙ ТЕГ: защита от пустых username в базе
             username_tag = f" (@{u['username']})" if u.get("username") else ""
             dice_ready_players.append(f" └ *{u['first_name']}{username_tag}* — доступно: {dice_left} из 2")
-
-    # Формируем и отправляем сообщение крупье ТОЛЬКО если есть хотя бы один кубик!
+            
+# Формируем и отправляем сообщение крупье ТОЛЬКО если есть хотя бы один кубик!
     if dice_ready_players:
+        # ЖЕЛЕЗНО ИСПРАВЛЕНО: Перевели весь утренний информер Крупье на HTML-теги <b> и <code>
         dice_memo_text = (
-            f"\n\n🎰 *ИНФОРМАЦИЯ ОТ КРУПЬЕ:* 🎰\n"
+            f"\n\n🎰 <b>ИНФОРМАЦИЯ ОТ КРУПЬЕ:</b> 🎰\n"
             f"У следующих участников на этой неделе ещё остались заряженные кубики судьбы:\n"
             f"{'\n'.join(dice_ready_players)}\n\n"
-            f"🎲 Напиши `/dice`, чтобы подбавить себе пару процентов, а в каком именно месте — зависит от твоей удачи! 😏"
+            f"🎲 Напиши <code>/dice</code>, чтобы подбавить себе пару процентов, а в каком именно месте — зависит от твоей удачи! 😏"
         )
         try:
-            await context.bot.send_message(chat_id=chat_id, text=dice_memo_text, parse_mode="Markdown")
+            # Заменили parse_mode на HTML для стопроцентной защиты никнеймов от багов
+            await context.bot.send_message(chat_id=chat_id, text=dice_memo_text, parse_mode="HTML")
         except Exception as e:
             # ТИХОЕ УВЕДОМЛЕНИЕ АДМИНУ: Если отправка упадет, ошибку пришлет тебе в ЛС
             try:
                 await context.bot.send_message(
                     chat_id=ADMIN_TG_ID, 
-                    text=f"⚠️ Ошибка отправки крупье в чат `{chat_id}`: `{e}`"
+                    text=f"⚠️ Ошибка отправки крупье в чат <code>{chat_id}</code>: <code>{e}</code>",
+                    parse_mode="HTML"
                 )
             except Exception:
                 print(f"Даже админу не удалось отправить лог ошибки: {e}")
@@ -984,12 +987,18 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.application.create_task(silent_backup(context))
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
     # ИСПРАВЛЕНО: Вытаскиваем всех и берем строго активных участников
     all_users = get_users()
     users = [u for u in all_users if u.get("is_active", True)]
     
     if not users:
-        await update.message.reply_text("В игре пока нет активных участников.")
+        # ЖЕЛЕЗНО ИСПРАВЛЕНО: Перевели отлуп на HTML и прямой send_message по chat_id
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="В игре пока нет active участников.",
+            parse_mode="HTML"
+        )
         return
 
     # 1. Сортируем пользователей для топа Пидоров (от максимума к минимуму)
@@ -998,31 +1007,50 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 2. Сортируем пользователей для топа Красавчиков (от максимума к минимуму)
     kras_sorted = sorted(users, key=lambda x: x["kras_count"], reverse=True)
 
-    message = "📊 *СТАТИСТИКА*\n\n"
+    # Перевели шапку на HTML
+    message = "📊 <b>СТАТИСТИКА ЧАТА</b>\n\n"
 
     # Формируем колонку / блок Пидоров
-    message += "🤡 *Топ Пидоров чата:*\n"
-    for i, user in enumerate(pidors_sorted, start=1):
-        username = f" (@{user['username']})" if user['username'] else ""
-        message += f"{i}. *{user['first_name']}{username}* — {user['pidor_count']} раз(а)\n"
+    message += "🤡 <b>Топ Пидоров чата:</b>\n"
+    for i, user_data in enumerate(pidors_sorted, start=1):
+        username = f" (@{user_data['username']})" if user_data['username'] else ""
+        # Экранируем имена от багов HTML
+        safe_name = user_data['first_name'].replace("<", "&lt;").replace(">", "&gt;")
+        message += f"{i}. <b>{safe_name}{username}</b> — {user_data['pidor_count']} раз(а)\n"
 
     message += "\n" + "—" * 15 + "\n\n" # Визуальный разделитель блоков
 
     # Формируем колонку / блок Красавчиков
-    message += "😎 *Топ Красавчиков чата:*\n"
-    for i, user in enumerate(kras_sorted, start=1):
-        username = f" (@{user['username']})" if user['username'] else ""
-        message += f"{i}. *{user['first_name']}{username}* — {user['kras_count']} раз(а)\n"
+    message += "😎 <b>Топ Красавчиков чата:</b>\n"
+    for i, user_data in enumerate(kras_sorted, start=1):
+        username = f" (@{user_data['username']})" if user_data['username'] else ""
+        # Экранируем имена от багов HTML
+        safe_name = user_data['first_name'].replace("<", "&lt;").replace(">", "&gt;")
+        message += f"{i}. <b>{safe_name}{username}</b> — {user_data['kras_count']} раз(а)\n"
     
-    await update.message.reply_text(message, parse_mode="Markdown")
+    try:
+        # ЖЕЛЕЗНО ИСПРАВЛЕНО: Прямой send_message по chat_id на HTML-парсер
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=message,
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        print(f"Ошибка вывода общей статистики stats: {e}")
 
 async def procents(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # ИСПРАВЛЕНО: Вытаскиваем всех и считаем шансы СТРОГО среди активных участников
+    chat_id = update.effective_chat.id
+    # ИСПРАВЛЕНО: Вытаскиваем всех и считаем шансы СТРОГО среди active участников
     all_users = get_users()
     users = [u for u in all_users if u.get("is_active", True)]
     
     if not users:
-        await update.message.reply_text("В игре пока нет активных участников.")
+        # ЖЕЛЕЗНО ИСПРАВЛЕНО: Заменили на send_message по HTML
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="В игре пока нет активных участников.",
+            parse_mode="HTML"
+        )
         return
 
     # Считаем суммарные веса только среди активных игроков
@@ -1030,7 +1058,6 @@ async def procents(update: Update, context: ContextTypes.DEFAULT_TYPE):
     total_k_weight = sum(user["kras_weight"] for user in users)
 
     # 1. Сортируем пользователей по шансу стать Пидором (от большего к меньшему)
-    # Сразу рассчитываем процент внутри сортировки, чтобы выстроить правильный топ
     pidors_by_chance = sorted(
         users, 
         key=lambda x: (x["pidor_weight"] / total_p_weight * 100) if total_p_weight > 0 else 0, 
@@ -1044,33 +1071,52 @@ async def procents(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reverse=True
     )
 
-    message = "🎯 *ТЕКУЩИЕ ШАНСЫ УЧАСТНИКОВ*\n\n"
+    # Перевели шапку на HTML
+    message = "🎯 <b>ТЕКУЩИЕ ШАНСЫ УЧАСТНИКОВ</b>\n\n"
 
     # Блок шансов на Пидора
-    message += "🔥 *Шансы стать Пидором дня:*\n"
-    for i, user in enumerate(pidors_by_chance, start=1):
-        username = f" (@{user['username']})" if user['username'] else ""
-        p_chance = (user["pidor_weight"] / total_p_weight * 100) if total_p_weight > 0 else 0
-        message += f"{i}. *{user['first_name']}{username}* — {p_chance:.1f}%\n"
+    message += "🔥 <b>Шансы стать Пидором дня:</b>\n"
+    for i, user_data in enumerate(pidors_by_chance, start=1):
+        username = f" (@{user_data['username']})" if user_data['username'] else ""
+        p_chance = (user_data["pidor_weight"] / total_p_weight * 100) if total_p_weight > 0 else 0
+        # Экранируем имя от багов HTML
+        safe_name = user_data['first_name'].replace("<", "&lt;").replace(">", "&gt;")
+        message += f"{i}. <b>{safe_name}{username}</b> — {p_chance:.1f}%\n"
 
     message += "\n" + "—" * 15 + "\n\n" # Визуальный разделитель блоков
 
     # Блок шансов на Красавчика
-    message += "✨ *Шансы стать Красавчиком дня:*\n"
-    for i, user in enumerate(kras_by_chance, start=1):
-        username = f" (@{user['username']})" if user['username'] else ""
-        k_chance = (user["kras_weight"] / total_k_weight * 100) if total_k_weight > 0 else 0
-        message += f"{i}. *{user['first_name']}{username}* — {k_chance:.1f}%\n"
+    message += "✨ <b>Шансы стать Красавчиком дня:</b>\n"
+    for i, user_data in enumerate(kras_by_chance, start=1):
+        username = f" (@{user_data['username']})" if user_data['username'] else ""
+        k_chance = (user_data["kras_weight"] / total_k_weight * 100) if total_k_weight > 0 else 0
+        # Экранируем имя от багов HTML
+        safe_name = user_data['first_name'].replace("<", "&lt;").replace(">", "&gt;")
+        message += f"{i}. <b>{safe_name}{username}</b> — {k_chance:.1f}%\n"
 
-    await update.message.reply_text(message, parse_mode="Markdown")
+    try:
+        # ЖЕЛЕЗНО ИСПРАВЛЕНО: Прямой send_message по chat_id на HTML-парсер
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=message,
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        print(f"Ошибка вывода таблицы процентов: {e}")
 
 async def records(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
     # ИСПРАВЛЕНО: Вытаскиваем всех и ищем чемпиона СТРОГО среди активных участников
     all_users = get_users()
     users = [u for u in all_users if u.get("is_active", True)]
     
     if not users:
-        await update.message.reply_text("В игре пока нет активных участников для фиксации рекордов.")
+        # ЖЕЛЕЗНО ИСПРАВЛЕНО: Заменили на send_message по HTML
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="В игре пока нет активных участников для фиксации рекордов.",
+            parse_mode="HTML"
+        )
         return
 
     # Сортируем: по КРАСАВЧИКАМ (по убыванию), а при равенстве — по ПИДОРАМ (по возрастанию)
@@ -1081,21 +1127,38 @@ async def records(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Проверяем, были ли вообще игры
     if leader["kras_count"] == 0 and leader["pidor_count"] == 0:
-        await update.message.reply_text("⚖️ Статистика еще пуста, рекорды не зафиксированы. Пора крутить рулетку!")
+        # ЖЕЛЕЗНО ИСПРАВЛЕНО: Заменили на send_message по HTML
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="⚖️ <b>Статистика еще пуста, рекорды не зафиксированы.</b> Пора крутить рулетку!",
+            parse_mode="HTML"
+        )
         return
 
+    # Экранируем имя лидера чата, чтобы спецсимволы не ломали разметку HTML
+    safe_leader_name = leader['first_name'].replace("<", "&lt;").replace(">", "&gt;")
+
+    # Пересобрали текст СТРОГО на HTML-тегах <b> и <i> вместо звездочек
     message = (
-        "🥇 *АБСОЛЮТНЫЙ ЧЕМПИОН ЧАТА* 🥇\n\n"
+        "🥇 <b>АБСОЛЮТНЫЙ ЧЕМПИОН ЧАТА</b> 🥇\n\n"
         f"Человек, которого фортуна целует в обе щеки, а радужные мысли обходят стороной. "
         f"Максимум благословений и минимум позора! Поприветствуйте легенду:\n\n"
-        f"👑 *{leader['first_name']}{leader_username}*\n"
+        f"👑 <b>{safe_leader_name}{leader_username}</b>\n"
         f"   └ 😎 Красавчик: {leader['kras_count']} раз(а)\n"
         f"   └ 🤡 Пидор: {leader['pidor_count']} раз(а)\n\n"
-        f"_Остальным соболезнуем, тренируйте удачу!_ 👇"
+        f"<i>Остальным соболезнуем, тренируйте удачу!</i> 👇"
     )
 
-    await update.message.reply_text(message, parse_mode="Markdown")
-    
+    try:
+        # ЖЕЛЕЗНО ИСПРАВЛЕНО: Прямой send_message по chat_id на HTML-парсер
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=message,
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        print(f"Ошибка вывода абсолютного лидера records: {e}")
+
 async def mimic(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     chat_id = update.effective_chat.id
@@ -1121,8 +1184,18 @@ async def mimic(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if days_passed < 14:
             days_left = 14 - days_passed
             day_word = "день" if days_left == 1 else ("дня" if days_left in [2, 3, 4] else "дней")
-            await update.message.reply_text(f"❌ Способность Мимикрия еще на перезарядке! Доступ появится через *{days_left} {day_word}*.", parse_mode="Markdown")
-            await update.message.reply_sticker(sticker='CAACAgIAAxkBAAEReRpqQ3-pZ9QRME44W1Es3DPWTGUPNAACkAIAAladvQoy0qlxuNTQtTwE')
+            
+            # ЖЕЛЕЗНО ИСПРАВЛЕНО: Прямой send_message на HTML-разметке защитит от комы при удалении команды
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"❌ Способность Мимикрия еще на перезарядке! Доступ появится через <b>{days_left} {day_word}</b>.",
+                parse_mode="HTML"
+            )
+            # Переписали стикер на прямой send_sticker по chat_id для ультимативной стабильности
+            await context.bot.send_sticker(
+                chat_id=chat_id, 
+                sticker='CAACAgIAAxkBAAEReRpqQ3-pZ9QRME44W1Es3DPWTGUPNAACkAIAAladvQoy0qlxuNTQtTwE'
+            )
             return
 
     # 3. УЛЬТИМАТИВНЫЙ ПАРСИНГ ЖЕРТВЫ (Твоя схема из карты UNO)
@@ -1220,10 +1293,15 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         shooter_attempts = 0
 
     if shooter_attempts >= 6:
-        await update.message.reply_text(
-            f"💨 <b>Осечка! Курок щёлкнул впустую...</b>\n\n"
-            f"{user.first_name}, ты пришёл на перестрелку с пустым револьвером! Все 6 патронов на этой неделе ты уже расстрелял. 🤦‍♂️\n"
-            f"❌ ШЕРИФ ИЗЫМАЕТ СТВОЛ! Иди трезвей в камеру до понедельника и не позорься!",
+        # Экранируем имя стрелка, чтобы спецсимволы в никах не ломали HTML-верстку
+        safe_shooter_name = user.first_name.replace("<", "&lt;").replace(">", "&gt;")
+
+        # ЖЕЛЕЗНО ИСПРАВЛЕНО: Заменили reply_text на прямой send_message по chat_id
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"💨 <b>Осечка! Курок щёлкнул впустую...</b>\n\n"
+                 f"{safe_shooter_name}, ты пришёл на перестрелку с пустым револьвером! Все 6 патронов на этой неделе ты уже расстрелял. 🤦‍♂️\n"
+                 f"❌ ШЕРИФ ИЗЫМАЕТ СТВОЛ! Иди трезвей в камеру до понедельника и не позорься!",
             parse_mode="HTML"
         )
         await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERocZqavV1gUjQriQqP3uLpw6uz9qdAwAChhEAAoC6wEokCKx8CQHogD0E')
@@ -1771,6 +1849,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
+    chat_id = update.effective_chat.id
     today = date.today()
     
     # 1. Вытаскиваем ВСЕХ пользователей для расчета общей суммы весов
@@ -1781,7 +1860,12 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     player = next((u for u in active_users if u["user_id"] == user.id), None)
     
     if not player:
-        await update.message.reply_text("❌ Тебя еще нет в игре! Напиши /register")
+        # ЖЕЛЕЗНО ИСПРАВЛЕНО: Перевели стартовый отлуп на HTML и безопасный send_message
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="❌ <b>Тебя еще нет в игре!</b> Напиши /register",
+            parse_mode="HTML"
+        )
         return
 
     # 2. РАССЧИТЫВАЕМ ПРОЦЕНТЫ ШАНСОВ НА ТЕКУЩИЙ МОМЕНТ (Как в /procents)
@@ -1815,7 +1899,6 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             mimic_status = f"🔴 НА ПЕРЕЗАРЯДКЕ (еще {m_days_left} {m_day_word})"
 
     # 4. Рассчитываем еженедельный остаток кармических кубиков (Лимит 2)
-    # Используем твой железно рабочий вариант с индексом!
     current_week_num = today.isocalendar()[1]
     db_dice_value = player.get("dice_count", 0)
     last_dice_week = db_dice_value // 10
@@ -1828,7 +1911,6 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     dice_status = "🔴 ИСЧЕРПАНЫ (0 из 2 на этой неделе)" if dice_left == 0 else f"🟢 ДОСТУПНО: {dice_left} из 2 на этой неделе"
 
     # Рассчитываем еженедельный остаток патронов для дуэлей
-    current_week_num = today.isocalendar()[1]
     db_duel_value = player.get("duel_count", 0)
     last_duel_week = db_duel_value // 100
     current_duel_attempts = db_duel_value % 100
@@ -1847,25 +1929,37 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     max_k_streak = player.get("max_kras_win_streak", 0) or 0
     max_p_streak = player.get("max_pidor_win_streak", 0) or 0
     
-    # 5. Собираем ультимативное досье
+    # Экранируем имена, чтобы спецсимволы в никах не ломали разметку Телеграма
+    safe_first_name = player['first_name'].replace("<", "&lt;").replace(">", "&gt;")
     username = f" (@{player['username']})" if player['username'] else ""
+
+    # 5. Собираем ультимативное досье (СТРОГО НА HTML-ТЕГАХ)
     message = (
-        f"👤 *ЛИЧНОЕ ДОСЬЕ ИГРОКА*:\n\n"
-        f"Участник: *{player['first_name']}{username}*\n"
-        f"🤡 Статус Пидора: *{player['pidor_count']}* раз(а)\n"
-        f"😎 Статус Красавчика: *{player['kras_count']}* раз(а)\n"
-        f"⚔️ Лига Дуэлей: *{d_total}* боёв _({d_wins} В / {d_losses} П)_\n\n"
-        f"📊 *ТЕКУЩИЕ ШАНСЫ*:\n"
-        f" └ 🤡 Стать Пидором: `{pidor_chance:.1f}%` \n"
-        f" └ 😎 Стать Красавчиком: `{kras_chance:.1f}%` \n\n"
+        f"👤 <b>ЛИЧНОЕ ДОСЬЕ ИГРОКА</b>:\n\n"
+        f"Участник: <b>{safe_first_name}{username}</b>\n"
+        f"🤡 Статус Пидора: <b>{player['pidor_count']}</b> раз(а)\n"
+        f"😎 Статус Красавчика: <b>{player['kras_count']}</b> раз(а)\n"
+        f"⚔️ Лига Дуэлей: <b>{d_total}</b> боёв <i>({d_wins} В / {d_losses} П)</i>\n\n"
+        f"📊 <b>ТЕКУЩИЕ ШАНСЫ</b>:\n"
+        f" └ 🤡 Стать Пидором: <code>{pidor_chance:.1f}%</code> \n"
+        f" └ 😎 Стать Красавчиком: <code>{kras_chance:.1f}%</code> \n\n"
         f"📈 Рекорд Красавчика подряд: {max_k_streak} дн.\n"
         f"📉 Рекорд Пидора подряд: {max_p_streak} дн.\n\n"
-        f"🃏 *Карта UNO:* {uno_status}\n"
-        f"🎭 *Карта Мимик:* {mimic_status}\n"
-        f"🎲 *Кубики судьбы:* {dice_status}\n"
-        f"🔫 *Патроны дуэлей:* {duel_bullet_status}"
+        f"🃏 <b>Карта UNO:</b> {uno_status}\n"
+        f"🎭 <b>Карта Мимик:</b> {mimic_status}\n"
+        f"🎲 <b>Кубики судьбы:</b> {dice_status}\n"
+        f"🔫 <b>Патроны дуэлей:</b> {duel_bullet_status}"
     )
-    await update.message.reply_text(message, parse_mode="Markdown")
+
+    try:
+        # ЖЕЛЕЗНО ИСПРАВЛЕНО: Прямой send_message по chat_id на HTML-парсер
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=message,
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        print(f"Ошибка вывода досье mystats: {e}")
 
 async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -1897,9 +1991,14 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Если наступила новая неделя — сбрасываем попытки на лету!
     if current_week_num != last_dice_week:
         current_attempts = 0
-
+        
     if current_attempts >= 2:
-        await update.message.reply_text("🛑 Хватит испытывать судьбу! Твой лимит (2 раза в НЕДЕЛЮ) исчерпан. Крупье убирает кубики до следующего понедельника! 🎲")
+        # ЖЕЛЕЗНО ИСПРАВЛЕНО: Перевели отлуп лимита кубиков на HTML и безопасный send_message по chat_id
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="🛑 <b>Хватит испытывать судьбу!</b> Твой лимит (2 раза в НЕДЕЛЮ) исчерпан. Крупье убирает кубики до следующего понедельника! 🎲",
+            parse_mode="HTML"
+        )
         return
 
     # -----------------------------------------------------------------
