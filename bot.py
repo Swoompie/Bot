@@ -1685,74 +1685,74 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             print(f"Ошибка вывода результата UNO: {e}")
 
-# ================= ❌❌❌ ВЫПАЛ ПРОВАЛ (СТЫКОВКА С ЧАСТЬЮ 4) =================
-else:
-    # Экранируем имя игрока для безопасности HTML
-    safe_name = user.first_name.replace("<", "&lt;").replace(">", "&gt;")
-
-    try:
-        if is_robbing_chad:
-            # На Красавчика только ОДНА попытка. Сразу вешаем КД на 6 дней за провал!
-            supabase.table("users").update({"last_switch_date": str(today), "pidor_weight": 100.0}).eq("user_id", user.id).execute()
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=(
-                    f"❌ <b>ТРЮК ПРОВАЛЕН!</b> Королевская карта UNO СГОРЕЛА ВО ВРЕМЯ ПОПЫТКИ КРАЖИ! \n\n"
-                    f"<b>{safe_name}</b>, попытка ограбить Красавчика провалилась, боги рандома изымают карту на 6 дней.\n"
-                    f"Титул Пидора дня остается на тебе! 🤡"
-                ),
-                parse_mode="HTML"
-            )
-            await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAEReQpqQ3adafSczLOzJ3WEyKHoQvfvJAACNhUAAjhx-EmeBZwsT5kj1TwE')
-            
-        else:
-            # Провал при обычном переводе на мирного (Включается логика Второго Шанса)
-            if is_retry_attempt:
-                # Вторая попытка на мирного провалилась — сжигаем карту окончательно
-                supabase.table("users").update({"last_switch_date": str(today), "pidor_weight": 85.0}).eq("user_id", user.id).execute()
-                context.user_data.pop("switch_retry", None)
-
+    # ================= ❌❌❌ ВЫПАЛ ПРОВАЛ (СТЫКОВКА С ЧАСТЬЮ 4) =================
+    else:
+        # Экранируем имя игрока для безопасности HTML
+        safe_name = user.first_name.replace("<", "&lt;").replace(">", "&gt;")
+    
+        try:
+            if is_robbing_chad:
+                # На Красавчика только ОДНА попытка. Сразу вешаем КД на 6 дней за провал!
+                supabase.table("users").update({"last_switch_date": str(today), "pidor_weight": 100.0}).eq("user_id", user.id).execute()
                 await context.bot.send_message(
                     chat_id=chat_id,
                     text=(
-                        f"💀 <b>ПОЛНОЕ ФИАСКО, СТРЕЛОЧНИК!</b> Второй шанс тоже провален! \n\n"
-                        f"<b>{safe_name}</b>, твоя карта UNO окончательно ПРЕВРАТИЛАСЬ В ПЕПЕЛ. "
-                        f"Кулдаун 6 дней активирован. Завтра твои шансы максимальны! 🤡"
+                        f"❌ <b>ТРЮК ПРОВАЛЕН!</b> Королевская карта UNO СГОРЕЛА ВО ВРЕМЯ ПОПЫТКИ КРАЖИ! \n\n"
+                        f"<b>{safe_name}</b>, попытка ограбить Красавчика провалилась, боги рандома изымают карту на 6 дней.\n"
+                        f"Титул Пидора дня остается на тебе! 🤡"
                     ),
                     parse_mode="HTML"
                 )
-                await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERg9tqT2Lb7EssiCPdH7XeEz1W5sbVswAC6S8AApkAAYhJDcx-Vp6-Sco8BA')
-            else:
-                # Первый провал на мирного — крутим скрытые 5% на "Второй Шанс"
-                has_second_chance = random.randint(1, 100) <= 5
+                await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAEReQpqQ3adafSczLOzJ3WEyKHoQvfvJAACNhUAAjhx-EmeBZwsT5kj1TwE')
                 
-                if has_second_chance:
-                    context.user_data["switch_retry"] = True # включаем триггер повтора
+            else:
+                # Провал при обычном переводе на мирного (Включается логика Второго Шанса)
+                if is_retry_attempt:
+                    # Вторая попытка на мирного провалилась — сжигаем карту окончательно
+                    supabase.table("users").update({"last_switch_date": str(today), "pidor_weight": 85.0}).eq("user_id", user.id).execute()
+                    context.user_data.pop("switch_retry", None)
+    
                     await context.bot.send_message(
                         chat_id=chat_id,
                         text=(
-                            f"⚡️ <b>ОПА, ОСЕЧКА... ИЛИ НЕТ?!</b> ⚡️\n\n"
-                            f"<b>{safe_name}</b>, твоя карта UNO задымилась, но боги рандома дали тебе <b>ВТОРОЙ ШАНС</b>! "
-                            f"Кулдаун НЕ активирован! Быстро пиши команду <code>/switch</code> ещё раз на любую мирную цель, пока лазейка не закрылась! 🃏"
+                            f"💀 <b>ПОЛНОЕ ФИАСКО, СТРЕЛОЧНИК!</b> Второй шанс тоже провален! \n\n"
+                            f"<b>{safe_name}</b>, твоя карта UNO окончательно ПРЕВРАТИЛАСЬ В ПЕПЕЛ. "
+                            f"Кулдаун 6 дней активирован. Завтра твои шансы максимальны! 🤡"
                         ),
                         parse_mode="HTML"
                     )
-                    await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERg85qT110qgTm1RJWyqRuKm0QwbCoLwAC9B4AAiNcOEtYh2FNKYLHdDwE')
+                    await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERg9tqT2Lb7EssiCPdH7XeEz1W5sbVswAC6S8AApkAAYhJDcx-Vp6-Sco8BA')
                 else:
-                    # Стандартный провал на мирного с первого раза
-                    supabase.table("users").update({"last_switch_date": str(today), "pidor_weight": 90.0}).eq("user_id", user.id).execute()
-                    await context.bot.send_message(
-                        chat_id=chat_id,
-                        text=(
-                            f"❌ <b>КАРТА UNO ПОРВАЛАСЬ!</b> <b>{safe_name}</b>, перевод сорвался и полетел обратно в тебя.\n\n"
-                            f"Титул остается на тебе. Карта уходит на перезарядку на 6 дней. 🤡"
-                        ),
-                        parse_mode="HTML"
-                    )
-                    await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAEReQpqQ3adafSczLOzJ3WEyKHoQvfvJAACNhUAAjhx-EmeBZwsT5kj1TwE')
-
-    except Exception as e:
-        print(f"Ошибка вывода провала UNO: {e}")
+                    # Первый провал на мирного — крутим скрытые 5% на "Второй Шанс"
+                    has_second_chance = random.randint(1, 100) <= 5
+                    
+                    if has_second_chance:
+                        context.user_data["switch_retry"] = True # включаем триггер повтора
+                        await context.bot.send_message(
+                            chat_id=chat_id,
+                            text=(
+                                f"⚡️ <b>ОПА, ОСЕЧКА... ИЛИ НЕТ?!</b> ⚡️\n\n"
+                                f"<b>{safe_name}</b>, твоя карта UNO задымилась, но боги рандома дали тебе <b>ВТОРОЙ ШАНС</b>! "
+                                f"Кулдаун НЕ активирован! Быстро пиши команду <code>/switch</code> ещё раз на любую мирную цель, пока лазейка не закрылась! 🃏"
+                            ),
+                            parse_mode="HTML"
+                        )
+                        await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERg85qT110qgTm1RJWyqRuKm0QwbCoLwAC9B4AAiNcOEtYh2FNKYLHdDwE')
+                    else:
+                        # Стандартный провал на мирного с первого раза
+                        supabase.table("users").update({"last_switch_date": str(today), "pidor_weight": 90.0}).eq("user_id", user.id).execute()
+                        await context.bot.send_message(
+                            chat_id=chat_id,
+                            text=(
+                                f"❌ <b>КАРТА UNO ПОРВАЛАСЬ!</b> <b>{safe_name}</b>, перевод сорвался и полетел обратно в тебя.\n\n"
+                                f"Титул остается на тебе. Карта уходит на перезарядку на 6 дней. 🤡"
+                            ),
+                            parse_mode="HTML"
+                        )
+                        await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAEReQpqQ3adafSczLOzJ3WEyKHoQvfvJAACNhUAAjhx-EmeBZwsT5kj1TwE')
+    
+        except Exception as e:
+            print(f"Ошибка вывода провала UNO: {e}")
 
 async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
