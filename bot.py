@@ -1766,19 +1766,15 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERv_1qh-RMBre9eek9ykdsovu3gf-SvwACCnUAAlgXsEkCKvJjaqw9iT0E')
 
-
-# ================= ❌❌❌ ВЫПАЛ ПРОВАЛ (ТОЖЕ ЗАМЕНИЛИ НА ЧЁТКИЙ И НЕЗАВИСИМЫЙ IF!) =================
-# ================= ❌❌❌ ВЫПАЛ ПРОВАЛ (ПОЛНАЯ ТИТАНОВАЯ БРОНЯ) =================
+# ================= ❌❌❌ ВЫПАЛ ПРОВАЛ (ПОЛНАЯ ТИТАНОВАЯ БРОНЯ — БЕЗ БАГОВ) =================
     if not is_success:
         # Экранируем имя игрока для безопасности HTML-верстки
         safe_name = user.first_name.replace("<", "&lt;").replace(">", "&gt;")
 
         try:
             if is_robbing_chad:
-                # На Красавчика только ОДНА попытка. Вешаем КД фоновым таском для ультимативной скорости!
-                context.application.create_task(
-                    supabase.table("users").update({"last_switch_date": str(today), "pidor_weight": 100.0}).eq("user_id", user.id).execute()
-                )
+                # На Красавчика только ОДНА попытка. Вешаем КД стандартным рабочим методом
+                supabase.table("users").update({"last_switch_date": str(today), "pidor_weight": 100.0}).eq("user_id", user.id).execute()
                 await context.bot.send_message(
                     chat_id=chat_id,
                     text=(
@@ -1788,15 +1784,13 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     ),
                     parse_mode="HTML"
                 )
-                await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgEAAxkBAAEReQpqQ3adafSczLOzJ3WEyKHoQvfvJAACNhUAAjhx-EmeBZwsT5kj1TwE')
+                await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAEReQpqQ3adafSczLOzJ3WEyKHoQvfvJAACNhUAAjhx-EmeBZwsT5kj1TwE')
                 
             else:
                 # Провал при обычном переводе на мирного (Включается логика Второго Шанса)
                 if is_retry_attempt:
-                    # Вторая попытка провалилась — сжигаем карту фоновым таском
-                    context.application.create_task(
-                        supabase.table("users").update({"last_switch_date": str(today), "pidor_weight": 85.0}).eq("user_id", user.id).execute()
-                    )
+                    # Вторая попытка провалилась — сжигаем карту стандартным рабочим методом
+                    supabase.table("users").update({"last_switch_date": str(today), "pidor_weight": 85.0}).eq("user_id", user.id).execute()
                     context.user_data.pop("switch_retry", None)
 
                     await context.bot.send_message(
@@ -1826,10 +1820,8 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         )
                         await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERg85qT110qgTm1RJWyqRuKm0QwbCoLwAC9B4AAiNcOEtYh2FNKYLHdDwE')
                     else:
-                        # Стандартный провал с первого раза — отправляем в базу в фоне
-                        context.application.create_task(
-                            supabase.table("users").update({"last_switch_date": str(today), "pidor_weight": 90.0}).eq("user_id", user.id).execute()
-                        )
+                        # Стандартный провал с первого раза — пишем в базу напрямую
+                        supabase.table("users").update({"last_switch_date": str(today), "pidor_weight": 90.0}).eq("user_id", user.id).execute()
                         await context.bot.send_message(
                             chat_id=chat_id,
                             text=(
@@ -1841,7 +1833,6 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAEReQpqQ3adafSczLOzJ3WEyKHoQvfvJAACNhUAAjhx-EmeBZwsT5kj1TwE')
 
         except Exception as e:
-            # МЕМНЫЙ АВТОРЕМОНТ РАБОТАЕТ НА 100%
             print(f"Ошибка вывода провала UNO: {e}")
             await context.bot.send_message(
                 chat_id=chat_id,
