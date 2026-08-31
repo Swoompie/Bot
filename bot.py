@@ -1966,14 +1966,24 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 1. Вытаскиваем данные игрока из Supabase
     res = supabase.table("users").select("*").eq("user_id", user.id).execute()
     if not res.data:
-        await update.message.reply_text("❌ Куда кубики бросаешь? Тебя нет в игре! Напиши /register")
+        # ЖЕЛЕЗНО ИСПРАВЛЕНО: Убрали reply_text во избежание крашей
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="❌ <b>Куда кубики бросаешь?</b> Тебя нет в игре! Напиши /register",
+            parse_mode="HTML"
+        )
         return
         
     player = res.data[0]
     
     # Защита: ливнувшие не играют
     if not player.get("is_active", True):
-        await update.message.reply_text("🚪 Ты ливнул из рулетки. Сначала вернись через /register!")
+        # ЖЕЛЕЗНО ИСПРАВЛЕНО: Убрали reply_text во избежание крашей
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text="🚪 <b>Ты ливнул из рулетки.</b> Сначала вернись через /register!",
+            parse_mode="HTML"
+        )
         return
 
     # 2. МАТЕМАТИЧЕСКИЙ РАСЧЕТ ЕЖЕНЕДЕЛЬНОГО ЛИМИТА
@@ -2016,10 +2026,27 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Считаем попытки и кодируем пак для базы
     new_attempts = current_attempts + 1
     remains = 2 - new_attempts
-    remains_text = f" Осталось бросков на этой неделе: *{remains}*." if remains > 0 else " Это был твой *последний* бросок на этой неделе!"
+    
+    # Перевели текст остатка бросков под будущий HTML-формат
+    remains_text = f" Осталось бросков на этой неделе: <b>{remains}</b>." if remains > 0 else " Это был твой <b>последний</b> бросок на этой неделе!"
     new_db_value = (current_week_num * 10) + new_attempts
+    # === 🧮 РАССЧИТЫВАЕМ ПРОГРЕССИВНЫЕ ВЕСА И ДИНАМИКУ ПРОЦЕНТОВ ===
+    safe_name = user.first_name.replace("<", "&lt;").replace(">", "&gt;")
+    
+    # Извлекаем баланс первого броска для детекции дублей
+    prev_balance = player.get("dice_start_balance", 0.0) if player.get("dice_start_balance") is not None else 0.0
 
-    # --- 🧮 РАССЧИТЫВАЕМ ПРОГРЕССИВНЫЕ ВЕСА И КАРМИЧЕСКИЕ ТЕКСТЫ ---
+    # 📊 МАТЕМАТИКА 1: Считаем СТАРЫЕ проценты ДО броска кубика
+    all_users_before = get_users()
+    active_users_before = [u for u in all_users_before if u.get("is_active", True)]
+    
+    total_p_before = sum(u.get("pidor_weight", 100.0) for u in active_users_before)
+    total_k_before = sum(u.get("kras_weight", 100.0) for u in active_users_before)
+    
+    old_p_chance = (player.get("pidor_weight", 100.0) / total_p_before * 100) if total_p_before > 0 else 0.0
+    old_k_chance = (player.get("kras_weight", 100.0) / total_k_before * 100) if total_k_before > 0 else 0.0
+
+    # Разветвление весов
     if dice_value <= 3:
         # ======= 🤡 ВЕТКА ПОЗОРА (1, 2, 3) =======
         step = 3.0 if dice_value == 3 else (7.0 if dice_value == 2 else 12.0)
@@ -2028,13 +2055,8 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         new_pidor_weight = player["pidor_weight"] + step
         new_kras_weight = max(1.0, player["kras_weight"] - k_minus)
         
-        # Фиксируем стартовую точку, если это ВПЕРВЫЕ за неделю
-        start_balance = 0.0 if current_attempts == 0 else player.get("dice_start_balance", 0.0)
-
-        # Считаем чистый вес текущего кубика
         current_dice_gain = -4.0 if dice_value == 3 else (-11.0 if dice_value == 2 else -19.0)
-        # Если это первый бросок — пишем его вес, если второй — сохраняем старый из базы
-        saved_balance = current_dice_gain if current_attempts == 0 else player.get("dice_start_balance", 0.0)
+        saved_balance = current_dice_gain if current_attempts == 0 else prev_balance
 
         supabase.table("users").update({
             "pidor_weight": new_pidor_weight,
@@ -2050,11 +2072,7 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             power_text = "микро-осечка. Косметический сдвиг: шансы на Пидора чуть-чуть подросли. Пронесло!"
 
-        await update.message.reply_text(
-            f"🎲 На кубике выпадает: *{dice_value}*!\n\n"
-            f"🤡 *КАРМА БЬЁТ РИКОШЕТОМ!* {user.first_name}, это {power_text} Проверив обновлённую таблицу в `/procents`.{remains_text}",
-            parse_mode="Markdown"
-        )
+        intro_text = f"🎲 На кубике выпадает: <b>{dice_value}</b>!\n\n🤡 <b>КАРМА БЬЁТ РИКОШЕТОМ!</b> {safe_name}, это {power_text}"
             
     else:
         # ======= 😎 ВЕТКА УДАЧИ (4, 5, 6) =======
@@ -2064,13 +2082,8 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         new_kras_weight = player["kras_weight"] + step
         new_pidor_weight = max(1.0, player["pidor_weight"] - p_minus)
         
-        # Фиксируем стартовую точку, если это ВПЕРВЫЕ за неделю
-        start_balance = 0.0 if current_attempts == 0 else player.get("dice_start_balance", 0.0)
-
-        # Считаем чистый вес текущего кубика
         current_dice_gain = 4.0 if dice_value == 4 else (11.0 if dice_value == 5 else 19.0)
-        # Если это первый бросок — пишем его вес, если второй — сохраняем старый из базы
-        saved_balance = current_dice_gain if current_attempts == 0 else player.get("dice_start_balance", 0.0)
+        saved_balance = current_dice_gain if current_attempts == 0 else prev_balance
 
         supabase.table("users").update({
             "kras_weight": new_kras_weight,
@@ -2080,23 +2093,81 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }).eq("user_id", user.id).execute()
         
         if dice_value == 6:
-            power_text = "👑 АБСОЛЮТНЫЙ ДЖЕКПОТ! 👑 Твой нимб засиял космическим блеском, а риски позорного утра неплохзо так снизились!"
+            power_text = "👑 АБСОЛЮТНЫЙ ДЖЕКПОТ! 👑 Твой нимб засиял космическим блеском, а риски позорного утра неплохо так снизились!"
         elif dice_value == 5:
-            power_text = "мощный прилив шарма! Проценты на победу уверенно поползли вверх, а вероятность поймать клеймо Пидора тает на глазах."
+            power_text = "мощный прилив шарма! Проценты на побену уверенно поползли вверх, а вероятность поймать клеймо Пидора тает на глазах."
         else:
             power_text = "скромный шаг к успеху. Чуть-чуть подбавил уверенности в стату, риски позора символически снижены."
 
-        await update.message.reply_text(
-            f"🎲 На кубике выпадает: *{dice_value}*!\n\n"
-            f"😎 *ФОРТУНА УЛЫБАЕТСЯ ТЕБЕ!* {user.first_name}, это {power_text} Проведи аудит в `/procents`.{remains_text}",
-            parse_mode="Markdown"
+        intro_text = f"🎲 На кубике выпадает: <b>{dice_value}</b>!\n\n😎 <b>ФОРТУНА УЛЫБАЕТСЯ ТЕБЕ!</b> {safe_name}, это {power_text}"
+
+    # 📊 МАТЕМАТИКА 2: Считаем СВЕЖИЕ проценты ПОСЛЕ внесения изменений в базу
+    all_users_after = get_users()
+    active_users_after = [u for u in all_users_after if u.get("is_active", True)]
+    
+    total_p_after = sum(u.get("pidor_weight", 100.0) for u in active_users_after)
+    total_k_after = sum(u.get("kras_weight", 100.0) for u in active_users_after)
+    
+    # Находим обновленные веса нашего игрока
+    fresh_player_data = next((u for u in active_users_after if u["user_id"] == user.id), None)
+    
+    if fresh_player_data:
+        new_p_chance = (fresh_player_data["pidor_weight"] / total_p_after * 100) if total_p_after > 0 else 0.0
+        new_k_chance = (fresh_player_data["kras_weight"] / total_k_after * 100) if total_k_after > 0 else 0.0
+    else:
+        new_p_chance, new_k_chance = old_p_chance, old_k_chance
+
+    # --- 🚨 ПЕРЕХВАТ ДУБЛЕЙ (С НОВЫМИ ПРОЦЕНТАМИ ВНУТРИ) ---
+    if current_attempts == 1 and prev_balance == -19.0 and dice_value == 1:
+        result_text = (
+            f"🎲 На кубике выпадает: <b>1</b> (Дубль!)\n\n"
+            f"🚨 <b>ЧЁРНЫЙ ДЕНЬ КАЛЕНДАРЯ! ПРОБИТИЕ МАТЕМАТИЧЕСКОГО ДНА!</b> 🎪\n\n"
+            f"Ковбой <b>{safe_name}</b> умудряется выбить дубль <b>1 и 1</b> за неделю! 😭\n"
+            f"Бля, земля пухом твоему авторитету, бро! Крупье вытирает слёзы жалости.\n\n"
+            f"📊 <b>ДИНАМИКА ТВОИХ ШАНСОВ:</b>\n"
+            f" └ 🤡 Шанс Пидора: <code>{old_p_chance:.1f}%</code> ➡️ <b>{new_p_chance:.1f}%</b> 📈\n"
+            f" └ 😎 Шанс Красавчика: <code>{old_k_chance:.1f}%</code> ➡️ <b>{new_k_chance:.1f}%</b> 📉\n\n"
+            f"{remains_text}"
+        )
+        await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAEReQpqQ3adafSczLOzJ3WEyKHoQvfvJAACNhUAAjhx-EmeBZwsT5kj1TwE')
+
+    elif current_attempts == 1 and prev_balance == 19.0 and dice_value == 6:
+        result_text = (
+            f"🎲 На кубике выпадает: <b>6</b> (Дубль!)\n\n"
+            f"🎰 <b>ОБНАРУЖЕН ЧИТЕР! ВЫ С КЕМ ТАМ НАВЕРХУ ДОГОВОРИЛИСЬ?!</b> 👑\n\n"
+            f"Ковбой <b>{safe_name}</b> выбрасывает дубль <b>6 и 6</b> за неделю! 🤯\n"
+            f"Матрица Салуна официально дала тотальный сбой от такой наглой удачи!\n\n"
+            f"📊 <b>ДИНАМИКА ТВОИХ ШАНСОВ:</b>\n"
+            f" └ 🤡 Шанс Пидора: <code>{old_p_chance:.1f}%</code> ➡️ <b>{new_p_chance:.1f}%</b> 📉\n"
+            f" └ 😎 Шанс Красавчика: <code>{old_k_chance:.1f}%</code> ➡️ <b>{new_k_chance:.1f}%</b> 📈\n\n"
+            f"{remains_text}"
+        )
+        await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERfwtqSi0WKXA0-slyXjuDMUAC14PGkAAC6BMAAp7K8UkQAAGdV1VM7UI8BA')
+
+    else:
+        # СТАНДАРТНЫЙ ВЫВОД С ДИНАМИЧЕСКИМ СРАВНЕНИЕМ ПРОЦЕНТОВ
+        result_text = (
+            f"{intro_text}\n\n"
+            f"📊 <b>ДИНАМИКА ТВОИХ ШАНСОВ:</b>\n"
+            f" └ 🤡 Шанс Пидора: <code>{old_p_chance:.1f}%</code> ➡️ <b>{new_p_chance:.1f}%</b>\n"
+            f" └ 😎 Шанс Красавчика: <code>{old_k_chance:.1f}%</code> ➡️ <b>{new_k_chance:.1f}%</b>\n\n"
+            f"{remains_text}"
         )
 
+    # === 🛡️ ФИНАЛЬНЫЙ ПУЛЕНЕПРОБИВАЕМЫЙ ВЫВОД В ЧАТ ПО CHAT_ID ===
+    try:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=result_text,
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        print(f"Ошибка вывода результатов кубиков dice: {e}")
     # =================================================================
     # 🎰 ПОДВЕДЕНИЕ ТОЧНЫХ СУММАРНЫХ ИТОГОВ НЕДЕЛИ (СТРОГО НА 2-Й БРОСОК)
     # =================================================================
     if remains == 0:
-        await asyncio.sleep(3) 
+        await asyncio.sleep(2) # Оптимизировали паузу до 2 секунд для ускорения функции
         
         # Вытаскиваем из базы финальные веса ПОСЛЕ второго броска
         fresh_res = supabase.table("users").select("*").eq("user_id", user.id).execute()
@@ -2111,15 +2182,35 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Чистый профит — это строго сумма весов двух кубиков!
             total_net_gain = first_dice_gain + second_dice_gain
             
-            if total_net_gain > 0:
-                await update.message.reply_text("📈 *ИТОГ СЕССИИ: ЧИСТЫЙ СТОНКС!*\nПо результатам двух бросков твоя карма ушла в уверенный плюс. Проценты крутости на высоте! 😎", parse_mode="Markdown")
-                await update.message.reply_sticker(sticker='CAACAgIAAxkBAAERlJpqX8w3FNDgCPWSvVnsuCCj4FRCgwACTkkAAqsfMUmHRIhIKo8OmT0E')
-            elif total_net_gain < 0:
-                await update.message.reply_text("📉 *ИТОГ СЕССИИ: NOT STONKS...*\nПо итогам двух бросков карма утянула тебя вниз, как и твои проценты. Риск на позор повышен! 🤡", parse_mode="Markdown")
-                await update.message.reply_sticker(sticker='CAACAgIAAxkBAAERlJxqX8yRTjidyacJymAE9dpIfo2cxAAC0wEAAsVnCAABVsYsrVbM7hg9BA')
-            else:
-                await update.message.reply_text("⚖️ *ИТОГ СЕССИИ: ИДЕАЛЬНЫЙ БАЛАНС!*\nТвои еженедельные броски полностью уравновесили друг друга. Карма осталась нетронутой, вселенная в равновесии! 🌌", parse_mode="Markdown")
-                await update.message.reply_sticker(sticker='CAACAgIAAxkBAAERlJ5qX8z9Vf5rs4yCRMFo0Tw2XqOetwACcgADvFR8E62VWTguIRO5PQQ')
+            # ПРОВЕРКА: Если это БЫЛ ультра-дубль (1-1 или 6-6), скипаем банальные итоги, чтобы не спамить чат!
+            is_absolute_jackpot = (first_dice_gain == 19.0 and dice_value == 6)
+            is_absolute_fiasco = (first_dice_gain == -19.0 and dice_value == 1)
+            
+            if not is_absolute_jackpot and not is_absolute_fiasco:
+                try:
+                    if total_net_gain > 0:
+                        await context.bot.send_message(
+                            chat_id=chat_id,
+                            text="📈 <b>ИТОГ СЕССИИ: ЧИСТЫЙ СТОНКС!</b>\nПо результатам двух бросков твоя карма ушла в уверенный плюс. Проценты крутости на высоте! 😎",
+                            parse_mode="HTML"
+                        )
+                        await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERlJpqX8w3FNDgCPWSvVnsuCCj4FRCgwACTkkAAqsfMUmHRIhIKo8OmT0E')
+                    elif total_net_gain < 0:
+                        await context.bot.send_message(
+                            chat_id=chat_id,
+                            text="📉 <b>ИТОГ СЕССИИ: NOT STONKS...</b>\nПо итогам двух бросков карма утянула тебя вниз, как и твои проценты. Риск на позор повышен! 🤡",
+                            parse_mode="HTML"
+                        )
+                        await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERlJxqX8yRTjidyacJymAE9dpIfo2cxAAC0wEAAsVnCAABVsYsrVbM7hg9BA')
+                    else:
+                        await context.bot.send_message(
+                            chat_id=chat_id,
+                            text="⚖️ <b>ИТОГ СЕССИИ: ИДЕАЛЬНЫЙ БАЛАНС!</b>\nТвои еженедельные броски полностью уравновесили друг друга. Карма осталась нетронутой, вселенная в равновесии! 🌌",
+                            parse_mode="HTML"
+                        )
+                        await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERlJ5qX8z9Vf5rs4yCRMFo0Tw2XqOetwACcgADvFR8E62VWTguIRO5PQQ')
+                except Exception as e:
+                    print(f"Ошибка вывода недельных итогов кубиков: {e}")
 
 # ---------------- ЗАПУСК (ВЕБХУК) ----------------
 
