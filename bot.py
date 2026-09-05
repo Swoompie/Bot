@@ -496,11 +496,9 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if multiplier == 5:
             await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgUAAxkBAAERr4pqeX-dpAQpHvj3CZnAcPY0_UmGSQACgggAAjiksVVM5Vj4fvPn0z0E')
 
-    # === 🎪 ПОЗОРНЫЙ ВИНСТРИК ПИДОРА (С ФИКСАЦИЕЙ АНТИРЕКОРДОВ В SUPABASE) ===
-    # 1. Всем остальным сбрасываем позорный стрик в 0
-    for u in filtered_users:
-        if u["user_id"] != winner["user_id"]:
-            supabase.table("users").update({"pidor_win_streak": 0}).eq("user_id", u["user_id"]).execute()
+    # === 🎪 ПОЗОРНЫЙ ВИНСТРИК ПИДОРА (БЕЗБАГОВЫЙ СБРОС) ===
+    # 1. Железный сброс в один клик: обнуляем позорный стрик ВСЕМ, кроме сегодняшнего призера
+    supabase.table("users").update({"pidor_win_streak": 0}).neq("user_id", winner["user_id"]).execute()
 
     # 2. Победителю накидываем +1 к позорному стрику
     current_win_streak = winner.get("pidor_win_streak", 0) or 0
@@ -821,11 +819,9 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if multiplier == 5:
             await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERr31qeWv80Ku9FF7n2t9x4eyLRpX9eAAC1jcAAvbPQUmGw6z4J9_owD0E')
     
-    # === 🏆 УЛЬТРА-ВИНСТРИК КРАСАВЧИКА (С ФИКСАЦИЕЙ РЕКОРДОВ В SUPABASE) ===
-    # 1. Всем остальным участникам сегодняшней рулетки сбрасываем победный стрик в 0
-    for u in filtered_users:
-        if u["user_id"] != final_winner["user_id"]:
-            supabase.table("users").update({"kras_win_streak": 0}).eq("user_id", u["user_id"]).execute()
+    # === 🏆 УЛЬТРА-ВИНСТРИК КРАСАВЧИКА (БЕЗБАГОВЫЙ СБРОС) ===
+    # 1. Железный сброс в один клик: обнуляем стрик ВСЕМ, кроме финального победителя
+    supabase.table("users").update({"kras_win_streak": 0}).neq("user_id", final_winner["user_id"]).execute()
 
     # 2. Победителю накидываем +1 к его текущему победному стрику
     current_win_streak = final_winner.get("kras_win_streak", 0) or 0
