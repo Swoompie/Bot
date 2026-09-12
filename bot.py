@@ -569,10 +569,11 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # --- МИКРО-ПОДСКАЗКА ПРО КАРТУ UNO (ТЕПЕРЬ УЧИТЫВАЕТ РЕАЛЬНОГО ПИДОРА) ---
     uno_status_text = ""
     rules_memo = (
-        "\n\n📊 *Сетка шансов на перевод:* "
-        "\n └ 👑 На Красавчика дня — *5%*"
-        "\n └ 🃏 На обычного мирного — *10%*"
-        "\n └ 🎯 На проигравшего в монетку — *20%* _(если таковой появится, но при провале твои шансы на Пидора взлетят!)_"
+        "\n\n📊 <b>Сетка шансов на перевод карты UNO:</b>"
+        "\n └ 👑 На Красавчика дня — <b>15%</b>"
+        "\n └ 🃏 На обычного мирного — <b>30%</b>"
+        "\n └ 🎯 На раненого в монетку — <b>60%</b>"
+        "\n\n⚠️ <b>ВНИМАНИЕ:</b> В случае провала промаха активируется кармическая расплата — ты получишь <b>Х2 МНОЖИТЕЛЬ ПОЗОРА</b> обратно в досье! Рискуй с умом! 😈🎰"
     )
 
     if final_pidor_user.get("last_switch_date"):
@@ -589,7 +590,24 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
         uno_status_text = f"\n\n🃏 *ОП-ПА! Твоя карта UNO ГОТОВА!* Защищайся, пиши: `/switch @username`{rules_memo}"
 
     if uno_status_text:
-        await context.bot.send_message(chat_id=chat_id, text=uno_status_text, parse_mode="Markdown")
+        try:
+            # ЖЕЛЕЗНО ИСПРАВЛЕНО: Заменили Markdown на HTML для поддержки новых жирных тегов!
+            await context.bot.send_message(
+                chat_id=chat_id, 
+                text=uno_status_text, 
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            # Предохранитель: если в чат не улетело, тихо шлём админу, но не вешаем бота
+            print(f"Ошибка вывода утреннего уно-статуса: {e}")
+            try:
+                await context.bot.send_message(
+                    chat_id=ADMIN_TG_ID, 
+                    text=f"⚠️ Ошибка утреннего Крупье UNO в чате <code>{chat_id}</code>: <code>{e}</code>",
+                    parse_mode="HTML"
+                )
+            except Exception:
+                pass
 
     # ---------------- БЛОК ЮБИЛЕЙНЫХ ПОЗДРАВЛЕНИЙ ПИДОРА ----------------
     # ЖЕЛЕЗНО ИСПРАВЛЕНО: Убрали затирание имени, celebrator_name берется из логики Мимика выше!
@@ -1619,27 +1637,40 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(chat_id=chat_id, text=phrase, parse_mode="HTML")
         await asyncio.sleep(1.0) # Оптимизировали паузу до 1 секунды для ускорения функции
 
-    # --- 🎰 РАЗДЕЛЬНЫЙ РАСЧЕТ ШАНСОВ (5% / 10% / 15% / 20%) ---
+    # --- 🎰 [ОБНОВЛЕНО] ПОВЫШЕННЫЙ РАСЧЕТ ШАНСОВ (15% / 30% / 15% / 75%) ---
     if is_robbing_chad:
-        success_chance = 5
+        success_chance = 15  # Было 5%
     elif is_coin_loser_target:
-        success_chance = 20  
+        success_chance = 60  # Было 20% (Добивание раненого)
     elif is_retry_attempt:
-        success_chance = 15  
+        success_chance = 50  # Второй шанс на мирного (оставляем 50% для баланса)
     else:
-        success_chance = 10  
+        success_chance = 30  # Было 10% (Обычный перевод)
 
     is_success = random.randint(1, 100) <= success_chance
 
-    # ЖЕЛЕЗНО ОПТИМИЗИРОВАНО: Убрали тяжелый дублирующий запрос select из базы данных!
-    # Добавляем фиксацию штрафного веса 120.0 при провале добивания
+    # --- 📊 ДИНАМИЧЕСКИЙ РАСЧЕТ ТЕКУЩЕГО МНОЖИТЕЛЯ ДЛЯ ШТРАФОВ ---
+    fresh_winner_res = supabase.table("users").select("pidor_count").eq("user_id", user.id).execute()
+    fresh_pidor_count = fresh_winner_res.data[0]["pidor_count"] if fresh_winner_res.data else today_winner["pidor_count"]
+    pidor_multiplier = max(1, fresh_pidor_count - today_winner["pidor_count"])
+    
+    # Х2 МНОЖИТЕЛЬ КАРЫ: Сколько прилетит сверху при провале
+    penalty_p_count = pidor_multiplier * 2
+
+    # [ОБНОВЛЕНО] Жесткое наказание за провал добивания раненого (Шанс был 75%, но промах фатален!)
     if not is_success and is_coin_loser_target:
-        supabase.table("users").update({"last_switch_date": str(today), "pidor_weight": 120.0}).eq("user_id", user.id).execute()
+        # Накидываем х2 штраф к текущему счету и задираем вес до 150.0
+        supabase.table("users").update({
+            "last_switch_date": str(today), 
+            "pidor_count": fresh_pidor_count + penalty_p_count,
+            "pidor_weight": 180.0
+        }).eq("user_id", user.id).execute()
         
         await context.bot.send_message(
             chat_id=chat_id,
-            text=f"❌ <b>КАРМА СУЩЕСТВУЕТ!</b> Карта UNO СГОРЕЛА при попытке добить раненого!\n\n"
-                 f"<b>{safe_user_name}</b>, боги рандома наказали тебя за жестокость. Карта уходит на КД, а твой штрафной процент Пидора взлетает до небес! 🤡",
+            text=f"❌ <b>ТОТАЛЬНОЕ КАРМИЧЕСКОЕ ПРАВОСУДИЕ!</b> ❌\n\n"
+                 f"Карта UNO расплавилась в руках <b>{safe_user_name}</b> при попытке добить раненого! Шанс был 75%, но ты умудрился промазать!\n\n"
+                 f"Боги рандома карают тебя за жестокость в двойном размере: получай <b>+{penalty_p_count} пидора</b> в досье, а твой штрафной вес взлетает до 150.0! 🤡💣",
             parse_mode="HTML"
         )
         await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAEReQpqQ3adafSczLOzJ3WEyKHoQvfvJAACNhUAAjhx-EmeBZwsT5kj1TwE')
@@ -1669,7 +1700,16 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # 3. Перебиваем историю сегодняшнего дня в daily_winners строго по ролям
             supabase.table("daily_winners").update({"user_id": victim["user_id"]}).eq("game_date", str(today)).eq("role", "pidor").execute()
             supabase.table("daily_winners").update({"user_id": user.id}).eq("game_date", str(today)).eq("role", "krasavchik").execute()
-            
+
+            # [ЛОГ УНО] Записываем Королевское ограбление в историю
+            supabase.table("uno_logs").insert({
+                "sender_name": user.first_name,
+                "victim_name": victim["first_name"],
+                "game_date": str(today),
+                "multiplier": pidor_multiplier, # Сохраняем текущий множитель
+                "is_krasavchik": True          # МАРКЕР: УКРАЛ КРАСАВЧИКА!
+            }).execute()
+
             try:
                 await context.bot.send_message(
                     chat_id=chat_id,
@@ -1691,26 +1731,46 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERv_1qh-RMBre9eek9ykdsovu3gf-SvwACCnUAAlgXsEkCKvJjaqw9iT0E')
 
-        # 🃏 ПУТЬ Б: УСПЕШНЫЙ ОБЫЧНЫЙ ПЕРЕВОД / ДОБИВАНИЕ (ЛИНИЯ ВЫРАВНИВАНИЯ)
+        # 🃏 ПУТЬ Б: УСПЕШНЫЙ ОБЫЧНЫЙ ПЕРЕВОД / ДОБИВАНИЕ (ВЫЧИСЛЯЕМ МНОЖИТЕЛЬ ПОЗОРА)
         if not is_robbing_chad:
+            # Записываем КД стрелочнику
             supabase.table("users").update({"last_switch_date": str(today)}).eq("user_id", user.id).execute()
             
-            # Обновляем Стрелочника: минус позор (данные из today_winner)
+            # --- 📊 ДИНАМИЧЕСКИЙ РАСЧЕТ МНОЖИТЕЛЯ ПОЗОРА (Честность для чата) ---
+            # Вытаскиваем свежие данные Ани из базы ПОСЛЕ рулетки, чтобы понять, сколько ей начислило
+            fresh_winner_res = supabase.table("users").select("pidor_count").eq("user_id", user.id).execute()
+            
+            # Если в базе уже 13, а в today_winner (до рулетки) было 10, то позор_джекпот = 3
+            fresh_pidor_count = fresh_winner_res.data[0]["pidor_count"] if fresh_winner_res.data else today_winner["pidor_count"]
+            
+            # Вычисляем, какой множитель прилетел сегодня (х1, х2, х3 или х5)
+            pidor_multiplier = max(1, fresh_pidor_count - today_winner["pidor_count"])
+            
+            # 1. Обновляем Стрелочника (списываем ВСЕ начисленные сегодня позоры под ноль!)
             supabase.table("users").update({
-                "pidor_count": max(0, today_winner["pidor_count"] - 1), 
+                "pidor_count": max(0, fresh_pidor_count - pidor_multiplier), 
                 "pidor_weight": 85.0
             }).eq("user_id", user.id).execute()
             
-            # Обновляем Жертву: плюс позор
+            # 2. Обновляем Жертву (навешиваем ей ВЕСЬ сегодняшний джекпот целиком!)
             supabase.table("users").update({
-                "pidor_count": victim["pidor_count"] + 1, 
+                "pidor_count": victim["pidor_count"] + pidor_multiplier, 
                 "pidor_weight": 80.0
             }).eq("user_id", victim["user_id"]).execute()
             
             # Точечно перебиваем историю сегодняшнего дня в daily_winners
             supabase.table("daily_winners").update({"user_id": victim["user_id"]}).eq("game_date", str(today)).eq("role", "pidor").execute()
+            
+            # [ЛОГ УНО] Записываем успешный перевод в историю
+            supabase.table("uno_logs").insert({
+                "sender_name": user.first_name,
+                "victim_name": victim["first_name"],
+                "game_date": str(today),
+                "multiplier": pidor_multiplier,
+                "is_krasavchik": False
+            }).execute()
 
-            # --- 🛡️ БРОНЕБОЙНАЯ ОТВЕТКА: HTML + ПРЯМОЙ ВЫВОД ---
+            # --- 🛡️ БРОНЕБОЙНАЯ ОТВЕТКА С УЧЕТОМ МНОЖИТЕЛЯ ---
         try:
             if is_coin_loser_target:
                 # 🪓 УСПЕШНОЕ ДОБИВАНИЯ РАНЕНОГО (20%)
@@ -1742,12 +1802,13 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             else:
                 # 💥 ОБЫЧНЫЙ ПЕРЕВОД (10%)
+                multiplier_alert = f" (с учётом множителя х{pidor_multiplier}!)" if pidor_multiplier > 1 else ""
                 await context.bot.send_message(
                     chat_id=chat_id,
                     text=(
                         f"💥 <b>КАРТА ПЕРЕВЕДЕНА!</b> Магия 10% сработала!\n\n"
                         f"👑 <b>{safe_user_name}</b> полностью очищен от подозрений.\n"
-                        f"🤡 Новый официальный <b>ПИДОР ДНЯ</b> — <b>{safe_victim_name}</b>! Смирись!"
+                        f"🤡 Новый официальный <b>ПИДОР ДНЯ</b> — <b>{safe_victim_name}</b>! Смирись!{multiplier_alert}"
                     ),
                     parse_mode="HTML"
                 )
@@ -1762,40 +1823,42 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERv_1qh-RMBre9eek9ykdsovu3gf-SvwACCnUAAlgXsEkCKvJjaqw9iT0E')
 
-# ================= ❌❌❌ ВЫПАЛ ПРОВАЛ (ПОЛНАЯ ТИТАНОВАЯ БРОНЯ — БЕЗ БАГОВ) =================
+# ================= ❌❌❌ ВЫПАЛ ПРОВАЛ (ОБНОВЛЕНО: Х2 РАСПЛАТА ЗА РИСК) =================
     if not is_success:
-        # Экранируем имя игрока для безопасности HTML-верстки
         safe_name = user.first_name.replace("<", "&lt;").replace(">", "&gt;")
 
         try:
             if is_robbing_chad:
-                # На Красавчика только ОДНА попытка. Вешаем КД стандартным рабочим методом
-                supabase.table("users").update({"last_switch_date": str(today), "pidor_weight": 100.0}).eq("user_id", user.id).execute()
+                # Провал кражи у Красавчика: штрафной вес 110.0 и х2 пидора обратно!
+                supabase.table("users").update({
+                    "last_switch_date": str(today), 
+                    "pidor_count": fresh_pidor_count + penalty_p_count,
+                    "pidor_weight": 110.0
+                }).eq("user_id", user.id).execute()
+                
                 await context.bot.send_message(
                     chat_id=chat_id,
-                    text=(
-                        f"❌ <b>ТРЮК ПРОВАЛЕН!</b> Королевская карта UNO СГОРЕЛА ВО ВРЕМЯ ПОПЫТКИ КРАЖИ! \n\n"
-                        f"<b>{safe_name}</b>, попытка ограбить Красавчика провалилась, боги рандома изымают карту на 6 дней.\n"
-                        f"Титул Пидора дня остается на тебе! 🤡"
-                    ),
+                    text=f"❌ <b>ОГРАБЛЕНИЕ ВЕКА ПРОВАЛЕНО!</b> ❌\n\n"
+                         f"Королевская защита Красавчика оказалась непробиваемой. Карта UNO сгорела!\n"
+                         f"<b>{safe_name}</b>, мало того, что титул Пидора остаётся на тебе, так казино вешает на тебя х2 штраф: <b>+{penalty_p_count} пидора</b> в профиль! 🤡",
                     parse_mode="HTML"
                 )
                 await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAEReQpqQ3adafSczLOzJ3WEyKHoQvfvJAACNhUAAjhx-EmeBZwsT5kj1TwE')
                 
             else:
-                # Провал при обычном переводе на мирного (Включается логика Второго Шанса)
                 if is_retry_attempt:
-                    # Вторая попытка провалилась — сжигаем карту стандартным рабочим методом
-                    supabase.table("users").update({"last_switch_date": str(today), "pidor_weight": 85.0}).eq("user_id", user.id).execute()
+                    # Вторая попытка провалилась — сжигаем карту с х2 штрафом, вес 95.0
+                    supabase.table("users").update({
+                        "last_switch_date": str(today), 
+                        "pidor_count": fresh_pidor_count + penalty_p_count,
+                        "pidor_weight": 95.0
+                    }).eq("user_id", user.id).execute()
                     context.user_data.pop("switch_retry", None)
 
                     await context.bot.send_message(
                         chat_id=chat_id,
-                        text=(
-                            f"💀 <b>ПОЛНОЕ ФИАСКО, СТРЕЛОЧНИК!</b> Второй шанс тоже провален! \n\n"
-                            f"<b>{safe_name}</b>, твоя карта UNO окончательно ПРЕВРАТИЛАСЬ В ПЕПЕЛ. "
-                            f"Кулдаун 6 дней активирован. Завтра твои шансы максимальны! 🤡"
-                        ),
+                        text=f"💀 <b>ПОЛНОЕ ФИАСКО, СТРЕЛОЧНИК!</b> Второй шанс тоже провален! 💀\n\n"
+                             f"Твоя карта UNO превратилась в пепел. А за наглость крупье выписывает тебе х2 наказание: <b>+{penalty_p_count} пидора</b> в досье. Отлетай! 🤡",
                         parse_mode="HTML"
                     )
                     await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERg9tqT2Lb7EssiCPdH7XeEz1W5sbVswAC6S8AApkAAYhJDcx-Vp6-Sco8BA')
@@ -1804,26 +1867,28 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     has_second_chance = random.randint(1, 100) <= 5
                     
                     if has_second_chance:
-                        context.user_data["switch_retry"] = True # включаем триггер повтора
+                        context.user_data["switch_retry"] = True 
                         await context.bot.send_message(
                             chat_id=chat_id,
-                            text=(
-                                f"⚡️ <b>ОПА, ОСЕЧКА... ИЛИ НЕТ?!</b> ⚡️\n\n"
-                                f"<b>{safe_name}</b>, твоя карта UNO задымилась, но боги рандома дали тебе <b>ВТОРОЙ ШАНС</b>! "
-                                f"Кулдаун НЕ активирован! Быстро пиши команду <code>/switch</code> ещё раз на любую мирную цель, пока лазейка не закрылась! 🃏"
-                            ),
+                            text=f"⚡️ <b>ОПА, ОСЕЧКА... ИЛИ НЕТ?!</b> ⚡️\n\n"
+                                 f"<b>{safe_name}</b>, твоя карта UNO задымилась, но боги рандома дали тебе <b>ВТОРОЙ ШАНС</b>! Шанс перевода всё ещё 50%!\n"
+                                 f"Кулдаун НЕ активирован! Быстро пиши команду <code>/switch</code> ещё раз, пока лазейка не закрылась! 🃏",
                             parse_mode="HTML"
                         )
                         await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERg85qT110qgTm1RJWyqRuKm0QwbCoLwAC9B4AAiNcOEtYh2FNKYLHdDwE')
                     else:
-                        # Стандартный провал с первого раза — пишем в базу напрямую
-                        supabase.table("users").update({"last_switch_date": str(today), "pidor_weight": 90.0}).eq("user_id", user.id).execute()
+                        # Стандартный провал на мирного с первого раза с х2 штрафом
+                        supabase.table("users").update({
+                            "last_switch_date": str(today), 
+                            "pidor_count": fresh_pidor_count + penalty_p_count,
+                            "pidor_weight": 100.0
+                        }).eq("user_id", user.id).execute()
+                        
                         await context.bot.send_message(
                             chat_id=chat_id,
-                            text=(
-                                f"❌ <b>КАРТА UNO ПОРВАЛАСЬ!</b> <b>{safe_name}</b>, перевод сорвался и полетел обратно в тебя.\n\n"
-                                f"Титул остается на тебе. Карта уходит на перезарядку на 6 дней. 🤡"
-                            ),
+                            text=f"❌ <b>КАРТА UNO ПОРВАЛАСЬ!</b> ❌\n\n"
+                                 f"Перевод сорвался и отрикошетил обратно в <b>{safe_name}</b>. "
+                                 f"За неудачный риск Салун удваивает ставку позора: получай <b>+{penalty_p_count} пидора</b>. Карта на КД 6 дней! 🤡",
                             parse_mode="HTML"
                         )
                         await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAEReQpqQ3adafSczLOzJ3WEyKHoQvfvJAACNhUAAjhx-EmeBZwsT5kj1TwE')
@@ -1832,7 +1897,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
             print(f"Ошибка вывода провала UNO: {e}")
             await context.bot.send_message(
                 chat_id=chat_id,
-                text="🔧 <b>Сука, опять вы всё сломали!</b> 🤦‍♂️\n\nПровал карты UNO застрял в текстурах Телеграма. Кулдаун записан, админ уже чинит!",
+                text="🔧 <b>Сука, опять вы всё сломали!</b> 🤦‍♂️\n\nПровал карты UNO застрял в текстурах. База всё записала, х2 кара выдана, админ чинит!",
                 parse_mode="HTML"
             )
             await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERv_1qh-RMBre9eek9ykdsovu3gf-SvwACCnUAAlgXsEkCKvJjaqw9iT0E')
@@ -2208,6 +2273,80 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception as e:
                     print(f"Ошибка вывода недельных итогов кубиков: {e}")
 
+async def uno_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    user = update.effective_user
+    
+    # Готовим безопасное HTML-имя вызывающего игрока
+    safe_sender_name = user.first_name.replace("<", "&lt;").replace(">", "&gt;")
+
+    # Вытягиваем из базы ВООБЩЕ ВСЕ логи, где sender_name равен имени этого игрока
+    res = supabase.table("uno_logs").select("*").eq("sender_name", user.first_name).order("id", ascending=False).execute()
+    
+    if not res.data or len(res.data) == 0:
+        await context.bot.send_message(
+            chat_id=chat_id, 
+            text=f"🃏 <b>{safe_sender_name}</b>, твоя личная хроника UNO пуста!\n\nТы ещё ни разу в истории Салуна не смог успешно перевести карту на пацанов. Либо тебе чертовски не везёт на кубиках, либо ты слишком мирный ковбой! 😏", 
+            parse_mode="HTML"
+        )
+        return
+
+    # Шапка персонального досье
+    header = f"🃏 <b>ЛИЧНАЯ ХРОНИКА СПЕЦОПЕРАЦИЙ: {safe_sender_name.upper()}</b> 🃏\n"
+    header += f"<i>Крупье поднял архивы Салуна... Вот твои успешные переводы стрелок:</i>\n\n"
+    
+    lines = []
+    
+    for log in res.data:
+        # Форматируем дату в красивый вид (12.09)
+        try:
+            raw_date = date.fromisoformat(log["game_date"])
+            formatted_date = raw_date.strftime("%d.%m")
+        except Exception:
+            formatted_date = log["game_date"]
+
+        # Экранируем имя жертвы
+        safe_victim = log["victim_name"].replace("<", "&lt;").replace(">", "&gt;")
+        mult = log.get("multiplier", 1)
+
+        # 👑 РАЗВЕТВЛЕНИЕ ТЕКСТА ПО ТИПАМ ГРАБЕЖЕЙ (КАК ТЫ И ХОТЕЛ!)
+        if log.get("is_krasavchik", False):
+            if mult >= 5:
+                # АБСОЛЮТНОЕ БЕЗУМИЕ (х5 Красавчик)
+                action_text = f"ты вообще ахуел и умудрился спиздить множитель Красавчика <b>[х{mult}]</b>! Это вообще легендарно! 🤯🚀"
+            else:
+                # ОБЫЧНЫЙ КРАСАВЧИК
+                action_text = f"ты вообще офигел и <b>Украл статус Красавчика дня</b>! Королевский налёт! 👑"
+        else:
+            # ПЕРЕВОР ОТВЕТКИ НА МИРНЫХ
+            if mult > 1:
+                # С МНОЖИТЕЛЕМ ПОЗОРА (Как у Ани сегодня)
+                action_text = f"ты перевёл стрелки на <b>{safe_victim}</b> с жёстким множителем позора <b>[х{mult}]</b>! Жертва ушла на дно! 🤡💣"
+            else:
+                # ОБЫЧНЫЙ ПЕРЕВОД
+                action_text = f"ты технично перевёл позорный статус на <b>{safe_victim}</b>. Чистая работа! 💥"
+
+        lines.append(f"📅 <code>{formatted_date}</code> — {action_text}")
+
+    # === 🛡️ АВТО-РАЗБИВКА НА ЧАСТИ (ЗАЩИТА ОТ ЛИМИТОВ ТЕЛЕГРАМА) ===
+    chunk_size = 30
+    try:
+        if len(lines) <= chunk_size:
+            full_message = header + "\n".join(lines) + "\n\n<i>История помнит каждого твоего подлеца, ковбой... 😏⚔️</i>"
+            await context.bot.send_message(chat_id=chat_id, text=full_message, parse_mode="HTML")
+        else:
+            await context.bot.send_message(chat_id=chat_id, text=header, parse_mode="HTML")
+            for chunk_index in range(0, len(lines), chunk_size):
+                chunk = lines[chunk_index:chunk_index + chunk_size]
+                chunk_message = "\n".join(chunk)
+                if chunk_index + chunk_size >= len(lines):
+                    chunk_message += "\n\n<i>История помнит каждого твоего подлеца, ковбой... 😏⚔️</i>"
+                await context.bot.send_message(chat_id=chat_id, text=chunk_message, parse_mode="HTML")
+                await asyncio.sleep(0.5)
+                
+    except Exception as e:
+        print(f"Ошибка вывода личной уно-статистики: {e}")
+
 # ---------------- ЗАПУСК (ВЕБХУК) ----------------
 
 async def main():
@@ -2235,6 +2374,8 @@ async def main():
     app.add_handler(CommandHandler("backup", manual_backup))
     app.add_handler(CommandHandler("dice", dice_command))
     app.add_handler(CommandHandler("duel", duel))
+    app.add_handler(CommandHandler("unostats", uno_stats))
+
 
 
     if RENDER_URL:
