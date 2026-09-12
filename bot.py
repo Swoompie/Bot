@@ -2286,7 +2286,7 @@ async def uno_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not res.data or len(res.data) == 0:
         await context.bot.send_message(
             chat_id=chat_id, 
-            text=f"🃏 <b>{safe_sender_name}</b>, твоя личная хроника UNO пуста!\n\nТы ещё ни разу в истории Салуна не смог успешно перевести карту на пацанов. Либо тебе чертовски не везёт на кубиках, либо ты слишком мирный ковбой! 😏", 
+            text=f"🃏 <b>{safe_sender_name}</b>, твоя личная хроника UNO пуста!\n\nТы ещё ни разу в истории чатика не смог успешно перевести карту. Либо тебе чертовски не везёт на переводы, либо ты слишком мирный ковбой! 😏", 
             parse_mode="HTML"
         )
         return
