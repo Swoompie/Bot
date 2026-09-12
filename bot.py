@@ -256,6 +256,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/duel @username — Устроить дикую перестрелку, за честь 🔫\n"
         "/mimic @username — Мимикрировать под другого игрока с удвоением статуса, КД 14 дней 🎭\n"
         "/mystats — Узнать свою статистику и карту UNO 👀\n"
+        "/unostats — Узнать свои переводы карты UNO 👀\n"
         "/unreg — Выйти из рулетки и удалить данные (нет) 🚪\n"
         "/help — Показать это сообщение еще раз (но на кое хер?)"
     )
@@ -1643,7 +1644,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif is_coin_loser_target:
         success_chance = 60  # Было 20% (Добивание раненого)
     elif is_retry_attempt:
-        success_chance = 50  # Второй шанс на мирного (оставляем 50% для баланса)
+        success_chance = 20  # Второй шанс на мирного (оставляем 20% для баланса)
     else:
         success_chance = 30  # Было 10% (Обычный перевод)
 
