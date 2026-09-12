@@ -251,7 +251,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/stats — Посмотреть общую статистику побед 📊\n"
         "/procents — Узнать свои шансы на победу 🎯\n"
         "/records — Узнать лидеров чата 👀\n"
-        "/switch @username — Использовать карту UNO и перевести от себя пидора (Шанс 5/10/20%?, КД 6 дней) 🃏\n"
+        "/switch @username — Использовать карту UNO и перевести от себя пидора (КД 6 дней) 🃏\n"
         "/dice — Кинуть кубик кармы (2 в неделю) , но надо быть осторожным, возможны аномальные колебания процентов 🎲\n"
         "/duel @username — Устроить дикую перестрелку, за честь 🔫\n"
         "/mimic @username — Мимикрировать под другого игрока с удвоением статуса, КД 14 дней 🎭\n"
@@ -574,7 +574,7 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "\n └ 👑 На Красавчика дня — <b>15%</b>"
         "\n └ 🃏 На обычного мирного — <b>30%</b>"
         "\n └ 🎯 На раненого в монетку — <b>60%</b>"
-        "\n\n⚠️ <b>ВНИМАНИЕ:</b> В случае провала промаха активируется кармическая расплата — ты получишь <b>Х2 МНОЖИТЕЛЬ ПОЗОРА</b> обратно в досье! Рискуй с умом! 😈🎰"
+        "\n\n⚠️ <b>ВНИМАНИЕ:</b> В случае провала промаха активируется кармическая расплата. Рискуй с умом! 😈🎰"
     )
 
     if final_pidor_user.get("last_switch_date"):
@@ -1615,23 +1615,23 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if is_robbing_chad:
         intro = [
             f"👑 <b>КРАЖА ВЕКА!</b> Пидор дня <b>{safe_user_name}</b> активирует карту «UNO» против Красавчика <b>{safe_victim_name}</b>!",
-            "🎲 Это Королевское Ограбление! Шанс 5%. Если сработает, титулы поменяются, а карта ОСТАНЕТСЯ ЦЕЛОЙ! 🔥",
+            "🎲 Это Королевское Ограбление! Шанс 15%. Если сработает, титулы поменяются, а карта ОСТАНЕТСЯ ЦЕЛОЙ! 🔥",
         ]
     elif is_coin_loser_target:
         intro = [
             f"🎯 <b>ДОБИВАНИЕ РАНЕНОГО!</b> <b>{safe_user_name}</b> активирует карту «UNO» против <b>{safe_victim_name}</b>!",
-            "🎲 Он сегодня и так эпично проиграл в монетку, а мы решили его добить? Похвально, но наказуемо! Шанс перевода повышен до 20%! 🔥\n⚠️ Внимание: в случае провала твои шансы на Пидора взлетят до небес!",
+            "🎲 Он сегодня и так эпично проиграл в монетку, а мы решили его добить? Похвально, но наказуемо! Шанс перевода повышен до 60%! 🔥\n⚠️ Внимание: в случае провала твои шансы на Пидора взлетят до небес!",
         ]
     else:
         if is_retry_attempt:
             intro = [
                 f"🔥 <b>ВТОРОЙ ШАНС!</b> <b>{safe_user_name}</b> трясущимися руками активирует карту «UNO» ПОВТОРНО против мирного <b>{safe_victim_name}</b>!",
-                "🎲 На этот раз боги шутить не будут. Вероятность 15%. Либо пан, либо пропал...",
+                "🎲 На этот раз боги шутить не будут. Вероятность 20%. Либо пан, либо пропал...",
             ]
         else:
             intro = [
                 f"🃏 <b>МЕМНЫЙ РЕВЁРС!</b> <b>{safe_user_name}</b> активирует карту «UNO» и пытается скинуть клеймо Пидора на <b>{safe_victim_name}</b>!",
-                "🎲 Шанс перевода 10%... Высшие силы взвешивают шансы...",
+                "🎲 Шанс перевода 30%... Высшие силы взвешивают шансы...",
             ]
 
     for phrase in intro:
@@ -1640,13 +1640,13 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # --- 🎰 [ОБНОВЛЕНО] ПОВЫШЕННЫЙ РАСЧЕТ ШАНСОВ (15% / 30% / 15% / 75%) ---
     if is_robbing_chad:
-        success_chance = 15  # Было 5%
+        success_chance = 15  
     elif is_coin_loser_target:
-        success_chance = 60  # Было 20% (Добивание раненого)
+        success_chance = 60  # Твои 60% на добивание раненого
     elif is_retry_attempt:
-        success_chance = 20  # Второй шанс на мирного (оставляем 20% для баланса)
+        success_chance = 50  
     else:
-        success_chance = 30  # Было 10% (Обычный перевод)
+        success_chance = 30  
 
     is_success = random.randint(1, 100) <= success_chance
 
@@ -1655,27 +1655,30 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     fresh_pidor_count = fresh_winner_res.data[0]["pidor_count"] if fresh_winner_res.data else today_winner["pidor_count"]
     pidor_multiplier = max(1, fresh_pidor_count - today_winner["pidor_count"])
     
-    # Х2 МНОЖИТЕЛЬ КАРЫ: Сколько прилетит сверху при провале
-    penalty_p_count = pidor_multiplier * 2
+    # [МЕГА-ОБНОВЛЕНИЕ]: Для раненого штраф равен Х3, для остальных оставляем Х2 кару!
+    if is_coin_loser_target:
+        penalty_p_count = pidor_multiplier * 3  # ТРОЙНОЙ ШТРАФ ЗА РАНЕНОГО!
+    else:
+        penalty_p_count = pidor_multiplier * 2  # Двойной штраф для обычных мирных и Красавчика
 
-    # [ОБНОВЛЕНО] Жесткое наказание за провал добивания раненого (Шанс был 75%, но промах фатален!)
+    # [ОБНОВЛЕНО] Жесткое х3 наказание за провал добивания раненого (Вес взлетает до 150.0)
     if not is_success and is_coin_loser_target:
-        # Накидываем х2 штраф к текущему счету и задираем вес до 150.0
         supabase.table("users").update({
             "last_switch_date": str(today), 
             "pidor_count": fresh_pidor_count + penalty_p_count,
-            "pidor_weight": 180.0
+            "pidor_weight": 170.0
         }).eq("user_id", user.id).execute()
         
         await context.bot.send_message(
             chat_id=chat_id,
             text=f"❌ <b>ТОТАЛЬНОЕ КАРМИЧЕСКОЕ ПРАВОСУДИЕ!</b> ❌\n\n"
-                 f"Карта UNO расплавилась в руках <b>{safe_user_name}</b> при попытке добить раненого! Шанс был 75%, но ты умудрился промазать!\n\n"
-                 f"Боги рандома карают тебя за жестокость в двойном размере: получай <b>+{penalty_p_count} пидора</b> в досье, а твой штрафной вес взлетает до 150.0! 🤡💣",
+                 f"Карта UNO расплавилась в руках <b>{safe_user_name}</b> при попытке добить раненого! Шанс был 60%, но ты умудрился промазать!\n\n"
+                 f"Боги рандома карают тебя за запредельную жестокость в тройном размере: казино активирует <b>Х3 МНОЖИТЕЛЬ НАКАЗАНИЯ</b>, получай сразу <b>+{penalty_p_count} пидора</b> в досье! 🤡💥💣",
             parse_mode="HTML"
         )
         await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAEReQpqQ3adafSczLOzJ3WEyKHoQvfvJAACNhUAAjhx-EmeBZwsT5kj1TwE')
-        return  
+        return  # Прерываем, провал раненого полностью обработан!
+
     # ================= 🎉🎉🎉 УСПЕШНЫЙ ПЕРЕВОД 🎉🎉🎉 =================
     if is_success:
         context.user_data.pop("switch_retry", None) # очищаем память ретрая
@@ -1779,9 +1782,9 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     chat_id=chat_id,
                     text=(
                         f"🪓 <b>БЕЗЖАЛОСТНОЕ ДОБИВАНИЕ ОФОРМЛЕНО!</b> 🪓\n\n"
-                        f"Стрелок <b>{safe_user_name}</b> активировал карту против раненого {safe_victim_name} и пробил его защиту с 20% шансом! ⚡️\n\n"
+                        f"Стрелок <b>{safe_user_name}</b> активировал карту против раненого {safe_victim_name} и пробил его защиту с 60% шансом! ⚡️\n\n"
                         f"🎯 <b>{safe_victim_name}</b> лежал на земле после проигрыша в монетку, а теперь забирает клеймо ПИДОРА ДНЯ себе! Полное фиаско! 🗿\n"
-                        f"😎 А хитрый <b>{safe_user_name}</b> нагло списывает себе -1 к позору и уходит курить в сторонку!"
+                        f"😎 А хитрый <b>{safe_user_name}</b> нагло списывает себе пидора и уходит курить в сторонку!"
                     ),
                     parse_mode="HTML"
                 )
@@ -1793,7 +1796,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     chat_id=chat_id,
                     text=(
                         f"🦊 <b>КАК ОН ЭТО ДЕЛАЕТ?! ХИТРЫЙ ЛИС В ДЕЛЕ!</b> 🦊\n\n"
-                        f"Первая карта порвалась, но со второго шанса <b>{safe_user_name}</b> совершает невозможное и выбивает 15%!\n"
+                        f"Первая карта порвалась, но со второго шанса <b>{safe_user_name}</b> совершает невозможное и выбивает 20%!\n"
                         f"👑 Ты полностью очищен от подозрений, легенда кубиков!\n\n"
                         f"🤡 А вот <b>{safe_victim_name}</b> официально становится <b>ПИДOPOМ ДНЯ</b> со второй подачи! Отлетай!"
                     ),
@@ -1807,7 +1810,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.send_message(
                     chat_id=chat_id,
                     text=(
-                        f"💥 <b>КАРТА ПЕРЕВЕДЕНА!</b> Магия 10% сработала!\n\n"
+                        f"💥 <b>КАРТА ПЕРЕВЕДЕНА!</b> Магия 30% сработала!\n\n"
                         f"👑 <b>{safe_user_name}</b> полностью очищен от подозрений.\n"
                         f"🤡 Новый официальный <b>ПИДОР ДНЯ</b> — <b>{safe_victim_name}</b>! Смирись!{multiplier_alert}"
                     ),
@@ -1985,17 +1988,23 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     max_k_streak = player.get("max_kras_win_streak", 0) or 0
     max_p_streak = player.get("max_pidor_win_streak", 0) or 0
     
+    # === 🃏 УМНЫЙ ПОДГРУЗ СТАТИСТИКИ ИЗ ТАБЛИЦЫ ЛОГОВ UNO ===
+    # Считаем, сколько раз имя этого игрока записано вsender_name (его успешные переводы)
+    uno_wins_res = supabase.table("uno_logs").select("id").eq("sender_name", player["first_name"]).execute()
+    uno_wins_total = len(uno_wins_res.data) if uno_wins_res.data else 0
+    
     # Экранируем имена, чтобы спецсимволы в никах не ломали разметку Телеграма
     safe_first_name = player['first_name'].replace("<", "&lt;").replace(">", "&gt;")
     username = f" (@{player['username']})" if player['username'] else ""
-
-    # 5. Собираем ультимативное досье (СТРОГО НА HTML-ТЕГАХ)
+    
+    # 5. Собираем ультимативное досье (СТРОГО НА HTML-ТЕГАХ С УЧЁТОМ АРХИВА UNO)
     message = (
         f"👤 <b>ЛИЧНОЕ ДОСЬЕ ИГРОКА</b>:\n\n"
         f"Участник: <b>{safe_first_name}{username}</b>\n"
         f"🤡 Статус Пидора: <b>{player['pidor_count']}</b> раз(а)\n"
         f"😎 Статус Красавчика: <b>{player['kras_count']}</b> раз(а)\n"
-        f"⚔️ Лига Дуэлей: <b>{d_total}</b> боёв <i>({d_wins} В / {d_losses} П)</i>\n\n"
+        f"⚔️ Лига Дуэлей: <b>{d_total}</b> боёв <i>({d_wins} В / {d_losses} П)</i>\n"
+        f"🃏 Переломная карта UNO: <b>{uno_wins_total}</b> усп. перевод(ов)\n\n"
         f"📊 <b>ТЕКУЩИЕ ШАНСЫ</b>:\n"
         f" └ 🤡 Стать Пидором: <code>{pidor_chance:.1f}%</code> \n"
         f" └ 😎 Стать Красавчиком: <code>{kras_chance:.1f}%</code> \n\n"
