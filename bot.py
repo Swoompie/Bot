@@ -2281,7 +2281,7 @@ async def uno_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     safe_sender_name = user.first_name.replace("<", "&lt;").replace(">", "&gt;")
 
     # Вытягиваем из базы ВООБЩЕ ВСЕ логи, где sender_name равен имени этого игрока
-    res = supabase.table("uno_logs").select("*").eq("sender_name", user.first_name).order("id", ascending=False).execute()
+    res = supabase.table("uno_logs").select("*").eq("sender_name", user.first_name).order("id", desc=True).execute()
     
     if not res.data or len(res.data) == 0:
         await context.bot.send_message(
@@ -2375,8 +2375,6 @@ async def main():
     app.add_handler(CommandHandler("dice", dice_command))
     app.add_handler(CommandHandler("duel", duel))
     app.add_handler(CommandHandler("unostats", uno_stats))
-
-
 
     if RENDER_URL:
         print("Бот запускается в режиме Webhook на Render...")
