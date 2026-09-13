@@ -573,7 +573,7 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "\n\n📊 <b>Сетка шансов на перевод карты UNO:</b>"
         "\n └ 👑 На Красавчика дня — <b>15%</b>"
         "\n └ 🃏 На обычного мирного — <b>30%</b>"
-        "\n └ 🎯 На раненого в монетку — <b>60%</b>"
+        "\n └ 🎯 На раненого в монетку — <b>45%</b>"
         "\n\n⚠️ <b>ВНИМАНИЕ:</b> В случае провала промаха активируется кармическая расплата. Рискуй с умом! 😈🎰"
     )
 
@@ -1620,7 +1620,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif is_coin_loser_target:
         intro = [
             f"🎯 <b>ДОБИВАНИЕ РАНЕНОГО!</b> <b>{safe_user_name}</b> активирует карту «UNO» против <b>{safe_victim_name}</b>!",
-            "🎲 Он сегодня и так эпично проиграл в монетку, а мы решили его добить? Похвально, но наказуемо! Шанс перевода повышен до 60%! 🔥\n⚠️ Внимание: в случае провала твои шансы на Пидора взлетят до небес!",
+            "🎲 Он сегодня и так эпично проиграл в монетку, а мы решили его добить? Похвально, но наказуемо! Шанс перевода повышен до 45%! 🔥\n⚠️ Внимание: в случае провала твои шансы на Пидора взлетят до небес!",
         ]
     else:
         if is_retry_attempt:
@@ -1642,7 +1642,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if is_robbing_chad:
         success_chance = 15  
     elif is_coin_loser_target:
-        success_chance = 60  # Твои 60% на добивание раненого
+        success_chance = 45  # Твои 60% на добивание раненого
     elif is_retry_attempt:
         success_chance = 50  
     else:
@@ -1672,7 +1672,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(
             chat_id=chat_id,
             text=f"❌ <b>ТОТАЛЬНОЕ КАРМИЧЕСКОЕ ПРАВОСУДИЕ!</b> ❌\n\n"
-                 f"Карта UNO расплавилась в руках <b>{safe_user_name}</b> при попытке добить раненого! Шанс был 60%, но ты умудрился промазать!\n\n"
+                 f"Карта UNO расплавилась в руках <b>{safe_user_name}</b> при попытке добить раненого! Шанс был 45%, но ты умудрился промазать!\n\n"
                  f"Боги рандома карают тебя за запредельную жестокость в тройном размере: казино активирует <b>Х3 МНОЖИТЕЛЬ НАКАЗАНИЯ</b>, получай сразу <b>+{penalty_p_count} пидора</b> в досье! 🤡💥💣",
             parse_mode="HTML"
         )
@@ -1782,7 +1782,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     chat_id=chat_id,
                     text=(
                         f"🪓 <b>БЕЗЖАЛОСТНОЕ ДОБИВАНИЕ ОФОРМЛЕНО!</b> 🪓\n\n"
-                        f"Стрелок <b>{safe_user_name}</b> активировал карту против раненого {safe_victim_name} и пробил его защиту с 60% шансом! ⚡️\n\n"
+                        f"Стрелок <b>{safe_user_name}</b> активировал карту против раненого {safe_victim_name} и пробил его защиту с 45% шансом! ⚡️\n\n"
                         f"🎯 <b>{safe_victim_name}</b> лежал на земле после проигрыша в монетку, а теперь забирает клеймо ПИДОРА ДНЯ себе! Полное фиаско! 🗿\n"
                         f"😎 А хитрый <b>{safe_user_name}</b> нагло списывает себе пидора и уходит курить в сторонку!"
                     ),
@@ -1908,7 +1908,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             chat_id=chat_id,
                             text=f"❌ <b>КАРТА UNO ПОРВАЛАСЬ!</b> ❌\n\n"
                                  f"Перевод сорвался и отрикошетил обратно в <b>{safe_name}</b>. "
-                                 f"За неудачный риск Салун удваивает ставку позора: получай <b>+{penalty_p_count} пидора</b>. Карта на КД 6 дней! 🤡",
+                                 f"За неудачный риск казино удваивает ставку позора: получай <b>+{penalty_p_count} пидора</b>. Карта на КД 6 дней! 🤡",
                             parse_mode="HTML"
                         )
                         await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAEReQpqQ3adafSczLOzJ3WEyKHoQvfvJAACNhUAAjhx-EmeBZwsT5kj1TwE')
