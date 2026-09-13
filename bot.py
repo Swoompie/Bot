@@ -3,7 +3,7 @@ import os
 import random
 import asyncio
 import json
-from datetime import date
+from datetime import date, datetime, timedelta
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes, ConversationHandler, MessageHandler, filters
 from supabase import create_client, Client
@@ -1833,22 +1833,38 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         try:
             if is_robbing_chad:
-                # Провал кражи у Красавчика: штрафной вес 110.0 и х2 пидора обратно!
+                # [МЕГА-НАКАЗАНИЕ]: Сдвигаем дату КД назад на 6 дней, чтобы суммарно кулдаун составил 12 дней!
+                fake_cd_date = today - timedelta(days=6)
+                
                 supabase.table("users").update({
-                    "last_switch_date": str(today), 
-                    "pidor_count": fresh_pidor_count + penalty_p_count,
+                    "last_switch_date": str(fake_cd_date), 
                     "pidor_weight": 110.0
                 }).eq("user_id", user.id).execute()
                 
+                # Добавляем лог провала в нашу таблицу uno_logs, чтобы ковбой навсегда остался в истории позора!
+                try:
+                    supabase.table("uno_logs").insert({
+                        "sender_name": user.first_name,
+                        "victim_name": victim["first_name"],
+                        "game_date": str(today),
+                        "multiplier": penalty_p_count,
+                        "is_krasavchik": True  # Помечаем, что обгадился именно на Красавчике!
+                    }).execute()
+                except Exception:
+                    pass
+
                 await context.bot.send_message(
                     chat_id=chat_id,
-                    text=f"❌ <b>ОГРАБЛЕНИЕ ВЕКА ПРОВАЛЕНО!</b> ❌\n\n"
-                         f"Королевская защита Красавчика оказалась непробиваемой. Карта UNO сгорела!\n"
-                         f"<b>{safe_name}</b>, мало того, что титул Пидора остаётся на тебе, так казино вешает на тебя х2 штраф: <b>+{penalty_p_count} пидора</b> в профиль! 🤡",
+                    text=f"❌ <b>КОРОЛЕВСКОЕ ОГРАБЛЕНИЕ ПРОВАЛЕНО! БОГИ РАНДОМА В ИЕРАРХИИ!</b> ❌\n\n"
+                         f"Королевская защита Красавчика оказалась непробиваемой. Карта UNO рассыпалась в прах!\n\n"
+                         f"<b>{safe_name}</b>, за покушение на Корону казино карает тебя по максимальному тарифу:\n"
+                         f" └ 🤡 Получай х2 штраф: <b>+{penalty_p_count} пидора</b> в досье!\n"
+                         f" └ ⏳ КАЗИНО ИЗЫМАЕТ КАРТУ НА <b>12 ДНЕЙ ПЕРЕЗАРЯДКИ</b> за наглость! (Вместо обычных 6)",
                     parse_mode="HTML"
                 )
                 await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAEReQpqQ3adafSczLOzJ3WEyKHoQvfvJAACNhUAAjhx-EmeBZwsT5kj1TwE')
-                
+                return
+
             else:
                 if is_retry_attempt:
                     # Вторая попытка провалилась — сжигаем карту с х2 штрафом, вес 95.0
