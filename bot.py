@@ -1663,22 +1663,25 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     is_success = random.randint(1, 100) <= success_chance
 
     # --- 📊 [ЧЕСТНЫЙ ФИКС]: СЧИТАЕМ СИЛУ ТОЛЬКО СЕГОДНЯШНЕГО УТРЕННЕГО ПОЗОРА ---
-    # Вытаскиваем свежий pidor_count игрока прямо сейчас
     fresh_winner_res = supabase.table("users").select("pidor_count").eq("user_id", user.id).execute()
     fresh_pidor_count = fresh_winner_res.data[0]["pidor_count"] if fresh_winner_res.data else today_winner["pidor_count"]
     
     # Сила утреннего позора (сколько прилетело сегодня: 1, 2, 3 или 5)
     today_gained_pidors = max(1, fresh_pidor_count - today_winner["pidor_count"])
     
-    # Вычисляем ЧИСТУЮ ПРИБАВКУ для базы данных:
     if is_coin_loser_target:
-        # Х3 НАКАЗАНИЕ: Утренний позор умножается на 3. Значит, добавить нужно еще две утренние дозы!
+        # Х3 НАКАЗАНИЕ ЗА РАНЕНОГО: Утренний позор умножается на 3. 
+        # Значит, чистая прибавка в базу равна утренней дозе, умноженной на 2!
         added_penalty = today_gained_pidors * 2
         total_day_gained = today_gained_pidors * 3
     else:
-        # Х2 НАКАЗАНИЕ: Утренний позор умножается на 2. Значит, добавить нужно еще одну такую же дозу!
+        # Х2 НАКАЗАНИЕ ДЛЯ ОСТАЛЬНЫХ: Утренний позор умножается на 2. 
+        # Значит, чистая прибавка в базу равна ровно одной утренней дозе!
         added_penalty = today_gained_pidors
         total_day_gained = today_gained_pidors * 2
+
+    # Переменная для вывода в текст сообщения теперь СТРОГО равна чистой прибавке в базу!
+    penalty_p_count = added_penalty
 
     # Жесткое х3 наказание за провал добивания раненого (Вес взлетает до 150.0)
     if not is_success and is_coin_loser_target:
