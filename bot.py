@@ -1524,20 +1524,32 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(chat_id=chat_id, text="🤡 Ты не сегодняшний пидор дня, чтобы активировать карту UNO. Сиди тихо!")
         return
 
-    # 2. Проверяем КД команды (6 дней)
+    # 2. Проверяем КД команды (Умная детекция 6 обычных или 12 штрафных дней)
     user_res = supabase.table("users").select("last_switch_date").eq("user_id", user.id).execute()
     
     if user_res.data and len(user_res.data) > 0 and user_res.data[0].get("last_switch_date"): 
         last_date = date.fromisoformat(user_res.data[0]["last_switch_date"]) 
         days_passed = (today - last_date).days
         
+        # Если прошло меньше 6 дней от записанной даты (с учетом штрафного сдвига — КД заблокирован)
         if days_passed < 6:
             days_left = 6 - days_passed
             day_word = "день" if days_left == 1 else ("дня" if days_left in [2, 3, 4] else "дней")
             
+            # --- 👑 [НОВОЕ] ДЕТЕКЦИЯ КОРОЛЕВСКОГО ПОЗОРА (Если кулдаун больше 6 дней) ---
+            if days_left > 6:
+                cd_message = (
+                    f"❌ <b>Твоя карта UNO заблокирована владельцем казино!</b>\n\n"
+                    f"Ты позорно промазал при попытке ограбить Красавчика дня, поэтому получил удвоенное наказание. "
+                    f"Иди трезвей в камере, доступ вернётся только через <b>{days_left} {day_word}</b>! ⏳🤡"
+                )
+            else:
+                # Обычный стандартный кулдаун на 6 дней
+                cd_message = f"❌ Твоя карта UNO всё еще на перезарядке! Доступ появится через <b>{days_left} {day_word}</b>."
+
             await context.bot.send_message(
                 chat_id=chat_id,
-                text=f"❌ Твоя карта UNO всё еще на перезарядке! Доступ появится через <b>{days_left} {day_word}</b>.",
+                text=cd_message,
                 parse_mode="HTML"
             )
             await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAEReRpqQ3-pZ9QRME44W1Es3DPWTGUPNAACkAIAAladvQoy0qlxuNTQtTwE')
@@ -1638,11 +1650,11 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(chat_id=chat_id, text=phrase, parse_mode="HTML")
         await asyncio.sleep(1.0) # Оптимизировали паузу до 1 секунды для ускорения функции
 
-    # --- 🎰 [ОБНОВЛЕНО] ПОВЫШЕННЫЙ РАСЧЕТ ШАНСОВ (15% / 30% / 15% / 75%) ---
+    # --- 🎰 ПОВЫШЕННЫЙ РАСЧЕТ ШАНСОВ (15% / 30% / 15% / 75%) ---
     if is_robbing_chad:
         success_chance = 15  
     elif is_coin_loser_target:
-        success_chance = 45  # Твои 60% на добивание раненого
+        success_chance = 45 
     elif is_retry_attempt:
         success_chance = 50  
     else:
@@ -1650,34 +1662,54 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     is_success = random.randint(1, 100) <= success_chance
 
-    # --- 📊 ДИНАМИЧЕСКИЙ РАСЧЕТ ТЕКУЩЕГО МНОЖИТЕЛЯ ДЛЯ ШТРАФОВ ---
+    # --- 📊 [ЧЕСТНЫЙ ФИКС]: СЧИТАЕМ СИЛУ ТОЛЬКО СЕГОДНЯШНЕГО УТРЕННЕГО ПОЗОРА ---
+    # Вытаскиваем свежий pidor_count игрока прямо сейчас
     fresh_winner_res = supabase.table("users").select("pidor_count").eq("user_id", user.id).execute()
     fresh_pidor_count = fresh_winner_res.data[0]["pidor_count"] if fresh_winner_res.data else today_winner["pidor_count"]
-    pidor_multiplier = max(1, fresh_pidor_count - today_winner["pidor_count"])
     
-    # [МЕГА-ОБНОВЛЕНИЕ]: Для раненого штраф равен Х3, для остальных оставляем Х2 кару!
+    # Сила утреннего позора (сколько прилетело сегодня: 1, 2, 3 или 5)
+    today_gained_pidors = max(1, fresh_pidor_count - today_winner["pidor_count"])
+    
+    # Вычисляем ЧИСТУЮ ПРИБАВКУ для базы данных:
     if is_coin_loser_target:
-        penalty_p_count = pidor_multiplier * 3  # ТРОЙНОЙ ШТРАФ ЗА РАНЕНОГО!
+        # Х3 НАКАЗАНИЕ: Утренний позор умножается на 3. Значит, добавить нужно еще две утренние дозы!
+        added_penalty = today_gained_pidors * 2
+        total_day_gained = today_gained_pidors * 3
     else:
-        penalty_p_count = pidor_multiplier * 2  # Двойной штраф для обычных мирных и Красавчика
+        # Х2 НАКАЗАНИЕ: Утренний позор умножается на 2. Значит, добавить нужно еще одну такую же дозу!
+        added_penalty = today_gained_pidors
+        total_day_gained = today_gained_pidors * 2
 
-    # [ОБНОВЛЕНО] Жесткое х3 наказание за провал добивания раненого (Вес взлетает до 150.0)
+    # Жесткое х3 наказание за провал добивания раненого (Вес взлетает до 150.0)
     if not is_success and is_coin_loser_target:
+        # Прибавляем ЧИСТУЮ добавку added_penalty к текущему счету
         supabase.table("users").update({
             "last_switch_date": str(today), 
-            "pidor_count": fresh_pidor_count + penalty_p_count,
-            "pidor_weight": 170.0
+            "pidor_count": fresh_pidor_count + added_penalty,
+            "pidor_weight": 150.0
         }).eq("user_id", user.id).execute()
         
+        # Записываем провал в лог
+        try:
+            supabase.table("uno_logs").insert({
+                "sender_name": user.first_name,
+                "victim_name": victim["first_name"],
+                "game_date": str(today),
+                "multiplier": total_day_gained, # Запишет финальный итог (3, 6 или 9)
+                "is_krasavchik": False
+            }).execute()
+        except Exception:
+            pass
+
         await context.bot.send_message(
             chat_id=chat_id,
             text=f"❌ <b>ТОТАЛЬНОЕ КАРМИЧЕСКОЕ ПРАВОСУДИЕ!</b> ❌\n\n"
-                 f"Карта UNO расплавилась в руках <b>{safe_user_name}</b> при попытке добить раненого! Шанс был 45%, но ты умудрился промазать!\n\n"
-                 f"Боги рандома карают тебя за запредельную жестокость в тройном размере: казино активирует <b>Х3 МНОЖИТЕЛЬ НАКАЗАНИЯ</b>, получай сразу <b>+{penalty_p_count} пидора</b> в досье! 🤡💥💣",
+                 f"Карта UNO расплавилась в руках <b>{safe_user_name}</b> при попытке добить раненого! Шанс был 60%, но ты умудрился промазать!\n\n"
+                 f"Боги рандома карают тебя в тройном размере: твой утренний позор умножается на 3! Получай ещё <b>+{added_penalty} пидора</b> в досье <i>(всего {total_day_gained} за сегодня)</i>! Штрафной вес взлетает до 150.0! 🤡💥💣",
             parse_mode="HTML"
         )
         await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAEReQpqQ3adafSczLOzJ3WEyKHoQvfvJAACNhUAAjhx-EmeBZwsT5kj1TwE')
-        return  # Прерываем, провал раненого полностью обработан!
+        return  
 
     # ================= 🎉🎉🎉 УСПЕШНЫЙ ПЕРЕВОД 🎉🎉🎉 =================
     if is_success:
@@ -1827,50 +1859,48 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERv_1qh-RMBre9eek9ykdsovu3gf-SvwACCnUAAlgXsEkCKvJjaqw9iT0E')
 
-# ================= ❌❌❌ ВЫПАЛ ПРОВАЛ (ОБНОВЛЕНО: Х2 РАСПЛАТА ЗА РИСК) =================
+# ================= ❌❌❌ ВЫПАЛ ПРОВАЛ (ЧЕСТНОЕ КРАТНОЕ УДВОЕНИЕ Х2) =================
     if not is_success:
         safe_name = user.first_name.replace("<", "&lt;").replace(">", "&gt;")
 
         try:
             if is_robbing_chad:
-                # [МЕГА-НАКАЗАНИЕ]: Сдвигаем дату КД назад на 6 дней, чтобы суммарно кулдаун составил 12 дней!
+                # Провал Красавчика: 12 дней КД и х2 утреннего штрафа
                 fake_cd_date = today - timedelta(days=6)
-                
                 supabase.table("users").update({
                     "last_switch_date": str(fake_cd_date), 
+                    "pidor_count": fresh_pidor_count + added_penalty,
                     "pidor_weight": 110.0
                 }).eq("user_id", user.id).execute()
                 
-                # Добавляем лог провала в нашу таблицу uno_logs, чтобы ковбой навсегда остался в истории позора!
                 try:
                     supabase.table("uno_logs").insert({
                         "sender_name": user.first_name,
                         "victim_name": victim["first_name"],
                         "game_date": str(today),
-                        "multiplier": penalty_p_count,
-                        "is_krasavchik": True  # Помечаем, что обгадился именно на Красавчике!
+                        "multiplier": total_day_gained,
+                        "is_krasavchik": True
                     }).execute()
                 except Exception:
                     pass
 
                 await context.bot.send_message(
                     chat_id=chat_id,
-                    text=f"❌ <b>КОРОЛЕВСКОЕ ОГРАБЛЕНИЕ ПРОВАЛЕНО! БОГИ РАНДОМА В ИЕРАРХИИ!</b> ❌\n\n"
+                    text=f"❌ <b>КОРОЛЕВСКОЕ ОГРАБЛЕНИЕ ПРОВАЛЕНО!</b> ❌\n\n"
                          f"Королевская защита Красавчика оказалась непробиваемой. Карта UNO рассыпалась в прах!\n\n"
-                         f"<b>{safe_name}</b>, за покушение на Корону казино карает тебя по максимальному тарифу:\n"
-                         f" └ 🤡 Получай х2 штраф: <b>+{penalty_p_count} пидора</b> в досье!\n"
-                         f" └ ⏳ КАЗИНО ИЗЫМАЕТ КАРТУ НА <b>12 ДНЕЙ ПЕРЕЗАРЯДКИ</b> за наглость! (Вместо обычных 6)",
+                         f"<b>{safe_name}</b>, за покушение на Корону твой утренний позор удваивается: получай <b>+{added_penalty} пидора</b> в досье <i>(всего {total_day_gained} за сегодня)</i>!\n"
+                         f"⏳ А за наглость шериф изымает карту UNO на <b>12 ДНЕЙ ПЕРЕЗАРЯДКИ</b>! 🤡💣",
                     parse_mode="HTML"
                 )
                 await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAEReQpqQ3adafSczLOzJ3WEyKHoQvfvJAACNhUAAjhx-EmeBZwsT5kj1TwE')
                 return
-
+                
             else:
                 if is_retry_attempt:
-                    # Вторая попытка провалилась — сжигаем карту с х2 штрафом, вес 95.0
+                    # Вторая попытка провалилась — сжигаем карту с х2 штрафом от утра
                     supabase.table("users").update({
                         "last_switch_date": str(today), 
-                        "pidor_count": fresh_pidor_count + penalty_p_count,
+                        "pidor_count": fresh_pidor_count + added_penalty,
                         "pidor_weight": 95.0
                     }).eq("user_id", user.id).execute()
                     context.user_data.pop("switch_retry", None)
@@ -1878,7 +1908,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await context.bot.send_message(
                         chat_id=chat_id,
                         text=f"💀 <b>ПОЛНОЕ ФИАСКО, СТРЕЛОЧНИК!</b> Второй шанс тоже провален! 💀\n\n"
-                             f"Твоя карта UNO превратилась в пепел. А за наглость крупье выписывает тебе х2 наказание: <b>+{penalty_p_count} пидора</b> в досье. Отлетай! 🤡",
+                             f"Твоя карта UNO превратилась в пепел. Твой сегодняшний позор удваивается: получай ещё <b>+{added_penalty} пидора</b> <i>(всего {total_day_gained} за сегодня)</i>. Кулдаун 6 дней взведён! 🤡",
                         parse_mode="HTML"
                     )
                     await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERg9tqT2Lb7EssiCPdH7XeEz1W5sbVswAC6S8AApkAAYhJDcx-Vp6-Sco8BA')
@@ -1891,16 +1921,16 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         await context.bot.send_message(
                             chat_id=chat_id,
                             text=f"⚡️ <b>ОПА, ОСЕЧКА... ИЛИ НЕТ?!</b> ⚡️\n\n"
-                                 f"<b>{safe_name}</b>, твоя карта UNO задымилась, но боги рандома дали тебе <b>ВТОРОЙ ШАНС</b>! Шанс перевода всё ещё 50%!\n"
+                                 f"<b>{safe_name}</b>, твоя карта UNO задымилась, но боги рандома дали тебе <b>ВТОРОЙ ШАНС</b>! Шанс перевода всё ещё 30%!\n"
                                  f"Кулдаун НЕ активирован! Быстро пиши команду <code>/switch</code> ещё раз, пока лазейка не закрылась! 🃏",
                             parse_mode="HTML"
                         )
                         await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERg85qT110qgTm1RJWyqRuKm0QwbCoLwAC9B4AAiNcOEtYh2FNKYLHdDwE')
                     else:
-                        # Стандартный провал на мирного с первого раза с х2 штрафом
+                        # Стандартный провал на мирного с первого раза с честным х2
                         supabase.table("users").update({
                             "last_switch_date": str(today), 
-                            "pidor_count": fresh_pidor_count + penalty_p_count,
+                            "pidor_count": fresh_pidor_count + added_penalty,
                             "pidor_weight": 100.0
                         }).eq("user_id", user.id).execute()
                         
@@ -1908,7 +1938,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             chat_id=chat_id,
                             text=f"❌ <b>КАРТА UNO ПОРВАЛАСЬ!</b> ❌\n\n"
                                  f"Перевод сорвался и отрикошетил обратно в <b>{safe_name}</b>. "
-                                 f"За неудачный риск казино удваивает ставку позора: получай <b>+{penalty_p_count} пидора</b>. Карта на КД 6 дней! 🤡",
+                                 f"Твой сегодняшний позор честно удваивается: лови ещё <b>+{added_penalty} пидора</b> в досье <i>(всего {total_day_gained} за сегодня)</i>! Карта уходит на КД 6 дней! 🤡",
                             parse_mode="HTML"
                         )
                         await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAEReQpqQ3adafSczLOzJ3WEyKHoQvfvJAACNhUAAjhx-EmeBZwsT5kj1TwE')
@@ -1917,7 +1947,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
             print(f"Ошибка вывода провала UNO: {e}")
             await context.bot.send_message(
                 chat_id=chat_id,
-                text="🔧 <b>Сука, опять вы всё сломали!</b> 🤦‍♂️\n\nПровал карты UNO застрял в текстурах. База всё записала, х2 кара выдана, админ чинит!",
+                text="🔧 <b>Сука, опять вы всё сломали!</b> 🤦‍♂️\n\nПровал карты UNO застрял в текстурах. База всё записала, честное кратное наказание выдано, админ чинит!",
                 parse_mode="HTML"
             )
             await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERv_1qh-RMBre9eek9ykdsovu3gf-SvwACCnUAAlgXsEkCKvJjaqw9iT0E')
