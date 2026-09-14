@@ -1464,9 +1464,10 @@ async def mimic(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     chat_id = update.effective_chat.id
-    user = update.effective_user
+
+    # === 🛡️ ТИТАНОВЫЙ ГЛОБАЛЬНЫЙ ПРОБИВ ИГРОКА С ТОЧНЫМ ИНДЕКСОМ [0] ===
     player_res = supabase.table("users").select("*").eq("user_id", user.id).execute()
-    player = player_res.data if player_res.data and len(player_res.data) > 0 else {"gender": "boy"}
+    player = player_res.data[0] if player_res.data and len(player_res.data) > 0 else {"gender": "boy"}
 
     today = date.today()
     current_week_num = today.isocalendar()[1]
