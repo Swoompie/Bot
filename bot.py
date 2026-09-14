@@ -963,8 +963,8 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if new_win_streak >= 3:
         await asyncio.sleep(1) # Небольшая пауза для эффекта сюрприза
         
-        # Рассчитываем правильное окончание для дней (3 дня, 5 дней)
-        day_word = "дня" if new_win_streak in else "дней"
+        # ЖЕЛЕЗНО ИСПРАВЛЕНО: Дописали пропущенный список для проверки
+        day_word = "дня" if new_win_streak in [3, 4] else "дней"
         
         # Собираем динамические гендерные глаголы, местоимения и титулы
         kak_on_text = g_text(final_winner, "Да как он это делает?!", "Да как она это делает?! 💅")
@@ -975,7 +975,7 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             chat_id=chat_id,
             text=(
                 f"🎰 <b>БОЖЕСТВЕННЫЙ ХЕТ-ТРИК КАЗИНО!</b> 👑\n\n"
-                f"{kak_on_text} <b>{safe_winner_name}</b> {g_text(final_winner, 'умудряется', 'умудряется')} забрать титул Красавчика дня аж <b>{new_win_streak} {day_word} подряд</b>! 🤯\n"
+                f"{kak_on_text} <b>{safe_winner_name}</b> {g_text(final_winner, 'умудряется', 'умудряется')} забрать титул Красавчика дня аж <b>{new_win_streak} {day_word} подряд</b>! 🤯\n\n"
                 f"Имея минимальный процент, {g_text(final_winner, 'он', 'она')} всё равно {vzlomal_text} рандом! {lubimchik_title} 🥂"
             ),
             parse_mode="HTML"
