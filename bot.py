@@ -1855,17 +1855,24 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERg8xqT1rvV4e9QOkd5krbAdwHGMbORQACrB8AAi-rqEswnXHdk_VAETwE')
             
             else:
-                # 💥 ОБЫЧНЫЙ ПЕРЕВОД (10%)
+                # 💥 ОБЫЧНЫЙ ПЕРЕВОД (30% ШАНС) — ТЕПЕРЬ С ГЕНДЕРАМИ ПАЦАНОВ И ДЕВЧОНОК
                 multiplier_alert = f" (с учётом множителя х{pidor_multiplier}!)" if pidor_multiplier > 1 else ""
+                    
+                # Собираем глаголы очищения для Стрелочника и позора для Жертвы
+                sender_clean_text = g_text(player, "полностью очищен от подозрений", "полностью очищена от подозрений")
+                victim_status_text = g_text(victim, "становится <b>ПИДОРОМ ДНЯ</b>", "становится <b>ПИДОРОМ ДНЯ</b>")
+                victim_accept_text = g_text(victim, "Смирись!", "Смирись, подруга! 💅")
+
                 await context.bot.send_message(
                     chat_id=chat_id,
                     text=(
                         f"💥 <b>КАРТА ПЕРЕВЕДЕНА!</b> Магия 30% сработала!\n\n"
-                        f"👑 <b>{safe_user_name}</b> полностью очищен от подозрений.\n"
-                        f"🤡 Новый официальный <b>ПИДОР ДНЯ</b> — <b>{safe_victim_name}</b>! Смирись!{multiplier_alert}"
+                        f"👑 <b>{safe_user_name}</b> {sender_clean_text}.\n"
+                        f"🤡 Новая официальная жертва: <b>{safe_victim_name}</b> {victim_status_text}! {victim_accept_text}{multiplier_alert}"
                     ),
                     parse_mode="HTML"
                 )
+
                 await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAEReQxqQ3c1Ul6X4NVVPO-Fd7SdNeiqIgACx04AAnJSgEuFrKam1iO89TwE')
 
         except Exception as e:
@@ -2061,19 +2068,25 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     safe_first_name = player['first_name'].replace("<", "&lt;").replace(">", "&gt;")
     username = f" (@{player['username']})" if player['username'] else ""
     
-    # 5. Собираем ультимативное досье (СТРОГО НА HTML-ТЕГАХ С УЧЁТОМ АРХИВА UNO)
+    # Прокачиваем гендерные статусы для карточки досье
+    status_title = g_text(player, "Суровый Ковбой", "Прекрасная Леди")
+    kras_record_title = g_text(player, "Красавчика", "Красавицы")
+    pidor_record_title = g_text(player, "Пидора", "Пидорессы")
+
+    # 5. Собираем ультимативное досье (СТРОГО НА HTML-ТЕГАХ С УЧЁТОМ АРХИВА UNO И ГЕНДЕРА)
     message = (
         f"👤 <b>ЛИЧНОЕ ДОСЬЕ ИГРОКА</b>:\n\n"
+        f"Статус: <b>{status_title}</b>\n"
         f"Участник: <b>{safe_first_name}{username}</b>\n"
         f"🤡 Статус Пидора: <b>{player['pidor_count']}</b> раз(а)\n"
         f"😎 Статус Красавчика: <b>{player['kras_count']}</b> раз(а)\n"
         f"⚔️ Лига Дуэлей: <b>{d_total}</b> боёв <i>({d_wins} В / {d_losses} П)</i>\n"
-        f"🃏 Переломная карта UNO: <b>{uno_wins_total}</b> усп. перевод(ов)\n\n"
+        f"🃏 Спецоперации UNO: <b>{uno_wins_total}</b> усп. перевод(ов)\n\n"
         f"📊 <b>ТЕКУЩИЕ ШАНСЫ</b>:\n"
         f" └ 🤡 Стать Пидором: <code>{pidor_chance:.1f}%</code> \n"
         f" └ 😎 Стать Красавчиком: <code>{kras_chance:.1f}%</code> \n\n"
-        f"📈 Рекорд Красавчика подряд: {max_k_streak} дн.\n"
-        f"📉 Рекорд Пидора подряд: {max_p_streak} дн.\n\n"
+        f"📈 Рекорд {kras_record_title} подряд: {max_k_streak} дн.\n"
+        f"📉 Рекорд {pidor_record_title} подряд: {max_p_streak} дн.\n\n"
         f"🃏 <b>Карта UNO:</b> {uno_status}\n"
         f"🎭 <b>Карта Мимик:</b> {mimic_status}\n"
         f"🎲 <b>Кубики судьбы:</b> {dice_status}\n"
