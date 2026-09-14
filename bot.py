@@ -584,7 +584,7 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if days_passed < 6:
             days_left = 6 - days_passed
             day_word = "день" if days_left == 1 else ("дня" if days_left in [2, 3, 4] else "дней")
-            uno_status_text = f"\n\n🃏 _Кстати, твоя карта UNO на перезарядке. Ждать еще {days_left} {day_word}._"
+            uno_status_text = f"\n\n🃏 Кстати, твоя карта UNO на перезарядке. Ждать еще {days_left} {day_word}."
         else:
             uno_status_text = f"\n\n🃏 *ОП-ПА! Твоя карта UNO ПЕРЕЗАРЯЖЕНА!* Можешь попробовать защититься, пиши: `/switch @username`{rules_memo}"
     else:
