@@ -973,7 +973,12 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if dice_left > 0:
             # БЕЗОПАСНЫЙ ТЕГ: защита от пустых username в базе
             username_tag = f" (@{u['username']})" if u.get("username") else ""
-            dice_ready_players.append(f" └ *{u['first_name']}{username_tag}* — доступно: {dice_left} из 2")
+            
+            # Экранируем имя игрока, чтобы спецсимволы в никах не ломали разметку HTML
+            safe_f_name = u['first_name'].replace("<", "&lt;").replace(">", "&gt;")
+            
+            # ЖЕЛЕЗНО ИСПРАВЛЕНО: Заменили звездочки на HTML-теги <b>...</b>
+            dice_ready_players.append(f" └ <b>{safe_f_name}{username_tag}</b> — доступно: {dice_left} из 2")
             
 # Формируем и отправляем сообщение крупье ТОЛЬКО если есть хотя бы один кубик!
     if dice_ready_players:
