@@ -160,6 +160,16 @@ def get_today_winner(role):
     return None
 
 
+def g_text(player_obj, boy_str, girl_str):
+    """
+    Универсальный гендерный фильтр Салуна. 
+    Принимает объект игрока из базы и два варианта текста.
+    """
+    if player_obj and player_obj.get("gender") == "girl":
+        return girl_str
+    return boy_str
+
+
 def get_opposite_winner_id(role):
     today_str = str(date.today())
     opp_role = "krasavchik" if role == "pidor" else "pidor"
@@ -2409,6 +2419,26 @@ async def uno_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         print(f"Ошибка вывода личной уно-статистики: {e}")
 
+async def set_gender_boy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    user = update.effective_user
+    supabase.table("users").update({"gender": "boy"}).eq("user_id", user.id).execute()
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=f"🤠 <b>{user.first_name}</b>, статус обновлён! Крупье зафиксировал в досье: <b>Суровый Ковбой</b>. Ствол смазан, шпоры звенят!",
+        parse_mode="HTML"
+    )
+
+async def set_gender_girl(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    user = update.effective_user
+    supabase.table("users").update({"gender": "girl"}).eq("user_id", user.id).execute()
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=f"💃 <b>{user.first_name}</b>, статус обновлён! Крупье зафиксировал в досье: <b>Прекрасная Леди</b>. Стол заряжен вашим шармом!",
+        parse_mode="HTML"
+    )
+
 # ---------------- ЗАПУСК (ВЕБХУК) ----------------
 
 async def main():
@@ -2437,6 +2467,9 @@ async def main():
     app.add_handler(CommandHandler("dice", dice_command))
     app.add_handler(CommandHandler("duel", duel))
     app.add_handler(CommandHandler("unostats", uno_stats))
+    app.add_handler(CommandHandler("boy", set_gender_boy))
+    app.add_handler(CommandHandler("girl", set_gender_girl))
+
 
     if RENDER_URL:
         print("Бот запускается в режиме Webhook на Render...")
