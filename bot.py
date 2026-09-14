@@ -2021,26 +2021,28 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
             }).execute()
 
             try:
-                # Собираем динамические гендерные статусы для Победителя (player) и Жертвы (victim)
+                # 1. Собираем динамические гендерные статусы и глаголы
                 winner_status = g_text(player, "СТАНОВИТСЯ НОВЫМ КРАСАВЧИКОМ ДНЯ!", "СТАНОВИТСЯ НОВОЙ КРАСАВИЦЕЙ ДНЯ! 👑")
-                victim_status = g_text(victim, "признаётся <b>ПИДОРОМ ДНЯ</b>!", "признаётся <b>ПИДОРОМ ДНЯ</b>!")
+                victim_status = g_text(victim, "признаётся <b>ПИДОРОМ ДНЯ</b>!", "признаётся <b>ПИДОРОЙ ДНЯ</b>! 🐍")
                 fallen_text = g_text(victim, "с позором падает на дно и", "теряет всё за игровым столом и")
 
+                # 2. Формируем чистый текст без вложенных скобок внутри вызова
+                success_text = (
+                    f"💥 <b>БОЖЕ МОЙ, ЭТО ИСТОРИЧЕСКИЙ МОМЕНТ! КАРТА ОСТАЕТСЯ ЦЕЛОЙ!</b> 💥\n\n"
+                    f"Королевское ограбление завершилось полным триумфом за игровым столом!\n\n"
+                    f"😎 <b>{safe_user_name}</b> забирает главный куш и {winner_status}\n\n"
+                    f"🤡 А вот <b>{safe_victim_name}</b> {fallen_text} {victim_status}"
+                )
+
+                # 3. Отправляем готовое сообщение
                 await context.bot.send_message(
                     chat_id=chat_id,
-                    text=(
-                        f"💥 <b>БОЖЕ МОЙ, ЭТО ИСТОРИЧЕСКИЙ МОМЕНТ! КАРТА ОСТАЕТСЯ ЦЕЛОЙ!</b> 💥\n\n"
-                        f"Королевское ограбление завершилось полным триумфом за игровым столом!\n"
-                        f"😎 <b>{safe_user_name}</b> забирает главный куш и {winner_status}\n\n"
-                        f"🤡 А вот <b>{safe_victim_name}</b> {fallen_text} {victim_status}"
-                    ),
+                    text=success_text,
                     parse_mode="HTML"
                 )
-                
             except Exception as e:
                 print(f"Ошибка вывода триумфа ограбления: {e}")
-                    parse_mode="HTML"
-                )
+
                 await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERfwtqSi0WKXA0-slyXjuDMUAC14PGkAAC6BMAAp7K8UkQAAGdV1VM7UI8BA')
                 
             except Exception as e:
