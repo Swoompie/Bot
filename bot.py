@@ -2221,21 +2221,19 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         intro_text = f"🎲 На кубике выпадает: <b>{dice_value}</b>!\n\n😎 <b>ФОРТУНА УЛЫБАЕТСЯ ТЕБЕ!</b> {safe_name}, это {power_text}"
 
-    # 📊 МАТЕМАТИКА 2: Считаем СВЕЖИЕ проценты ПОСЛЕ внесения изменений в базу
-    all_users_after = get_users()
-    active_users_after = [u for u in all_users_after if u.get("is_active", True)]
-    
-    total_p_after = sum(u.get("pidor_weight", 100.0) for u in active_users_after)
-    total_k_after = sum(u.get("kras_weight", 100.0) for u in active_users_after)
-    
-    # Находим обновленные веса нашего игрока
-    fresh_player_data = next((u for u in active_users_after if u["user_id"] == user.id), None)
-    
-    if fresh_player_data:
-        new_p_chance = (fresh_player_data["pidor_weight"] / total_p_after * 100) if total_p_after > 0 else 0.0
-        new_k_chance = (fresh_player_data["kras_weight"] / total_k_after * 100) if total_k_after > 0 else 0.0
+    # 📊 МАТЕМАТИКА 2: [ЖЕЛЕЗНО ОПТИМИЗИРОВАНО] Пересчитываем новые проценты в памяти без повторного запроса к базе!
+    if dice_value <= 3:
+        # Ветка позора: сумма пидоров чата выросла на step, а красавчиков упала на k_minus
+        total_p_after = total_p_before + step
+        total_k_after = max(1.0, total_k_before - k_minus)
     else:
-        new_p_chance, new_k_chance = old_p_chance, old_k_chance
+        # Ветка удачи: сумма красавчиков чата выросла на step, а пидоров упала на p_minus
+        total_k_after = total_k_before + step
+        total_p_after = max(1.0, total_p_before - p_minus)
+    
+    # Считаем точные новые проценты игрока на основе его свежих весов, сохраненных в ветках выше
+    new_p_chance = (new_pidor_weight / total_p_after * 100) if total_p_after > 0 else 0.0
+    new_k_chance = (new_kras_weight / total_k_after * 100) if total_k_after > 0 else 0.0
 
     # --- 🚨 ПЕРЕХВАТ ДУБЛЕЙ (С НОВЫМИ ПРОЦЕНТАМИ ВНУТРИ) ---
     if current_attempts == 1 and prev_balance == -19.0 and dice_value == 1:
