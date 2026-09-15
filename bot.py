@@ -2760,8 +2760,12 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     print(f"Ошибка вывода недельных итогов кубиков: {e}")
 
 async def uno_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # === 🕵️‍♂️ [ФИКС] ВЫТАСКИВАЕМ АВТОРА КОМАНДЫ ДЛЯ ГЕНДЕРНОГО АВТОМАТА ===
     chat_id = update.effective_chat.id
     user = update.effective_user
+    
+    player_res = supabase.table("users").select("*").eq("user_id", user.id).execute()
+    player = player_res.data[0] if player_res.data and len(player_res.data) > 0 else {"gender": "boy"}
     
     # Готовим безопасное HTML-имя вызывающего игрока
     safe_sender_name = user.first_name.replace("<", "&lt;").replace(">", "&gt;")
