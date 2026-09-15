@@ -681,41 +681,69 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
         'CAACAgIAAxkBAAERePhqQ29fvKDHMorjySaOzDQ013gcdgACNUoAAoRQOEkf13J-sHIrqTwE'
     ]
         
-    # Готовим гендерные переменные для юбилеев (на основе объекта final_winner)
-    parney_title = g_text(final_winner, "сомнительных парней", "сомнительных леди 💅")
-    ploh_title = g_text(final_winner, "Стабильно плох!", "Стабильно плоха! 💅")
-    bar_title = g_text(final_winner, "пожизненную путевку в гейбар! 🏅", "пожизненную путевку на женский стриптиз! 🏅")
-    geystvo_title = g_text(final_winner, "твоё гейство видно даже со спутников наблюдения!", "твой позорный шлейф видно даже из космоса!")
-    gaymaster_title = g_text(final_winner, "ГЕЙмастеров! 🏛", "Королев Драмы! 🏛")
-    proshel_title = g_text(final_winner, "полностью прошёл эту жизнь", "полностью прошла эту жизнь")
-
+    # Юбилейные шаблоны для Пидора дня (без вызова несуществующих переменных!)
     jokes = {
-        10: f"🎂 <b>ОГО, 10 РАЗ!</b> {celebrator_name}, поздравляем! Первый юбилей на дне. Давай, расскажи всем, что это просто «случайность»! 🤡",
-        20: f"👑 <b>УЖЕ 20 ПОБЕД!</b> {celebrator_name} официально переходит в Высшую лигу {parney_title}. Корона из картона готова! 🎪",
-        30: f"🚨 <b>30-й СТРАЙК!</b> {celebrator_name}, это уже карьера. Ты стабилен как швейцарские часы. {ploh_title} 🛑",
-        40: f"🗄 <b>КРИЗИС СРЕДНЕГО ВОЗРАСТА!</b> {celebrator_name} отмечает 40 побед! Архив компромата переполнен! 📂",
-        50: f"🎖 <b>ПОЛУВЕКОВОЙ ЮБИЛЕЙ!</b> 50 раз! {celebrator_name} получает золотую медаль и {bar_title}",
-        60: f"🎰 <b>МАСТЕР СВОЕГО ДЕЛА!</b> 60 побед у {celebrator_name}! Датчики сомнительных мыслей зашкаливают! ⚡️",
-        70: f"🚨 <b>КОСМИЧЕСКИЙ УРОВЕНЬ!</b> 70-й раз! {celebrator_name}, {geystvo_title} 🌌",
-        80: f"🦾 <b>ТИФЛОНОВЫЙ СТАТУС!</b> 80 раз! К {celebrator_name} уже просто ничего не липнет, это абсолютный иммунитет! 🛡",
-        90: f"🧛‍♂️ <b>ДРЕВНИЙ ОЛДХЭД!</b> 90 побед! {celebrator_name} выходит на финишную прямую к великому залу славы {gaymaster_title}",
-        100: f"🏆 <b>ЛЕГЕНДА ВЕКА! СТОКРАТНЫЙ ПИДОР!</b> 🎉💥 {celebrator_name} {proshel_title} с обратной стороны! 👑🍾"
+        10: "🎂 <b>ОГО, 10 РАЗ!</b> {celebrator_name}, поздравляем! Первый юбилей на дне. Давай, расскажи всем, что это просто «случайность»! 🤡",
+        20: "👑 <b>УЖЕ 20 ПОБЕД!</b> {celebrator_name} официально переходит в Высшую лигу {parney_title}. Корона из картона готова! 🎪",
+        30: "🚨 <b>30-й СТРАЙК!</b> {celebrator_name}, это уже карьера. Ты стабилен как швейцарские часы. {ploh_title} 🛑",
+        40: "🗄 <b>КРИЗИС СРЕДНЕГО ВОЗРАСТА!</b> {celebrator_name} отмечает 40 побед! Архив компромата переполнен! 📂",
+        50: "🎖 <b>ПОЛУВЕКОВОЙ ЮБИЛЕЙ!</b> 50 раз! {celebrator_name} получает золотую медаль и {bar_title}",
+        60: "🎰 <b>МАСТЕР СВОЕГО ДЕЛА!</b> 60 побед у {celebrator_name}! Датчики сомнительных мыслей зашкаливают! ⚡️",
+        70: "🚨 <b>КОСМИЧЕСКИЙ УРОВЕНЬ!</b> 70-й раз! {celebrator_name}, {geystvo_title} 🌌",
+        80: "🦾 <b>ТИФЛОНОВЫЙ СТАТУС!</b> 80 раз! К {celebrator_name} уже просто ничего не липнет, это абсолютный иммунитет! 🛡",
+        90: "🧛‍♂️ <b>ДРЕВНИЙ ОЛДХЭД!</b> 90 побед! {celebrator_name} выходит на финишную прямую к великому залу славы {gaymaster_title}",
+        100: "🏆 <b>ЛЕГЕНДА ВЕКА! СТОКРАТНЫЙ ПИДОР!</b> 🎉💥 {celebrator_name} {proshel_title} с обратной стороны! 👑🍾"
     }
+
 
     is_anniversary = False
     
     if celebrator_count == 5 or (is_mimic_triggered and celebrator_count == 6):
-        await update.message.reply_text(f"🎉 *РАЗОГРЕВ ОКОНЧЕН!* {celebrator_name} косячит уже 5-й раз! Начало положено, но до клуба великих данжн мастеров далеко! 🎖", parse_mode="Markdown")
+        # Гендерный глагол для 5-го раза
+        kos_text = g_text(final_winner, "косячит", "рискует за игровым столом")
+        masters_text = g_text(final_winner, "данжн мастеров", "королев драмы")
+
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"🎉 <b>РАЗОГРЕВ ОКОНЧЕН!</b> {celebrator_name} {kos_text} уже 5-й раз! Начало положено, но до клуба великих {masters_text} далеко! 🎖",
+            parse_mode="HTML"
+        )
         is_anniversary = True
+        
     elif celebrator_count in jokes or (is_mimic_triggered and (celebrator_count - 1) in jokes):
         actual_joke_count = celebrator_count if celebrator_count in jokes else (celebrator_count - 1)
-        await update.message.reply_text(jokes[actual_joke_count], parse_mode="Markdown")
+        
+        # Считаем гендерные переменные СТРОГО в момент триггера юбилея на основе final_winner
+        parney_title = g_text(final_winner, "сомнительных парней", "сомнительных леди 💅")
+        ploh_title = g_text(final_winner, "Стабильно плох!", "Стабильно плоха! 💅")
+        bar_title = g_text(final_winner, "пожизненную путевку в гейбар! 🏅", "пожизненную путевку на мужской стриптиз! 🏅")
+        geystvo_title = g_text(final_winner, "твоё гейство видно даже со спутников наблюдения!", "твой позорный шлейф видно даже из космоса!")
+        gaymaster_title = g_text(final_winner, "ГЕЙмастеров! 🏛", "Королев Драмы! 🏛")
+        proshel_title = g_text(final_winner, "полностью прошёл эту жизнь", "полностью прошла эту жизнь")
+
+        # Достаем текстовый шаблон из словаря и красиво фаршируем его переменными на лету
+        raw_joke = jokes[actual_joke_count]
+        formatted_joke = raw_joke.format(
+            celebrator_name=celebrator_name,
+            parney_title=parney_title,
+            ploh_title=ploh_title,
+            bar_title=bar_title,
+            geystvo_title=geystvo_title,
+            gaymaster_title=gaymaster_title,
+            proshel_title=proshel_title
+        )
+
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=formatted_joke,
+            parse_mode="HTML"
+        )
         is_anniversary = True
          
     if is_anniversary:
         random_sticker = random.choice(pidor_stickers_pool)
         await context.bot.send_sticker(chat_id=chat_id, sticker=random_sticker)
-        
+
 async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from datetime import date
     game_today = date.today()
@@ -1052,44 +1080,70 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         'CAACAgIAAxkBAAEReQRqQ3Ldb-x4CbDRQhozMvG6zY9vqQACagADJeuTHyg3EZuaMZFnPAQ'
     ]
 
-    # Готовим гендерные переменные для юбилеев Красавчика (на основе объекта final_winner)
-    miss_mr_title = g_text(final_winner, "мистер Обаяние! 📸", "мисс Обаяние! 💅📸")
-    podkrutil_text = g_text(final_winner, "подкрутил", "подкрутила")
-    podkupil_text = g_text(final_winner, "подкупил", "подкупила")
-    narciss_title = g_text(final_winner, "главным нарциссом этого чата.", "главной нарцисской этого чата! 💅")
-    mister_vselennaya = g_text(final_winner, "Мистер Вселенная! 🦾", "Мисс Вселенная! 💅🦾")
-    pobeditel_title = g_text(final_winner, "великих Победителей.", "великих Победительниц. ✨")
-    boss_title = g_text(final_winner, "икона стиля и босс этого чата! Салют чемпиону!", "икона стиля и королева этого чата! Салют чемпионке! 💅")
-    proshel_game = g_text(final_winner, "полностью прошёл эту игру!", "полностью прошла эту игру! 💅")
-
+    # Юбилейные шаблоны для Красавчика дня (чистый текст!)
     jokes = {
-        10: f"👑 <b>ОГО, 10 РАЗ!</b> {celebrator_name}, аккуратнее на поворотах, а то нимб упадёт и ноги отдавит! Чат, расступаемся, тут идёт {miss_mr_title}",
-        20: f"🎩 <b>20 ПОБЕД!</b> {celebrator_name} так часто выигрывает, что уже целует своё отражение в зеркале по утрам. Завязывай с самолюбованием, нам завидно! 🔥",
-        30: f"🏆 <b>30-й СТРАЙК!</b> {celebrator_name}, признайся, ты {podkrutil_text} этот код или просто {podkupil_text} бота? Чат требует проверку на коддинг! 🚨",
-        40: f"✨ <b>40 РАЗ КРАСАВЧИК!</b> Уровень эго {celebrator_name} превысил все допустимые нормы. Скоро тебе понадобится отдельная комната для твоей короны! 🗄",
-        50: f"🎖 <b>ПОЛУВЕКОВОЙ ЮБИЛЕЙ!</b> 50 побед! {celebrator_name}, мы скидываемся тебе на памятник при жизни в полный рост. Из чистого золота, естественно! 🏅",
-        60: f"🎰 <b>60 ПОБЕД!</b> {celebrator_name} официально признан {narciss_title} Датчики привлекательности сгорели от такого пафоса! ⚡️",
-        70: f"🛰 <b>КОСМИЧЕСКИЙ КРАСАВЧИК!</b> 70-й раз! {celebrator_name}, твоё великолепие ослепляет даже спутники наблюдения! Надень маску, побереги наши глаза! 🌌",
-        80: f"🛡 <b>80 РАЗ! СВЕРХЛЮДИ СРЕДИ НАС!</b> К {celebrator_name} уже выстроилась очередь за автографами. Не забудь упомянуть этот чат, когда поедешь на {mister_vselennaya}",
-        90: f"🏛 <b>90 ПОБЕД!</b> {celebrator_name} одной ногой в зале славы {pobeditel_title} Ещё чуть-чуть, и твоё лицо напечатают на обложках всех журналов! 🧛‍♂️",
-        100: f"👑🍾 <b>ЛЕГЕНДА ВЕКА! СТОКРАТНЫЙ КРАСАВЧИК!</b> 🎉💥 {celebrator_name} официально {proshel_game} 100 побед! {boss_title} 🏆🌟"
+        10: "👑 <b>ОГО, 10 РАЗ!</b> {celebrator_name}, аккуратнее на поворотах, а то нимб упадёт и ноги отдавит! Чат, расступаемся, тут идёт {miss_mr_title}",
+        20: "🎩 <b>20 ПОБЕД!</b> {celebrator_name} так часто выигрывает, что уже целует своё отражение в зеркале по утрам. Завязывай с самолюбованием, нам завидно! 🔥",
+        30: "🏆 <b>30-й СТРАЙК!</b> {celebrator_name}, признайся, ты {podkrutil_text} этот код или просто {podkupil_text} бота? Чат требует проверку на коддинг! 🚨",
+        40: "✨ <b>40 РАЗ КРАСАВЧИК!</b> Уровень эго {celebrator_name} превысил все допустимые нормы. Скоро тебе понадобится отдельная комната для твоей короны! 🗄",
+        50: "🎖 <b>ПОЛУВЕКОВОЙ ЮБИЛЕЙ!</b> 50 побед! {celebrator_name}, мы скидываемся тебе на памятник при жизни в полный рост. Из чистого золота, естественно! 🏅",
+        60: "🎰 <b>60 ПОБЕД!</b> {celebrator_name} официально признан {narciss_title} Датчики привлекательности сгорели от такого пафоса! ⚡️",
+        70: "🛰 <b>КОСМИЧЕСКИЙ КРАСАВЧИК!</b> 70-й раз! {celebrator_name}, твоё великолепие ослепляет даже спутники наблюдения! Надень маску, побереги наши глаза! 🌌",
+        80: "🛡 <b>80 РАЗ! СВЕРХЛЮДИ СРЕДИ НАС!</b> К {celebrator_name} уже выстроилась очередь за автографами. Не забудь упомянуть этот чат, когда поедешь на {mister_vselennaya}",
+        90: "🏛 <b>90 ПОБЕД!</b> {celebrator_name} одной ногой в зале славы {pobeditel_title} Ещё чуть-чуть, и твоё лицо напечатают на обложках всех журналов! 🧛‍♂️",
+        100: "👑🍾 <b>ЛЕГЕНДА ВЕКА! СТОКРАТНЫЙ КРАСАВЧИК!</b> 🎉💥 {celebrator_name} официально {proshel_game} 100 побед! {boss_title} 🏆🌟"
     }
 
-    is_anniversary = False 
+
+    is_anniversary = False
     
-    # ИСПРАВЛЕНО: Если сработал Мимик и пролетел мимо 5, проверим точечно юбилеи или прыжок через него
     if celebrator_count == 5 or (is_mimic_triggered and celebrator_count == 6):
-        await update.message.reply_text(f"🎉 *5 ПОБЕД!* {celebrator_name} вступает в клуб самовлюбленных! Начало положено! 🎖", parse_mode="Markdown")
+        # Гендерные глаголы для 5-го раза Красавчика
+        kras_5_title = g_text(final_winner, "набирает обороты", "сияет на игровом столе ✨")
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"🎉 <b>РАЗОГРЕВ ОКОНЧЕН!</b> {celebrator_name} {kras_5_title} уже 5-й раз! Начало положено, но до зала великой славы ещё нужно дойти! 🎖",
+            parse_mode="HTML"
+        )
         is_anniversary = True
     elif celebrator_count in jokes or (is_mimic_triggered and (celebrator_count - 1) in jokes):
-        # Защита на случай если из-за +2 мимик перешагнул точную цифру юбилея (например с 9 сразу на 11)
         actual_joke_count = celebrator_count if celebrator_count in jokes else (celebrator_count - 1)
-        await update.message.reply_text(jokes[actual_joke_count], parse_mode="Markdown")
-        is_anniversary = True
+        
+        # Считаем гендерные переменные СТРОГО при срабатывании на основе final_winner
+        miss_mr_title = g_text(final_winner, "мистер Обаяние! 📸", "мисс Обаяние! ✨📸")
+        podkrutil_text = g_text(final_winner, "подкрутил", "подкрутила")
+        podkupil_text = g_text(final_winner, "подкупил", "подкупила")
+        narciss_title = g_text(final_winner, "главным нарциссом этого чата.", "главной нарцисской этого чата! 💖")
+        mister_vselennaya = g_text(final_winner, "Мистер Вселенная! 🦾", "Мисс Вселенная! ✨🦾")
+        pobeditel_title = g_text(final_winner, "великих Победителей.", "великих Победительниц. ✨")
+        boss_title = g_text(final_winner, "икона стиля и босс этого чата! Салют чемпиону!", "икона стиля и королева этого чата! Салют чемпионке! ✨")
+        proshel_game = g_text(final_winner, "полностью прошёл эту игру!", "полностью прошла эту игру! ✨")
 
+        # Наполняем шаблон
+        raw_joke = jokes[actual_joke_count]
+        formatted_joke = raw_joke.format(
+            celebrator_name=celebrator_name,
+            miss_mr_title=miss_mr_title,
+            podkrutil_text=podkrutil_text,
+            podkupil_text=podkupil_text,
+            narciss_title=narciss_title,
+            mister_vselennaya=mister_vselennaya,
+            pobeditel_title=pobeditel_title,
+            proshel_game=proshel_game,
+            boss_title=boss_title
+        )
+
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=formatted_joke,
+            parse_mode="HTML"
+        )
+        is_anniversary = True
+         
     if is_anniversary:
         random_sticker = random.choice(kras_stickers_pool)
         await context.bot.send_sticker(chat_id=chat_id, sticker=random_sticker)
+
 
     # ================= 🎲 СВОДКА ПО ДОСТУПНЫМ КУБИКАМ СУДЬБЫ =================
     # ЖЕЛЕЗНО ИСПРАВЛЕНО: Объявляем дату и используем твой рабочий вариант с!
