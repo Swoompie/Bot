@@ -1549,7 +1549,7 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         safe_shooter_name = user.first_name.replace("<", "&lt;").replace(">", "&gt;")
 
         # Собираем динамические гендерные глаголы и обращения для Стрелка (player)
-        prish_text = g_text(player, "ты пришёл в игровую зону", "ты пришла в игровую зону 💅")
+        prish_text = g_text(player, "ты пришёл в игровую зону", "ты пришла в игровую зону")
         rasstrel_text = g_text(player, "ты уже расстрелял", "ты уже расстреляла")
         pozo_text = g_text(player, "не позорься", "не расстраивайся, подруга! 💅")
 
@@ -1557,7 +1557,7 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(
             chat_id=chat_id,
             text=f"💨 <b>Осечка! Обойма пуста...</b>\n\n"
-                 f"{safe_shooter_name}, {prish_text} с разряженным маркером! Все 6 патронов на этой неделе {rasstrel_text}. 🤦‍♂️\n"
+                 f"{safe_shooter_name}, {prish_text} с разряженным пистолетом! Все 6 патронов на этой неделе {rasstrel_text}. 🤦‍♂️\n"
                  f"❌ КРУПЬЕ ЗАКРЫВАЕТ ДОСТУП! Отдохни от азарта за барной стойкой до понедельника и {pozo_text}!",
             parse_mode="HTML"
         )
@@ -1652,17 +1652,29 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         v_name = f"{victim['first_name']}{v_username_display}"
         
         # Собираем динамические гендерные статусы для обоих участников дуэли
-        # player — тот, кто принял вызов (текущий user), victim — тот, кто его бросил
         p_title = g_text(player, "Ковбой", "Леди")
         v_title = g_text(victim, "ковбой", "леди")
         
-        # Динамический глагол для описания пары
-        if player.get("gender") == "girl" and victim.get("gender") == "girl":
+        # Определяем пол участников для выбора стикера и текста
+        is_p_girl = (player.get("gender") == "girl")
+        is_v_girl = (victim.get("gender") == "girl")
+
+        # Настраиваем текст и подбираем стикер под каждую пару игроков
+        if is_p_girl and is_v_girl:
+            # 💃 🆚 💃 (Девушка против Девушки)
             shodyatsya_text = "Прекрасные леди"
-        elif player.get("gender") == "boy" and victim.get("gender") == "boy":
-            shodyatsya_text = "Игроки"
+            # TODO: Сюда вставим твой кастомный стикер для Ж/Ж боёв
+            duel_sticker = 'CAACAgIAAxkBAAER50ZqqOZiWVgDQmmArJGbLOYmve4H-AAC36YAApMjSUknNw-DrlBDXz0E' 
+        elif not is_p_girl and not is_v_girl:
+            # 👦 🆚 👦 (Парень против Парня)
+            shodyatsya_text = "Судари"
+            # Твой родной стикер дуэли ковбоев
+            duel_sticker = 'CAACAgIAAxkBAAERnotqaMvN6_wsk1CPke39HxtwJyuPDwACUhEAArywIErXQg4EzgXGxj0E' 
         else:
+            # 👦 🆚 💃 или 💃 🆚 👦 (Смешанный баттл полов)
             shodyatsya_text = "Участники"
+            # TODO: Сюда вставим твой кастомный стикер для М/Ж боёв
+            duel_sticker = 'CAACAgIAAxkBAAER50hqqOZj7ESY27DpLtaGKkN5zrcRLQAC_J8AAuE9SEmMN6q09r1cVz0E'
 
         # ЖЕЛЕЗНО ИСПРАВЛЕНО: Полный переход на стиль комфортного казино и HTML-броню
         await context.bot.send_message(
@@ -1675,7 +1687,9 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="HTML"
         )
 
-        await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERnotqaMvN6_wsk1CPke39HxtwJyuPDwACUhEAArywIErXQg4EzgXGxj0E')
+        # Отправляем точечный стикер под конкретную пару!
+        await context.bot.send_sticker(chat_id=chat_id, sticker=duel_sticker)
+
         await asyncio.sleep(3.5) # Валидольная пауза для нагнетания
 
         # Разбираем обойму ПРИНЯВШЕГО дуэль (shooter)
