@@ -1361,7 +1361,7 @@ async def records(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Пересобрали текст СТРОГО на HTML-тегах <b> и <i> вместо звездочек
     message = (
-        "🥇 <b>АБСОЛЮТНЫЙ ЧЕМПИОН КАЗИНО Im🎰</b> 🥇\n\n"
+        "🥇 <b>АБСОЛЮТНЫЙ ЧЕМПИОН КАЗИНО 🎰</b> 🥇\n\n"
         f"{human_title} фортуна целует в обе щеки, а радужные мысли обходят стороной. "
         f"Максимум благословений и чистый кайф по жизни! Поприветствуйте {legend_title}:\n\n"
         f"👑 <b>{safe_leader_name}{leader_username}</b>\n"
