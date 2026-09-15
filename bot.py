@@ -1741,12 +1741,12 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Собираем динамические гендерные титулы для Проигравшего (loser)
         pobezh_title = g_text(loser, "поражённый оппонент", "поражённая леди 🐍")
-        otprav_text = g_text(loser, "отправляется перезаряжать ствол", "отправляется на перезарядку своего дерринджер")
+        otprav_text = g_text(loser, "отправляется перезаряжать ствол", "отправляется на перезарядку своего дерринджера")
 
         await context.bot.send_message(
             chat_id=chat_id,
             text=f"🎰 <b>РАУНД ЗАВЕРШЕН! ВСЕ СТАВКИ СЫГРАЛИ!</b> 🎰\n\n"
-                 f"🎯 {vystrel_text} главную победу {vyrval_text} <b>{winner['first_name']}</b>! 👑 <i>(осталось патронов в обойме: {winner_left}/6)</i>\n"
+                 f"🎯 {vystrel_text} главную {vyrval_text} <b>{winner['first_name']}</b>! 👑 <i>(осталось патронов в обойме: {winner_left}/6)</i>\n"
                  f"🐌 А {pobezh_title} <b>{loser['first_name']}</b> {otprav_text}! <i>(осталось патронов в обойме: {loser_left}/6)</i>\n\n"
                  f"📊 <i>Рейтинг лиги обновлен. Очки успешно зачислены, дуэлянты продолжают копить серии выстрелов для получения наград от администрации казино 🎰!</i> 🏆",
             parse_mode="HTML"
