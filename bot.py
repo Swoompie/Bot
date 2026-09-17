@@ -2051,13 +2051,17 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         umudrilsya_text = g_text(player, "умудрился", "умудрилась")
         nakazali_text = g_text(player, "карают тебя за излишний риск", "карают тебя за излишний риск, леди 🐍")
 
+        # АВТОМАТ ДЛЯ ЖЕРТВЫ: проверяем пол того, на кого переводили карту (victim)
+        victim_target_text = g_text(victim, "уязвимого оппонента", "у дамы 🐍")
+
         await context.bot.send_message(
             chat_id=chat_id,
             text=f"❌ <b>ТОТАЛЬНОЕ КАРМИЧЕСКОЕ ПРАВОСУДИЕ!</b> ❌\n\n"
-                 f"Карта UNO расплавилась в руках <b>{safe_user_name}</b> при попытке забрать куш у уязвимого оппонента! Шанс был 45%, но ты {umudrilsya_text} промазать!\n\n"
+                 f"Карта UNO расплавилась в руках <b>{safe_user_name}</b> при попытке забрать куш {victim_target_text}! Шанс был 45%, но ты {umudrilsya_text} промазать!\n\n"
                  f"Боги рандома {nakazali_text} в тройном размере: твой утренний позор умножается на 3! Получай ещё <b>+{added_penalty} пидора</b> в досье <i>(всего {total_day_gained} за сегодня)</i>! 🤡💥💣",
             parse_mode="HTML"
         )
+
 
         await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAEReQpqQ3adafSczLOzJ3WEyKHoQvfvJAACNhUAAjhx-EmeBZwsT5kj1TwE')
         return  
