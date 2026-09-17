@@ -1960,12 +1960,15 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     safe_victim_name = victim_name.replace("<", "&lt;").replace(">", "&gt;")
     
     # Готовим динамические гендерные глаголы и обращения для Стрелочника (player)
-    resh_text = g_text(player, "решил", "решила 🐍")
+    resh_text = g_text(player, "решил", "решила")
     retry_hand_text = g_text(player, "трясущимися руками повторно активирует", "элегантным, но рискованным жестом повторно активирует")
 
     # Готовим динамические гендерные глаголы для Жертвы (victim)
     loser_coin_text = g_text(victim, "проиграл", "проиграла")
-    victim_title = g_text(victim, "Этот оппонент", "Эта леди 🐍")
+    victim_title = g_text(victim, "Этот оппонент", "Эта леди")
+    victim_pronoun = g_text(victim, "его", "её")
+    # ФИКС ЗАГОЛОВКА: Динамическое добивание раненого / раненой
+    dobivanie_title = g_text(victim, "ДОБИВАНИЕ РАНЕНОГО!", "ДОБИВАНИЕ РАНЕНОЙ!")
 
     # 4. ВЫДАЕМ ИНТРО-ТЕКСТ С УЧЕТОМ ДИНАМИЧЕСКИХ ШАНСОВ И ГЕНДЕРОВ (ЖЕЛЕЗНО НА HTML)
     if is_robbing_chad:
@@ -1975,8 +1978,8 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
     elif is_coin_loser_target:
         intro = [
-            f"🎯 <b>ДОБИВАНИЕ РАНЕНОГО!</b> <b>{safe_user_name}</b> активирует карту «UNO» против <b>{safe_victim_name}</b>!",
-            f"🎲 {victim_title} сегодня и так эпично {loser_coin_text} в монетку, а ты {resh_text} его добить? Рискованный азарт! Шанс перевода повышен до 45%! 🔥\n⚠️ Внимание: в случае провала твой утренний позорный коэффициент умножится на 3!",
+            f"🎯 <b>{dobivanie_title}</b> <b>{safe_user_name}</b> активирует карту «UNO» против <b>{safe_victim_name}</b>!",
+            f"🎲 {victim_title} сегодня и так эпично {loser_coin_text} в монетку, а ты {resh_text} {victim_pronoun} добить? Рискованный азарт! Шанс перевода повышен до 45%! 🔥\n⚠️ Внимание: в случае провала твой утренний позорный коэффициент умножится на 3!",
         ]
     else:
         if is_retry_attempt:
