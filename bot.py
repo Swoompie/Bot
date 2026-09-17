@@ -1830,7 +1830,10 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERnnhqaMio_yi6YSjV0Ysi5q16lPq1ogAC9xIAAvmEAUtGFDZQ8K2jFj0E')
     
 async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # === 🕵️‍♂️ [ФИКС] ВЫТАСКИВАЕМ СТРЕЛОЧНИКА ДЛЯ ГЕНДЕРНОГО АВТОМАТА ===
     user = update.effective_user
+    player_res = supabase.table("users").select("*").eq("user_id", user.id).execute()
+    player = player_res.data[0] if player_res.data and len(player_res.data) > 0 else {"gender": "boy"}
     chat_id = update.effective_chat.id
     today = date.today()
 
