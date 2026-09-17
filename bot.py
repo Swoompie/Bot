@@ -1965,6 +1965,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Готовим динамические гендерные глаголы для Жертвы (victim)
     loser_coin_text = g_text(victim, "проиграл", "проиграла")
+    victim_title = g_text(victim, "Этот оппонент", "Эта леди 🐍")
 
     # 4. ВЫДАЕМ ИНТРО-ТЕКСТ С УЧЕТОМ ДИНАМИЧЕСКИХ ШАНСОВ И ГЕНДЕРОВ (ЖЕЛЕЗНО НА HTML)
     if is_robbing_chad:
@@ -1975,7 +1976,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif is_coin_loser_target:
         intro = [
             f"🎯 <b>ДОБИВАНИЕ РАНЕНОГО!</b> <b>{safe_user_name}</b> активирует карту «UNO» против <b>{safe_victim_name}</b>!",
-            f"🎲 Этот оппонент сегодня и так эпично {loser_coin_text} в монетку, а ты {resh_text} его добить? Рискованный азарт! Шанс перевода повышен до 45%! 🔥\n⚠️ Внимание: в случае провала твой утренний позорный коэффициент умножится на 3!",
+            f"🎲 {victim_title} сегодня и так эпично {loser_coin_text} в монетку, а ты {resh_text} его добить? Рискованный азарт! Шанс перевода повышен до 45%! 🔥\n⚠️ Внимание: в случае провала твой утренний позорный коэффициент умножится на 3!",
         ]
     else:
         if is_retry_attempt:
@@ -2054,7 +2055,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
             chat_id=chat_id,
             text=f"❌ <b>ТОТАЛЬНОЕ КАРМИЧЕСКОЕ ПРАВОСУДИЕ!</b> ❌\n\n"
                  f"Карта UNO расплавилась в руках <b>{safe_user_name}</b> при попытке забрать куш у уязвимого оппонента! Шанс был 45%, но ты {umudrilsya_text} промазать!\n\n"
-                 f"Боги рандома {nakazali_text} в тройном размере: твой утренний позор умножается на 3! Получай ещё <b>+{added_penalty} пидора</b> в досье <i>(всего {total_day_gained} за сегодня)</i>! Штрафной вес взлетает до 150.0! 🤡💥💣",
+                 f"Боги рандома {nakazali_text} в тройном размере: твой утренний позор умножается на 3! Получай ещё <b>+{added_penalty} пидора</b> в досье <i>(всего {total_day_gained} за сегодня)</i>! 🤡💥💣",
             parse_mode="HTML"
         )
 
@@ -2311,7 +2312,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     chat_id=chat_id,
                     text=f"❌ <b>ТОТАЛЬНОЕ КАРМИЧЕСКОЕ ПРАВОСУДИЕ!</b> ❌\n\n"
                          f"Карта UNO расплавилась в руках <b>{safe_name}</b> при попытке добить раненого! Шанс был 45%, но ты {umudrilsya_text} промазать!\n\n"
-                         f"Боги рандома {nakazali_text} в тройном размере: твой утренний позор умножается на 3! Получай ещё <b>+{added_penalty} пидора</b> в досье <i>(всего {total_day_gained} за сегодня)</i>! Штрафной вес взлетает до 150.0! 🤡💥💣",
+                         f"Боги рандома {nakazali_text} в тройном размере: твой утренний позор умножается на 3! Получай ещё <b>+{added_penalty} пидора</b> в досье <i>(всего {total_day_gained} за сегодня)</i>! 🤡💥💣",
                     parse_mode="HTML"
                 )
                 await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAEReQpqQ3adafSczLOzJ3WEyKHoQvfvJAACNhUAAjhx-EmeBZwsT5kj1TwE')
