@@ -2696,7 +2696,7 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f" └ 😎 Шанс Красавчика: <code>{old_k_chance:.1f}%</code> ➡️ <b>{new_k_chance:.1f}%</b> 📉\n\n"
             f"{remains_text}"
         )
-        await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAEReQpqQ3adafSczLOzJ3WEyKHoQvfvJAACNhUAAjhx-EmeBZwsT5kj1TwE')
+        await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgUAAxkBAAERr4pqeX-dpAQpHvj3CZnAcPY0_UmGSQACgggAAjiksVVM5Vj4fvPn0z0E')
 
     elif current_attempts == 1 and prev_balance == 19.0 and dice_value == 6:
         # Собираем динамические гендерные титулы и фразы для везунчика (на основе player)
@@ -2714,7 +2714,7 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f" └ 😎 Шанс Красавчика: <code>{old_k_chance:.1f}%</code> ➡️ <b>{new_k_chance:.1f}%</b> 📈\n\n"
             f"{remains_text}"
         )
-        await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERfwtqSi0WKXA0-slyXjuDMUAC14PGkAAC6BMAAp7K8UkQAAGdV1VM7UI8BA')
+        await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgQAAxkBAAERlA5qX28PoaHLw_vQlr61kl4t7WzyFgACUAgAAtRigFLWQCl12cGV0z0E')
 
     else:
         # СТАНДАРТНЫЙ ВЫВОД С ДИНАМИЧЕСКИМ СРАВНЕНИЕМ ПРОЦЕНТОВ
