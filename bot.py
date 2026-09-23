@@ -1385,6 +1385,11 @@ async def mimic(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     today = date.today()
 
+    # === 🕵️‍♂️ [ФИКС] ВЫТАСКИВАЕМ МИМИКА ИЗ БАЗЫ ДЛЯ ГЕНДЕРНОГО АВТОМАТА ===
+    player_res = supabase.table("users").select("*").eq("user_id", user.id).execute()
+    player = player_res.data[0] if player_res.data and len(player_res.data) > 0 else {"gender": "boy"}
+
+
     if update.effective_chat.type == "private":
         await update.message.reply_text("❌ Активировать Мимика можно только в групповых чатах!")
         return
