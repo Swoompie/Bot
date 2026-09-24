@@ -1513,8 +1513,13 @@ async def mimic(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📡 {podkl_text} удачи <b>{victim_name}</b>... Ставка принята! Куда упадёт монета рулетки казино — туда улетит и твоя карма! 🗿"
     ]
 
+    # ЖЕЛЕЗНО ИСПРАВЛЕНО: Перевели интригующие фразы мимика на HTML-броню
     for phrase in mimic_phrases:
-        await context.bot.send_message(chat_id=chat_id, text=phrase, parse_mode="Markdown")
+        await context.bot.send_message(
+            chat_id=chat_id, 
+            text=phrase, 
+            parse_mode="HTML"
+        )
         await asyncio.sleep(1.5)
 
     # Мемный стикер наведения цели
