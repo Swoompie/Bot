@@ -3000,7 +3000,7 @@ async def command_notbed(update: Update, context: ContextTypes.DEFAULT_TYPE):
     res = supabase.table("uno_logs").select("*").eq("game_date", today_str).execute()
     
     if not res.data or len(res.data) == 0:
-        await context.bot.send_message(chat_id=chat_id, text="🃏 За игровым столом сегодня не было дуэлей UNO. Команда недоступна!", parse_mode="HTML")
+        await context.bot.send_message(chat_id=chat_id, text="🃏 За игровым столом сегодня не было активированных карт UNO. Команда недоступна!", parse_mode="HTML")
         return
 
     # Берём самый свежий сегодняшний лог перевода
