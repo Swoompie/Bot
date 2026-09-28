@@ -423,6 +423,10 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Выбираем победителя по умолчанию
     winner = weighted_choice(filtered_users, "pidor_weight")
 
+    # === 🕵️‍♂️ [МЕГА-ФИКС]: ФИКСИРУЕМ СЧЁТ ДО ВСЕХ ОБНОВЛЕНИЙ И МНОЖИТЕЛЕЙ ===
+    # Сохраняем чистый счёт игрока до начисления сегодняшних очков
+    old_count = winner.get("pidor_count", 0)
+
     # ЖЕЛЕЗНО ИСПРАВЛЕНО: Отправляем напрямую через send_message по chat_id!
     # Теперь удаление сообщения Артёма больше никогда не подвесит бота.
     username = f" (@{winner['username']})" if winner['username'] else ""
@@ -633,7 +637,7 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "\n\n📊 <b>Сетка шансов на перевод карты UNO:</b>"
         "\n └ 👑 На Красавчика дня — <b>15%</b>"
         "\n └ 🃏 На обычного мирного — <b>30%</b>"
-        "\n └ 🎯 На раненого в монетку — <b>45%</b>"
+        "\n └ 🎯 На проигравшего в монетку — <b>45%</b>"
         "\n\n⚠️ <b>ВНИМАНИЕ:</b> В случае провала промаха активируется кармическая расплата. Рискуй с умом! 😈🎰"
     )
 
@@ -698,8 +702,15 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     is_anniversary = False
     
-    if celebrator_count == 5 or (is_mimic_triggered and celebrator_count == 6):
-        # Гендерный глагол для 5-го раза
+    # ЖЕЛЕЗНЫЙ АВТОМАТ: Сравниваем новый счёт со старым (old_count нужно сохранить в самом начале функции, до апдейта в базе!)
+    triggered_joke_count = None
+    for j_key in jokes.keys():
+        if celebrator_count >= j_key and old_count < j_key:
+            triggered_joke_count = j_key
+            break
+
+    # Проверка на разогрев (5-й раз)
+    if celebrator_count >= 5 and old_count < 5:
         kos_text = g_text(final_winner, "косячит", "рискует за игровым столом")
         masters_text = g_text(final_winner, "данжн мастеров", "королев драмы")
 
@@ -709,10 +720,9 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="HTML"
         )
         is_anniversary = True
+
         
-    elif celebrator_count in jokes or (is_mimic_triggered and (celebrator_count - 1) in jokes):
-        actual_joke_count = celebrator_count if celebrator_count in jokes else (celebrator_count - 1)
-        
+    elif triggered_joke_count is not None:
         # Считаем гендерные переменные СТРОГО в момент триггера юбилея на основе final_winner
         parney_title = g_text(final_winner, "сомнительных парней", "сомнительных леди 💅")
         ploh_title = g_text(final_winner, "Стабильно плох!", "Стабильно плоха! 💅")
@@ -721,8 +731,8 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
         gaymaster_title = g_text(final_winner, "ГЕЙмастеров! 🏛", "Королев Драмы! 🏛")
         proshel_title = g_text(final_winner, "полностью прошёл эту жизнь", "полностью прошла эту жизнь")
 
-        # Достаем текстовый шаблон из словаря и красиво фаршируем его переменными на лету
-        raw_joke = jokes[actual_joke_count]
+        # Достаем текстовый шаблон из словаря по пойманному ключу перешагивания!
+        raw_joke = jokes[triggered_joke_count]
         formatted_joke = raw_joke.format(
             celebrator_name=celebrator_name,
             parney_title=parney_title,
@@ -872,6 +882,10 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             chat_id=chat_id,
             text=f"😎 Красавчик дня — {final_winner['first_name']}{favorit_username}"
         )
+
+    # === 🕵️‍♂️ [МЕГА-ФИКС]: ФИКСИРУЕМ СЧЁТ ДО ВСЕХ ОБНОВЛЕНИЙ И МНОЖИТЕЛЕЙ ===
+    # Вытаскиваем чистый счёт итогового победителя ДО начисления сегодняшних крон!
+    old_count = final_winner.get("kras_count", 0)
 
     # === 👑 МНОЖИТЕЛЬ ЧЕМПИОНА С ПОД КРУТКОЙ ОТ СТРИКА МАКС-ШАНСА В SUPABASE ===
     total_kras_weight = sum(u["kras_weight"] for u in users)
@@ -1097,8 +1111,15 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     is_anniversary = False
     
-    if celebrator_count == 5 or (is_mimic_triggered and celebrator_count == 6):
-        # Гендерные глаголы для 5-го раза Красавчика
+    # УЛЬТИМАТИВНЫЙ АВТОМАТ ДЛЯ КРОН: Проверяем перешагивание юбилея
+    triggered_joke_count = None
+    for j_key in jokes.keys():
+        if celebrator_count >= j_key and old_count < j_key:
+            triggered_joke_count = j_key
+            break
+
+    # Проверка на разогрев (5-й раз Красавчика)
+    if celebrator_count >= 5 and old_count < 5:
         kras_5_title = g_text(final_winner, "набирает обороты", "сияет на игровом столе ✨")
         await context.bot.send_message(
             chat_id=chat_id,
@@ -1106,9 +1127,8 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="HTML"
         )
         is_anniversary = True
-    elif celebrator_count in jokes or (is_mimic_triggered and (celebrator_count - 1) in jokes):
-        actual_joke_count = celebrator_count if celebrator_count in jokes else (celebrator_count - 1)
         
+    elif triggered_joke_count is not None:
         # Считаем гендерные переменные СТРОГО при срабатывании на основе final_winner
         miss_mr_title = g_text(final_winner, "мистер Обаяние! 📸", "мисс Обаяние! ✨📸")
         podkrutil_text = g_text(final_winner, "подкрутил", "подкрутила")
@@ -1119,8 +1139,8 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         boss_title = g_text(final_winner, "икона стиля и босс этого чата! Салют чемпиону!", "икона стиля и королева этого чата! Салют чемпионке! ✨")
         proshel_game = g_text(final_winner, "полностью прошёл эту игру!", "полностью прошла эту игру! ✨")
 
-        # Наполняем шаблон
-        raw_joke = jokes[actual_joke_count]
+        # Наполняем шаблон юбилея Красавчика
+        raw_joke = jokes[triggered_joke_count]
         formatted_joke = raw_joke.format(
             celebrator_name=celebrator_name,
             miss_mr_title=miss_mr_title,
@@ -2075,7 +2095,6 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="HTML"
         )
 
-
         await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAEReQpqQ3adafSczLOzJ3WEyKHoQvfvJAACNhUAAjhx-EmeBZwsT5kj1TwE')
         return  
 
@@ -2240,15 +2259,24 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     
                 # Собираем глаголы очищения для Стрелочника и позора для Жертвы
                 sender_clean_text = g_text(player, "полностью очищен от подозрений", "полностью очищена от подозрений")
-                victim_status_text = g_text(victim, "становится <b>ПИДОРОМ ДНЯ</b>", "становится <b>ПИДОРОМ ДНЯ</b>")
-                victim_accept_text = g_text(victim, "Смирись!", "Смирись, подруга! 💅")
+                victim_status_text = g_text(victim, "становится <b>ПИДОРОМ ДНЯ</b>", "становится <b>ПИДОРОЙ ДНЯ</b>")
+                victim_accept_text = g_text(victim, "Смирись!", "Принимай правила игры!")
 
+                # ЖЕЛЕЗНО ИСПРАВЛЕНО: Запоминаем: Стрелок (user.id) затащил, Жертва (victim["user_id"]) пострадал
+                context.chat_data["last_switch_clash"] = {
+                    "winner_id": user.id,
+                    "loser_id": victim["user_id"],
+                    "status": "success",
+                    "date": str(date.today())
+                }
+
+                # Дальше у тебя идёт отправка сообщения (оставляй её как есть, скобки запечатаны!)
                 await context.bot.send_message(
                     chat_id=chat_id,
                     text=(
-                        f"💥 <b>КАРТА ПЕРЕВЕДЕНА!</b> Магия 30% сработала!\n\n"
-                        f"👑 <b>{safe_user_name}</b> {sender_clean_text}.\n"
-                        f"🤡 Новая официальная жертва: <b>{safe_victim_name}</b> {victim_status_text}! {victim_accept_text}{multiplier_alert}"
+                        f"💥 <b>СТРЕЛКИ УСПЕШНО ПЕРЕВЕДЕНЫ!</b> 💥\n\n"
+                        f"Игрок <b>{safe_user_name}</b> {sender_clean_text} за игровым столом!\n"
+                        f"🤡 А вот <b>{safe_victim_name}</b> {victim_status_text}{multiplier_alert}! {victim_accept_text} 🎰"
                     ),
                     parse_mode="HTML"
                 )
@@ -2376,7 +2404,14 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             "pidor_count": fresh_pidor_count + added_penalty,
                             "pidor_weight": 100.0
                         }).eq("user_id", user.id).execute()
-                        
+
+                        context.chat_data["last_switch_clash"] = {
+                            "winner_id": victim["user_id"],
+                            "loser_id": user.id,
+                            "status": "failed",
+                            "date": str(date.today())
+                        }
+
                         await context.bot.send_message(
                             chat_id=chat_id,
                             text=f"❌ <b>КАРТА UNO ПОРВАЛАСЬ!</b> ❌\n\n"
@@ -2934,6 +2969,91 @@ async def set_gender_girl(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="HTML"
     )
 
+async def command_notbed(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    user = update.effective_user
+    today_str = str(date.today())
+    
+    # ПРЯМОЙ СТУК В БАЗУ: Ищем сегодняшний успешный лог, где автором (sender_id) был текущий юзер
+    # или где текущий юзер вообще участвовал. Но так как это /notbed (успех), ищем лог по дню.
+    res = supabase.table("uno_logs").select("*").eq("game_date", today_str).execute()
+    
+    if not res.data or len(res.data) == 0:
+        await context.bot.send_message(chat_id=chat_id, text="🃏 За игровым столом сегодня не было дуэлей UNO. Команда недоступна!", parse_mode="HTML")
+        return
+
+    # Берём самый свежий сегодняшний лог перевода
+    clash = res.data[-1]
+    
+    # Проверяем, что к этой драме причастен именно тот, кто пишет команду
+    # В таблице логов у тебя могут быть поля sender_name/victim_name или id. 
+    # Если лог завязан на имена, сделаем безопасную проверку по именам участников чата:
+    sender_name = clash.get("sender_name")
+    victim_name = clash.get("victim_name")
+    
+    if user.first_name != sender_name and user.first_name != victim_name:
+        await context.bot.send_message(chat_id=chat_id, text="🙅‍♂️ Ты не участвовал в сегодняшнем карточном замесе. Не лезь за чужой игровой стол!", parse_mode="HTML")
+        return
+
+    # Вытаскиваем профиль нажавшего для гендера
+    player_res = supabase.table("users").select("*").eq("user_id", user.id).execute()
+    player = player_res.data[0] if player_res.data and len(player_res.data) > 0 else {"gender": "boy"}
+    safe_name = user.first_name.replace("<", "&lt;").replace(">", "&gt;")
+
+    # === РАЗВОДКА: КТО НАЖАЛ КОМАНДУ ===
+    if user.first_name == sender_name:
+        # Нажал тот, кто перевёл (Агрессор)
+        msg_boy = "Чистая тактика, пацаны! Я перевёл, сучки, учитесь, пока я добрый! Коддинг высокого уровня! 😎🎰"
+        msg_girl = "Абсолютная грация, мальчики! Забрала этот раунд на чистом интуитивном расчёте. Учитесь! 💎💅"
+        await context.bot.send_message(chat_id=chat_id, text=f"🥂 <b>{safe_name}</b> вальяжно откидывается на стуле и объявляет:\n\n🔥 <b>{g_text(player, msg_boy, msg_girl)}</b>", parse_mode="HTML")
+    else:
+        # Нажал тот, на кого перевели (Жертва)
+        msg_boy = "Признаю, разыграно красиво... Технично подловил. Но игровой день ещё длинный, я отыграюсь! 🚬"
+        msg_girl = "Это был дерзкий выпад, признаю... Но фортуна в казино капризна, мой ход ещё впереди! 🐍"
+        await context.bot.send_message(chat_id=chat_id, text=f"🐌 <b>{safe_name}</b> грустно цедит свой напиток у барной стойки и бормочет:\n\n🎭 <i>{g_text(player, msg_boy, msg_girl)}</i>", parse_mode="HTML")
+
+
+async def command_sosamba(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    user = update.effective_user
+    today_str = str(date.today())
+    
+    # Для /sosamba (которая активируется при КАРМИЧЕСКОЙ КАРЕ) — если при провале перевода 
+    # лог в uno_logs НЕ записывается, мы можем использовать вашу таблицу ежедневных статусов или 
+    # просто сделать быстрый чек. Но если лог пишется только при успехе, давай проверим сегодняшние логи:
+    res = supabase.table("uno_logs").select("*").eq("game_date", today_str).execute()
+    
+    # Если логов нет, либо проверяем логи неудач. Предположим, мы пишем сосамбу по успешному переводу 
+    # (глумление над жертвой) ИЛИ по провалу. 
+    # Чтобы сосамба работала ВСЕГДА железно по логам, смотрим сегодняшний срез:
+    if not res.data or len(res.data) == 0:
+        await context.bot.send_message(chat_id=chat_id, text="🃏 Вокруг тишина. Сосамба взводится только после реального экшена за столом!", parse_mode="HTML")
+        return
+
+    clash = res.data[-1]
+    sender_name = clash.get("sender_name")
+    victim_name = clash.get("victim_name")
+
+    if user.first_name != sender_name and user.first_name != victim_name:
+        await context.bot.send_message(chat_id=chat_id, text="🙅‍♂️ Ты не причастен к этой разборке, право на глумление имеют только участники!", parse_mode="HTML")
+        return
+
+    player_res = supabase.table("users").select("*").eq("user_id", user.id).execute()
+    player = player_res.data[0] if player_res.data and len(player_res.data) > 0 else {"gender": "boy"}
+    safe_name = user.first_name.replace("<", "&lt;").replace(">", "&gt;")
+
+    # === РАЗВОДКА ДЛЯ СОСАМБЫ ===
+    if user.first_name == sender_name:
+        # Наглый агрессор празднует победу и включает сосамбу для цели
+        msg_boy = "СОСАМБА, БРАТИК! Твоя удача сегодня официально переходит в мой банк! Добро пожаловать на дно! 🤡💥"
+        msg_girl = "СОСАМБА, МИЛАЯ! Твоя защита пробита в два клика. Отдыхай в лаунж-зоне! 💅🐍"
+        await context.bot.send_message(chat_id=chat_id, text=f"🎪 <b>{safe_name}</b> заливисто хохочет на весь зал:\n\n📢 <b>{g_text(player, msg_boy, msg_girl)}</b>", parse_mode="HTML")
+    else:
+        # Жертва, у которой сгорело, констатирует факт
+        msg_boy = "Оформил на меня сосамбу на ровном месте... Скинул так скинул, ушёл переписывать досье. 😭"
+        msg_girl = "Поймала ультимативную сосамбу... Попалась на чистый тактический блеф. Ухожу на перезарядку. 💔"
+        await context.bot.send_message(chat_id=chat_id, text=f"🐌 <b>{safe_name}</b> разводит руками в полном недоумении:\n\n👀 <i>{g_text(player, msg_boy, msg_girl)}</i>", parse_mode="HTML")
+        
 # ---------------- ЗАПУСК (ВЕБХУК) ----------------
 
 async def main():
@@ -2964,6 +3084,8 @@ async def main():
     app.add_handler(CommandHandler("unostats", uno_stats))
     app.add_handler(CommandHandler("boy", set_gender_boy))
     app.add_handler(CommandHandler("girl", set_gender_girl))
+    app.add_handler(CommandHandler("notbed", command_notbed))
+    app.add_handler(CommandHandler("sosamba", command_sosamba))
 
 
     if RENDER_URL:
