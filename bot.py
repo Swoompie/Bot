@@ -278,10 +278,12 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         "📢 <b>СТЕНА СУДЕБНОГО ГЛУМЛЕНИЯ (Доступно участникам перевода дня)</b>\n"
         " ├ <code>/notbed</code> — Вальяжно заявить оппоненту: <i>'Я перевёл, сучки, учитесь!'</i> 😎🥂\n"
-        " └ <code>/sosamba</code> — Триумфально объявить сосамбу, если чужая ловушка UNO взорвалась рикошетом 🤡💣\n\n"
+        " └ <code>/sosamba</code> — Триумфально объявить сосамбу, если чужая карта UNO взорвалась рикошетом 🤡💣\n\n"
         
         "🚪 <b>ВЕРИФИКАЦИЯ И ДВЕРЬ НА ВЫХОД</b>\n"
         " ├ <code>/register</code> — Зарегистрироваться в рулетке и войти в игру 📑\n"
+        " ├ <code>/boy</code> — Выбрать статус Ковбоя 👦⚓️\n"
+        " ├ <code>/girl</code> — Выбрать статус Леди (чтобы Крупье включил фем-фильтр) 💅🐍\n"
         " ├ <code>/unreg</code> — Выйти из рулетки и удалить данные (нет) 🚪\n"
         " └ <code>/help</code> — Показать это сообщение еще раз (но на кой хер?)\n\n"
         "<i>Все ставки сделаны, фортуна начинает свой ход... 🍸🎰</i>"
@@ -292,6 +294,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text=help_text,
         parse_mode="HTML"
     )
+
 
 async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
