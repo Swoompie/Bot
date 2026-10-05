@@ -2429,12 +2429,15 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             "pidor_weight": 100.0
                         }).eq("user_id", user.id).execute()
 
-                        context.chat_data["last_switch_clash"] = {
-                            "winner_id": victim["user_id"],
-                            "loser_id": user.id,
-                            "status": "failed",
-                            "date": str(date.today())
-                        }
+                        # === 🎰 [ЖЕЛЕЗНЫЙ ФИКС]: ЗАПИСЫВАЕМ ПРОВАЛ В БАЗУ ДЛЯ КНОПКИ СОСАМБЫ ===
+                        # Передаем id строки базы как автоинкремент, фиксируем нулевой множитель
+                        supabase.table("uno_logs").insert({
+                            "game_date": str(date.today()),
+                            "sender_name": user.first_name,
+                            "victim_name": victim["first_name"],
+                            "multiplier": 0,  # 0 — маркер кармического провала агрессора
+                            "is_krasavchik": False
+                        }).execute()
 
                         await context.bot.send_message(
                             chat_id=chat_id,
@@ -2998,58 +3001,45 @@ async def command_notbed(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     today_str = str(date.today())
     
-    # ПРЯМОЙ СТУК В БАЗУ: Ищем сегодняшний успешный лог, где автором (sender_id) был текущий юзер
-    # или где текущий юзер вообще участвовал. Но так как это /notbed (успех), ищем лог по дню.
     res = supabase.table("uno_logs").select("*").eq("game_date", today_str).execute()
     
     if not res.data or len(res.data) == 0:
         await context.bot.send_message(chat_id=chat_id, text="🃏 За игровым столом сегодня не было активированных карт UNO. Команда недоступна!", parse_mode="HTML")
         return
 
-    # Берём самый свежий сегодняшний лог перевода
     clash = res.data[-1]
-    
-    # Проверяем, что к этой драме причастен именно тот, кто пишет команду
-    # В таблице логов у тебя могут быть поля sender_name/victim_name или id. 
-    # Если лог завязан на имена, сделаем безопасную проверку по именам участников чата:
     sender_name = clash.get("sender_name")
     victim_name = clash.get("victim_name")
-    
+    mult = clash.get("multiplier", 1)
+
+    if mult == 0:
+        await context.bot.send_message(chat_id=chat_id, text="🙅‍♂️ Какой 'notbad'? В последнем замесе карта UNO дала жёсткую осечку! Тут уместна другая команда... 😏💣", parse_mode="HTML")
+        return
+
     if user.first_name != sender_name and user.first_name != victim_name:
         await context.bot.send_message(chat_id=chat_id, text="🙅‍♂️ Ты не участвовал в сегодняшнем карточном замесе. Не лезь за чужой игровой стол!", parse_mode="HTML")
         return
 
-    # Вытаскиваем профиль нажавшего для гендера
     player_res = supabase.table("users").select("*").eq("user_id", user.id).execute()
     player = player_res.data[0] if player_res.data and len(player_res.data) > 0 else {"gender": "boy"}
     safe_name = user.first_name.replace("<", "&lt;").replace(">", "&gt;")
 
-    # === РАЗВОДКА: КТО НАЖАЛ КОМАНДУ ===
     if user.first_name == sender_name:
-        # Нажал тот, кто перевёл (Агрессор)
         msg_boy = "Чистая тактика, пацаны! Я перевёл, сучки, учитесь, пока я добрый! Коддинг высокого уровня! 😎🎰"
         msg_girl = "Абсолютная грация, мальчики! Забрала этот раунд на чистом интуитивном расчёте. Учитесь! 💎💅"
         await context.bot.send_message(chat_id=chat_id, text=f"🥂 <b>{safe_name}</b> вальяжно откидывается на стуле и объявляет:\n\n🔥 <b>{g_text(player, msg_boy, msg_girl)}</b>", parse_mode="HTML")
     else:
-        # Нажал тот, на кого перевели (Жертва)
         msg_boy = "Признаю, разыграно красиво... Технично подловил. Но игровой день ещё длинный, я отыграюсь! 🚬"
-        msg_girl = "Это был дерзкий выпад, признаю... Но фортуна в казино капризна, мой ход ещё впереди! 🐍"
+        msg_girl = "Это был дерзкий выпад, признаю... Но фортуна в казино капризна, мой ход ещё впереди! "
         await context.bot.send_message(chat_id=chat_id, text=f"🐌 <b>{safe_name}</b> грустно цедит свой напиток у барной стойки и бормочет:\n\n🎭 <i>{g_text(player, msg_boy, msg_girl)}</i>", parse_mode="HTML")
-
 
 async def command_sosamba(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     user = update.effective_user
     today_str = str(date.today())
     
-    # Для /sosamba (которая активируется при КАРМИЧЕСКОЙ КАРЕ) — если при провале перевода 
-    # лог в uno_logs НЕ записывается, мы можем использовать вашу таблицу ежедневных статусов или 
-    # просто сделать быстрый чек. Но если лог пишется только при успехе, давай проверим сегодняшние логи:
     res = supabase.table("uno_logs").select("*").eq("game_date", today_str).execute()
     
-    # Если логов нет, либо проверяем логи неудач. Предположим, мы пишем сосамбу по успешному переводу 
-    # (глумление над жертвой) ИЛИ по провалу. 
-    # Чтобы сосамба работала ВСЕГДА железно по логам, смотрим сегодняшний срез:
     if not res.data or len(res.data) == 0:
         await context.bot.send_message(chat_id=chat_id, text="🃏 Вокруг тишина. Сосамба взводится только после реального экшена за столом!", parse_mode="HTML")
         return
@@ -3057,6 +3047,11 @@ async def command_sosamba(update: Update, context: ContextTypes.DEFAULT_TYPE):
     clash = res.data[-1]
     sender_name = clash.get("sender_name")
     victim_name = clash.get("victim_name")
+    mult = clash.get("multiplier", 1)
+
+    if mult != 0:
+        await context.bot.send_message(chat_id=chat_id, text="🙅‍♂️ Оппонент успешно перевёл стрелки, какая тут сосамба? Зализывай раны! 🐌", parse_mode="HTML")
+        return
 
     if user.first_name != sender_name and user.first_name != victim_name:
         await context.bot.send_message(chat_id=chat_id, text="🙅‍♂️ Ты не причастен к этой разборке, право на глумление имеют только участники!", parse_mode="HTML")
@@ -3066,17 +3061,17 @@ async def command_sosamba(update: Update, context: ContextTypes.DEFAULT_TYPE):
     player = player_res.data[0] if player_res.data and len(player_res.data) > 0 else {"gender": "boy"}
     safe_name = user.first_name.replace("<", "&lt;").replace(">", "&gt;")
 
-    # === РАЗВОДКА ДЛЯ СОСАМБЫ ===
-    if user.first_name == sender_name:
-        # Наглый агрессор празднует победу и включает сосамбу для цели
-        msg_boy = "СОСАМБА, БРАТИК! Твоя удача сегодня официально переходит в мой банк! Добро пожаловать на дно! 🤡💥"
-        msg_girl = "СОСАМБА, МИЛАЯ! Твоя защита пробита в два клика. Отдыхай в лаунж-зоне! 💅🐍"
-        await context.bot.send_message(chat_id=chat_id, text=f"🎪 <b>{safe_name}</b> заливисто хохочет на весь зал:\n\n📢 <b>{g_text(player, msg_boy, msg_girl)}</b>", parse_mode="HTML")
+    if user.first_name == victim_name:
+        # Пишет Спасшаяся жертва (Глумление над неудачливым воришкой)
+        msg_boy = "СОСАМБА, БРАТИК! Хотел перевести на меня, но сам сожрал свой позор в тройном размере! Карма — вещь! 😂💣"
+        msg_girl = "СОСАМБА, МИЛАЯ! Пыталась скинуть на меня клеймо, а в итоге сама улетала в банк позора! Учись играть! 💅🔥"
+        await context.bot.send_message(chat_id=chat_id, text=f"🎪 <b>{safe_name}</b> триумфально указывает пальцем на поверженного оппонента:\n\n📢 <b>{g_text(player, msg_boy, msg_girl)}</b>", parse_mode="HTML")
     else:
-        # Жертва, у которой сгорело, констатирует факт
-        msg_boy = "Оформил на меня сосамбу на ровном месте... Скинул так скинул, ушёл переписывать досье. 😭"
-        msg_girl = "Поймала ультимативную сосамбу... Попалась на чистый тактический блеф. Ухожу на перезарядку. 💔"
-        await context.bot.send_message(chat_id=chat_id, text=f"🐌 <b>{safe_name}</b> разводит руками в полном недоумении:\n\n👀 <i>{g_text(player, msg_boy, msg_girl)}</i>", parse_mode="HTML")
+        # Пишет Сам агрессор, который улетел на КД и взорвался
+        msg_boy = "Сам себе оформил сосамбу... Нарушил правила казино, пацаны, не повторяйте моих глупых ходов. 💀"
+        msg_girl = "Устроила сосамбу самой себе... Ловушка рандома захлопнулась прямо на моих пальцах. 🤦‍♀️"
+        await context.bot.send_message(chat_id=chat_id, text=f"🤡 <b>{safe_name}</b> сокрушённо констатирует факт своего фиаско:\n\n👀 <i>{g_text(player, msg_boy, msg_girl)}</i>", parse_mode="HTML")
+
         
 # ---------------- ЗАПУСК (ВЕБХУК) ----------------
 
