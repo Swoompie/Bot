@@ -2859,7 +2859,10 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def uno_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # === 🕵️‍♂️ [ФИКС] ВЫТАСКИВАЕМ АВТОРА КОМАНДЫ ДЛЯ ГЕНДЕРНОГО АВТОМАТА ===
     chat_id = update.effective_chat.id
+    # ЖЕЛЕЗНО ИСПРАВЛЕНО: Фильтруем провалы! Берём только успешные переводы (где множитель > 0)
     user = update.effective_user
+    res = supabase.table("uno_logs").select("*").eq("sender_name", user.first_name).gt("multiplier", 0).execute()
+
     
     player_res = supabase.table("users").select("*").eq("user_id", user.id).execute()
     player = player_res.data[0] if player_res.data and len(player_res.data) > 0 else {"gender": "boy"}
