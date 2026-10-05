@@ -3057,19 +3057,39 @@ async def command_sosamba(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(chat_id=chat_id, text="🙅‍♂️ Ты не причастен к этой разборке, право на глумление имеют только участники!", parse_mode="HTML")
         return
 
+    # Вытаскиваем профиль нажавшего для гендера
     player_res = supabase.table("users").select("*").eq("user_id", user.id).execute()
-    player = player_res.data[0] if player_res.data and len(player_res.data) > 0 else {"gender": "boy"}
+    player = player_res.data if player_res.data and len(player_res.data) > 0 else {"gender": "boy"}
     safe_name = user.first_name.replace("<", "&lt;").replace(">", "&gt;")
 
+    # ВЫЧИСЛЯЕМ МАСШТАБ ПОЗОРА АГРЕССОРА (Проверяем его свежий вес в базе)
+    # Вытаскиваем профиль неудачника по имени, чтобы понять, какой у него штрафной вес
+    loser_res = supabase.table("users").select("pidor_weight").eq("first_name", sender_name).execute()
+    is_karma_triple = False
+    if loser_res.data and len(loser_res.data) > 0:
+        # Если вес взлетел до 150.0 — это был тройной кармический штраф
+        if loser_res.data.get("pidor_weight", 100.0) >= 150.0:
+            is_karma_triple = True
+
     if user.first_name == victim_name:
-        # Пишет Спасшаяся жертва (Глумление над неудачливым воришкой)
-        msg_boy = "СОСАМБА, БРАТИК! Хотел перевести на меня, но сам сожрал свой позор в тройном размере! Карма — вещь! 😂💣"
-        msg_girl = "СОСАМБА, МИЛАЯ! Пыталась скинуть на меня клеймо, а в итоге сама улетала в банк позора! Учись играть! 💅🔥"
+        # Пишет Спасшаяся жертва (Рома глумится над Артёмом)
+        if is_karma_triple:
+            msg_boy = "СОСАМБА, БРАТИК! Хотел перевести на меня, но сам сожрал свой позор в тройном размере! Карма — вещь! 😂💣"
+            msg_girl = "СОСАМБА, МИЛАЯ! Пыталась скинуть на меня клеймо, а в итоге сама улетела в тройной позор! Учись играть! 💅🔥"
+        else:
+            msg_boy = "СОСАМБА, БРАТИК! Хотел перевести на меня, но твоя пушка дала осечку и выдала тебе двойной рикошет по лбу! 😂 Оформляй досье!"
+            msg_girl = "СОСАМБА, МИЛАЯ! Попытка интриги провалилась. Лови чистый рикошет обратно в своё досье! Отдыхай! 💅🐍"
+            
         await context.bot.send_message(chat_id=chat_id, text=f"🎪 <b>{safe_name}</b> триумфально указывает пальцем на поверженного оппонента:\n\n📢 <b>{g_text(player, msg_boy, msg_girl)}</b>", parse_mode="HTML")
     else:
-        # Пишет Сам агрессор, который улетел на КД и взорвался
-        msg_boy = "Сам себе оформил сосамбу... Нарушил правила казино, пацаны, не повторяйте моих глупых ходов. 💀"
-        msg_girl = "Устроила сосамбу самой себе... Ловушка рандома захлопнулась прямо на моих пальцах. 🤦‍♀️"
+        # Пишет Сам агрессор, который улетел на КД и взорвался (Артём констатирует фейл)
+        if is_karma_triple:
+            msg_boy = "Сам себе оформил тотальную сосамбу в тройном размере... Карма — жесткая сука, пацаны. 💀"
+            msg_girl = "Устроила кармический самоподрыв... Ловушка рандома уничтожила меня в тройном объёме. 🤦‍♀️"
+        else:
+            msg_boy = "Сам себе оформил сосамбу на рикошете... Хотел красиво перевести стрелки, а получил х2 в досье. Косяк. 💀"
+            msg_girl = "Поймала собственный рикошет... Карта UNO порвалась прямо у меня в руках, лови удваивание. 🤦‍♀️"
+            
         await context.bot.send_message(chat_id=chat_id, text=f"🤡 <b>{safe_name}</b> сокрушённо констатирует факт своего фиаско:\n\n👀 <i>{g_text(player, msg_boy, msg_girl)}</i>", parse_mode="HTML")
 
         
