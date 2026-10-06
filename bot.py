@@ -781,9 +781,38 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from datetime import date
     game_today = date.today()
+
+    # === 🛡️ [ЗАКОН КАЗИНО]: ЗАПРЕТ НА КРАСАВЧИКА БЕЗ ПИДОРА ===
+    # Проверяем, был ли уже выбран Пидор дня за сегодня
+    pidor_already_chosen = get_today_winner("pidor")
+    
+    if not pidor_already_chosen:
+        # 1. Сначала отправляем HTML-текст отказа
+        await context.bot.send_message(
+            chat_id=update.effective_chat.id,
+            text=(
+                f"🎰 <b>ОТКАЗ В ДОСТУПЕ ЗА ИГРОВОЙ СТОЛ!</b> 🎰\n\n"
+                f"Эй, в казино соблюдаются строгие правила! Колесо Красавчика дня <code>/run</code> заблокировано, "
+                f"пока чат не узнает имя своего сегодняшнего <b>Пидора дня</b> через команду <code>/pidor</code>! 🤡💥\n\n"
+                f"<i>Сначала разберитесь с позором, а уже потом делите чемпионские кроны! С уважением, Крупье. 🥂</i>"
+            ),
+            parse_mode="HTML"
+        )
+        
+        # 2. Следом отправляем твой кастомный стикер блокировки
+        await context.bot.send_sticker(
+            chat_id=update.effective_chat.id, 
+            sticker='CAACAgIAAxkBAAER_thqxMc638Oc9rHMYqxBUCmK0T9dDgAC5BgAAi1aSUrLNwihSebbBD0E'
+        )
+        
+        # 3. И только теперь окончательно выходим из функции!
+        return
+
+        
     # 1. Вытаскиваем только АКТИВНЫХ игроков (is_active == True)
     all_users = get_users()
     users = [u for u in all_users if u.get("is_active", True)]
+
     
     if len(users) < 1:
         await update.message.reply_text("В боте еще никто не зарегистрировался. Напишите /register")
@@ -1624,16 +1653,18 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Кого вызываем на дуэль? Тегни цель: `/duel @username` или @ и выбери имя из списка!")
         return
 
+    # ЖЕЛЕЗНО ИСПРАВЛЕНО: Защита от callback_query (инлайн-кнопок), чтобы бот не падал в NoneType
     target_username = None
     target_user_id = None
 
-    for entity in update.message.entities:
-        if entity.type == "mention":
-            target_username = update.message.text[entity.offset:entity.offset + entity.length].replace("@", "")
-            break
-        elif entity.type == "text_mention":
-            target_user_id = entity.user.id
-            break
+    if update.message and update.message.entities:
+        for entity in update.message.entities:
+            if entity.type == "mention":
+                target_username = update.message.text[entity.offset:entity.offset + entity.length].replace("@", "")
+                break
+            elif entity.type == "text_mention":
+                target_user_id = entity.user.id
+                break
 
     # Ищем жертву в базе
     if target_user_id:
