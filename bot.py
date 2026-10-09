@@ -3098,11 +3098,12 @@ async def command_sosamba(update: Update, context: ContextTypes.DEFAULT_TYPE):
     player = player_res.data if player_res.data and len(player_res.data) > 0 else {"gender": "boy"}
     safe_name = user.first_name.replace("<", "&lt;").replace(">", "&gt;")
 
-    # Проверяем масштаб позора неудачника в базе
+    # ЖЕЛЕЗНО ИСПРАВЛЕНО: Добавили индекс, чтобы читать словарь из списка Supabase
     loser_res = supabase.table("users").select("pidor_weight").eq("first_name", sender_name).execute()
     is_karma_triple = False
     if loser_res.data and len(loser_res.data) > 0:
-        if loser_res.data.get("pidor_weight", 100.0) >= 150.0:
+        # Берём первую найденную строку [0] и спокойно вызываем .get()
+        if loser_res.data[0].get("pidor_weight", 100.0) >= 150.0:
             is_karma_triple = True
 
     if user.first_name == victim_name:
