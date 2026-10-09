@@ -3057,7 +3057,8 @@ async def command_notbed(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     player_res = supabase.table("users").select("*").eq("user_id", user.id).execute()
-    player = player_res.data if player_res.data and len(player_res.data) > 0 else {"gender": "boy"}
+    # ЖЕЛЕЗНО ИСПРАВЛЕНО: Вытаскиваем чистый словарь по индексу, а не список!
+    player = player_res.data[0] if player_res.data and len(player_res.data) > 0 else {"gender": "boy"}
     safe_name = user.first_name.replace("<", "&lt;").replace(">", "&gt;")
 
     if user.first_name == sender_name:
@@ -3095,7 +3096,8 @@ async def command_sosamba(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     player_res = supabase.table("users").select("*").eq("user_id", user.id).execute()
-    player = player_res.data if player_res.data and len(player_res.data) > 0 else {"gender": "boy"}
+    # ЖЕЛЕЗНО ИСПРАВЛЕНО: Вытаскиваем чистый словарь по индексу, а не список!
+    player = player_res.data[0] if player_res.data and len(player_res.data) > 0 else {"gender": "boy"}
     safe_name = user.first_name.replace("<", "&lt;").replace(">", "&gt;")
 
     # ЖЕЛЕЗНО ИСПРАВЛЕНО: Добавили индекс, чтобы читать словарь из списка Supabase
