@@ -1825,7 +1825,7 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         vyrval_text = g_text(winner, "победу вырывает", "победу вырывает") # Универсально
 
         # Собираем динамические гендерные титулы для Проигравшего (loser)
-        pobezh_title = g_text(loser, "поражённый оппонент", "поражённая леди 🐍")
+        pobezh_title = g_text(loser, "поражённый оппонент", "поражённая леди ")
         otprav_text = g_text(loser, "отправляется перезаряжать ствол", "отправляется на перезарядку своего дерринджера")
 
         await context.bot.send_message(
@@ -1947,7 +1947,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # --- 👑 [НОВОЕ] ДЕТЕКЦИЯ КОРОЛЕВСКОГО ПОЗОРА (Если кулдаун больше 6 дней) ---
             if days_left > 6:
                 # Собираем динамические гендерные глаголы для Стрелка (player)
-                promazal_text = g_text(player, "ты позорно промазал", "ты позорно промазала 🐍")
+                promazal_text = g_text(player, "ты позорно промазал", "ты позорно промазала ")
                 poluchil_text = g_text(player, "получил удвоенное наказание", "получила удвоенное наказание")
 
                 cd_message = (
@@ -2000,7 +2000,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if victim["user_id"] == user.id:
         # Собираем динамические гендерные подколы для игрока (player)
-        genius_title = g_text(player, "гений мысли, ничего не скажешь", "хитрая леди, ничего не скажешь 🐍")
+        genius_title = g_text(player, "гений мысли, ничего не скажешь", "хитрая леди, ничего не скажешь ")
         another_target = g_text(player, "выбери другую цель", "выбери другого оппонента")
 
         await context.bot.send_message(
@@ -2137,10 +2137,10 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
         # Собираем динамический глагол промаха на основе пола Стрелка (player)
         umudrilsya_text = g_text(player, "умудрился", "умудрилась")
-        nakazali_text = g_text(player, "карают тебя за излишний риск", "карают тебя за излишний риск, леди 🐍")
+        nakazali_text = g_text(player, "карают тебя за излишний риск", "карают тебя за излишний риск, леди ")
 
         # АВТОМАТ ДЛЯ ЖЕРТВЫ: проверяем пол того, на кого переводили карту (victim)
-        victim_target_text = g_text(victim, "уязвимого оппонента", "у дамы 🐍")
+        victim_target_text = g_text(victim, "уязвимого оппонента", "у дамы ")
 
         await context.bot.send_message(
             chat_id=chat_id,
@@ -2191,7 +2191,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 # 1. Собираем динамические гендерные статусы и глаголы
                 winner_status = g_text(player, "СТАНОВИТСЯ НОВЫМ КРАСАВЧИКОМ ДНЯ!", "СТАНОВИТСЯ НОВОЙ КРАСАВИЦЕЙ ДНЯ! 👑")
-                victim_status = g_text(victim, "признаётся <b>ПИДОРОМ ДНЯ</b>!", "признаётся <b>ПИДОРОЙ ДНЯ</b>! 🐍")
+                victim_status = g_text(victim, "признаётся <b>ПИДОРОМ ДНЯ</b>!", "признаётся <b>ПИДОРОМ ДНЯ</b>! ")
                 fallen_text = g_text(victim, "с позором падает на дно и", "теряет всё за игровым столом и")
 
                 # 2. Формируем чистый текст без вложенных скобок внутри вызова
@@ -2368,11 +2368,12 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 }).eq("user_id", user.id).execute()
                 
                 try:
+                    # ЖЕЛЕЗНО ИСПРАВЛЕНО: Записываем жесткий маркер провала -1 вместо нуля!
                     supabase.table("uno_logs").insert({
                         "sender_name": user.first_name,
                         "victim_name": victim["first_name"],
                         "game_date": str(today),
-                        "multiplier": total_day_gained,
+                        "multiplier": -1,  # Теперь это уникальный маркер любого провала UNO!
                         "is_krasavchik": True
                     }).execute()
                 except Exception:
@@ -2402,7 +2403,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         "sender_name": user.first_name,
                         "victim_name": victim["first_name"],
                         "game_date": str(today),
-                        "multiplier": total_day_gained,
+                        "multiplier": -1,
                         "is_krasavchik": False
                     }).execute()
                 except Exception:
@@ -2466,7 +2467,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             "game_date": str(date.today()),
                             "sender_name": user.first_name,
                             "victim_name": victim["first_name"],
-                            "multiplier": 0,  # 0 — маркер кармического провала агрессора
+                            "multiplier": -1,  # 0 — маркер кармического провала агрессора
                             "is_krasavchik": False
                         }).execute()
 
@@ -2906,7 +2907,7 @@ async def uno_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if not res.data or len(res.data) == 0:
         # Собираем динамические гендерные подколы для пустой хроники (на основе player)
-        smog_text = g_text(player, "смог успешно перевести карту", "смогла успешно перевести карту 🐍")
+        smog_text = g_text(player, "смог успешно перевести карту", "смогла успешно перевести карту ")
         nevezet_text = g_text(player, "чертовски не везёт на переводы, либо ты слишком мирный ковбой", "не везёт на риски, либо ты слишком мирная леди")
 
         await context.bot.send_message(
@@ -2963,7 +2964,7 @@ async def uno_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
             tehn_action = f"ты технично перевела позорный статус на <b>{safe_victim}</b>"
         else:
             # 👩 ➡️ 👩 (Девушка на Девушку)
-            perevel_action = f"ты перевела стрелки на <b>{safe_victim}</b>! Она ушла на дно! 🤡🐍"
+            perevel_action = f"ты перевела стрелки на <b>{safe_victim}</b>! Она ушла на дно! 🤡"
             tehn_action = f"ты технично перевела позорный статус на <b>{safe_victim}</b>"
 
         # Собираем остальные кастомные фразы для автора
@@ -3046,7 +3047,8 @@ async def command_notbed(update: Update, context: ContextTypes.DEFAULT_TYPE):
     victim_name = clash.get("victim_name")
     mult = clash.get("multiplier", 1)
 
-    if mult == 0:
+    # Если маркер равен -1 — это провал перевода!
+    if mult == -1:
         await context.bot.send_message(chat_id=chat_id, text="🙅‍♂️ Какой 'notbad'? В последнем замесе карта UNO дала жёсткую осечку! Тут уместна другая команда... 😏💣", parse_mode="HTML")
         return
 
@@ -3055,7 +3057,7 @@ async def command_notbed(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     player_res = supabase.table("users").select("*").eq("user_id", user.id).execute()
-    player = player_res.data[0] if player_res.data and len(player_res.data) > 0 else {"gender": "boy"}
+    player = player_res.data if player_res.data and len(player_res.data) > 0 else {"gender": "boy"}
     safe_name = user.first_name.replace("<", "&lt;").replace(">", "&gt;")
 
     if user.first_name == sender_name:
@@ -3083,7 +3085,8 @@ async def command_sosamba(update: Update, context: ContextTypes.DEFAULT_TYPE):
     victim_name = clash.get("victim_name")
     mult = clash.get("multiplier", 1)
 
-    if mult != 0:
+    # Сосамба работает ТОЛЬКО если последний раунд закончился провалом (-1)
+    if mult != -1:
         await context.bot.send_message(chat_id=chat_id, text="🙅‍♂️ Оппонент успешно перевёл стрелки, какая тут сосамба? Зализывай раны! 🐌", parse_mode="HTML")
         return
 
@@ -3091,32 +3094,27 @@ async def command_sosamba(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(chat_id=chat_id, text="🙅‍♂️ Ты не причастен к этой разборке, право на глумление имеют только участники!", parse_mode="HTML")
         return
 
-    # Вытаскиваем профиль нажавшего для гендера
     player_res = supabase.table("users").select("*").eq("user_id", user.id).execute()
     player = player_res.data if player_res.data and len(player_res.data) > 0 else {"gender": "boy"}
     safe_name = user.first_name.replace("<", "&lt;").replace(">", "&gt;")
 
-    # ВЫЧИСЛЯЕМ МАСШТАБ ПОЗОРА АГРЕССОРА (Проверяем его свежий вес в базе)
-    # Вытаскиваем профиль неудачника по имени, чтобы понять, какой у него штрафной вес
+    # Проверяем масштаб позора неудачника в базе
     loser_res = supabase.table("users").select("pidor_weight").eq("first_name", sender_name).execute()
     is_karma_triple = False
     if loser_res.data and len(loser_res.data) > 0:
-        # Если вес взлетел до 150.0 — это был тройной кармический штраф
         if loser_res.data.get("pidor_weight", 100.0) >= 150.0:
             is_karma_triple = True
 
     if user.first_name == victim_name:
-        # Пишет Спасшаяся жертва (Рома глумится над Артёмом)
         if is_karma_triple:
-            msg_boy = "СОСАМБА, БРАТИК! Хотел перевести на меня, но сам сожрал свой позор в тройном размере! Карма — вещь! 😂💣"
-            msg_girl = "СОСАМБА, МИЛАЯ! Пыталась скинуть на меня клеймо, а в итоге сама улетела в тройной позор! Учись играть! 💅🔥"
+            msg_boy = "<b>СОСАМБА, БРАТИК!</b> Хотел перевести на меня, но сам сожрал свой позор в тройном размере! Карма — вещь! 😂💣"
+            msg_girl = "<b>СОСАМБА, МИЛАЯ!</b> Пыталась скинуть на меня клеймо, а в итоге сама улевела в тройной позор! Учись играть! 💅🔥"
         else:
-            msg_boy = "СОСАМБА, БРАТИК! Хотел перевести на меня, но твоя пушка дала осечку и выдала тебе двойной рикошет по лбу! 😂 Оформляй досье!"
-            msg_girl = "СОСАМБА, МИЛАЯ! Попытка интриги провалилась. Лови чистый рикошет обратно в своё досье! Отдыхай! 💅🐍"
+            msg_boy = "<b>СОСАМБА, БРАТИК!</b> Хотел перевести на меня, но твоя пушка дала осечку и выдала тебе двойной рикошет по лбу! 😂 Оформляй досье!"
+            msg_girl = "<b>СОСАМБА, МИЛАЯ!</b> Попытка интриги провалилась. Лови чистый рикошет обратно в своё досье! Отдыхай! 💅"
             
-        await context.bot.send_message(chat_id=chat_id, text=f"🎪 <b>{safe_name}</b> триумфально указывает пальцем на поверженного оппонента:\n\n📢 <b>{g_text(player, msg_boy, msg_girl)}</b>", parse_mode="HTML")
+        await context.bot.send_message(chat_id=chat_id, text=f"🎪 <b>{safe_name}</b> триумфально указывает пальцем на поверженного оппонента:\n\n📢 {g_text(player, msg_boy, msg_girl)}", parse_mode="HTML")
     else:
-        # Пишет Сам агрессор, который улетел на КД и взорвался (Артём констатирует фейл)
         if is_karma_triple:
             msg_boy = "Сам себе оформил тотальную сосамбу в тройном размере... Карма — жесткая сука, пацаны. 💀"
             msg_girl = "Устроила кармический самоподрыв... Ловушка рандома уничтожила меня в тройном объёме. 🤦‍♀️"
@@ -3125,7 +3123,6 @@ async def command_sosamba(update: Update, context: ContextTypes.DEFAULT_TYPE):
             msg_girl = "Поймала собственный рикошет... Карта UNO порвалась прямо у меня в руках, лови удваивание. 🤦‍♀️"
             
         await context.bot.send_message(chat_id=chat_id, text=f"🤡 <b>{safe_name}</b> сокрушённо констатирует факт своего фиаско:\n\n👀 <i>{g_text(player, msg_boy, msg_girl)}</i>", parse_mode="HTML")
-
         
 # ---------------- ЗАПУСК (ВЕБХУК) ----------------
 
