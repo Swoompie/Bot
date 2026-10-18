@@ -2429,6 +2429,18 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     }).eq("user_id", user.id).execute()
                     context.user_data.pop("switch_retry", None)
 
+                    # === 🎰 [ЖЕЛЕЗНЫЙ ФИКС]: ЗАПИСЫВАЕМ ПРОВАЛ ВТОРОГО ШАНСА В БАЗУ ===
+                    try:
+                        supabase.table("uno_logs").insert({
+                            "game_date": str(date.today()),
+                            "sender_name": user.first_name,
+                            "victim_name": victim["first_name"],
+                            "multiplier": -1,  # Ставим жесткий -1 для сосамбы!
+                            "is_krasavchik": False
+                        }).execute()
+                    except Exception:
+                        pass
+
                     # Динамический титул Стрелочника / Стрелочницы
                     streloch_title = g_text(player, "СТРЕЛОЧНИК", "СТРЕЛОЧНИЦА")
 
@@ -2439,6 +2451,8 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         parse_mode="HTML"
                     )
                     await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERg9tqT2Lb7EssiCPdH7XeEz1W5sbVswAC6S8AApkAAYhJDcx-Vp6-Sco8BA')
+                    return  # ЖЕСТКИЙ ВЫХОД ИЗ ФУНКЦИИ
+
                 else:
                     # Первый провал на мирного — крутим скрытые 5% на "Второй Шанс"
                     has_second_chance = random.randint(1, 100) <= 5
@@ -2453,6 +2467,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             parse_mode="HTML"
                         )
                         await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERg85qT110qgTm1RJWyqRuKm0QwbCoLwAC9B4AAiNcOEtYh2FNKYLHdDwE')
+                        return
                     else:
                         # Стандартный провал на мирного с первого раза с честным х2
                         supabase.table("users").update({
@@ -2461,15 +2476,17 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             "pidor_weight": 100.0
                         }).eq("user_id", user.id).execute()
 
-                        # === 🎰 [ЖЕЛЕЗНЫЙ ФИКС]: ЗАПИСЫВАЕМ ПРОВАЛ В БАЗУ ДЛЯ КНОПКИ СОСАМБЫ ===
-                        # Передаем id строки базы как автоинкремент, фиксируем нулевой множитель
-                        supabase.table("uno_logs").insert({
-                            "game_date": str(date.today()),
-                            "sender_name": user.first_name,
-                            "victim_name": victim["first_name"],
-                            "multiplier": -1,  # 0 — маркер кармического провала агрессора
-                            "is_krasavchik": False
-                        }).execute()
+                        # === 🎰 [ЖЕЛЕЗНЫЙ ФИКС]: ЗАПИСЫВАЕМ СТАНДАРТНЫЙ ПРОВАЛ ===
+                        try:
+                            supabase.table("uno_logs").insert({
+                                "game_date": str(date.today()),
+                                "sender_name": user.first_name,
+                                "victim_name": victim["first_name"],
+                                "multiplier": -1,  # Жесткий маркер провала
+                                "is_krasavchik": False
+                            }).execute()
+                        except Exception:
+                            pass
 
                         await context.bot.send_message(
                             chat_id=chat_id,
@@ -2479,6 +2496,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                             parse_mode="HTML"
                         )
                         await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAEReQpqQ3adafSczLOzJ3WEyKHoQvfvJAACNhUAAjhx-EmeBZwsT5kj1TwE')
+                        return
 
         except Exception as e:
             print(f"Ошибка вывода провала UNO: {e}")
