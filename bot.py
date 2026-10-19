@@ -869,65 +869,67 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"{dolzhen_text} <b>{safe_favorit_name}{favorit_username}</b>, но монетка внезапно упала РЕБРОМ! 💥\n"
                 f"Датчики крутости казино зафиксировали аномалию. На кону дикий баттл!\n\n"
                 f"⚡️ <b>{safe_favorit_name}</b> против <b>{safe_contender_name}{contender_username}</b>! ⚡️\n"
-                f"Бросаем финальный кубик судьбы 1-3, 4-6... подкидываем монетку (50/50)..."
+                f"Бросаем финальный кубик судьбы... подкидываем монетку (50/50)..."
             ),
             parse_mode="HTML"
         )
 
         await asyncio.sleep(2.5) # Пауза для нагнетания валидола
         
-        # Мгновенный баттл 50/50 между ними
+        # Мгновенный баттл 50/50 между фаворитом и претендентом
         if random.randint(1, 100) <= 50:
             final_winner = favorit
-            coin_loser = contender  # Неудачник монетки
+            coin_loser = contender  # 🤡 Проиграл Претендент (кого выбрало "ребро")
+            added_bonus_weight = 15.0  # Тихо накидываем утешительный приз под капотом
             
             # Экранируем имена для безопасности HTML-верстки Телеграма
             safe_winner_name = final_winner['first_name'].replace("<", "&lt;").replace(">", "&gt;")
             safe_loser_name = coin_loser['first_name'].replace("<", "&lt;").replace(">", "&gt;")
 
-            # Гендерные глаголы и титулы для первого исхода
-            protect_text = g_text(final_winner, "свою крутость защищает", "свою крутость защищает") # Универсально
-            loser_title = g_text(coin_loser, "проигравший", "проигравшая")
+            protect_text = g_text(final_winner, "свою крутость защищает", "свою крутость защищает")
+            loser_title = g_text(coin_loser, "проигравший претендент", "проигравшая леди-претендент 💅")
 
             await context.bot.send_message(
                 chat_id=chat_id,
                 text=(
                     f"🪙 <b>МОНЕТКА ОСТАЕТСЯ НА СТОРОНЕ ПЕРВОГО!</b>\n\n"
-                    f"😎 В жестком баттле {protect_text} <b>{safe_winner_name}{favorit_username}</b>! Справедливость восторжествовала!\n"
-                    f"🤡 А {loser_title} <b>{safe_loser_name}</b> получает утешительные повышенные шансы к Красавчику на завтра!"
+                    f"😎 В жестком баттле {protect_text} <b>{safe_winner_name}{favorit_username}</b>! Изначальный фаворит отстоял свой статус!\n"
+                    f"🤡 А {loser_title} <b>{safe_loser_name}</b> не вывозит апсет и получает лишь <b>небольшой утешительный приз на завтра</b> за красивую попытку штурма! 🎰"
                 ),
                 parse_mode="HTML"
             )
         else:
             final_winner = contender
-            coin_loser = favorit  # Неудачник монетки
+            coin_loser = favorit  # 🤡 Проиграл истинный Фаворит (у кого украли победу)
+            added_bonus_weight = 50.0  # Тихо накидываем мощную компенсацию под капотом
             
             # Экранируем имена для безопасности HTML-верстки Телеграма
             safe_winner_name = final_winner['first_name'].replace("<", "&lt;").replace(">", "&gt;")
             safe_loser_name = coin_loser['first_name'].replace("<", "&lt;").replace(">", "&gt;")
 
-            # Гендерные титулы для второго исхода
             favorit_title = g_text(coin_loser, "рук фаворита", "рук фаворитки")
-            obvorovanniy_title = g_text(coin_loser, "обворованный", "обворованная 💅")
+            obvorovanniy_title = g_text(coin_loser, "обворованный фаворит", "обворованная фаворитка 💅")
 
             await context.bot.send_message(
                 chat_id=chat_id,
                 text=(
                     f"🪙 <b>ОГРАБЛЕНИЕ В ФИНАЛЕ! ОНА ПЕРЕВЕРНУЛАСЬ!</b>\n\n"
                     f"😎 Монетка решает в пользу претендента! <b>{safe_winner_name}{contender_username}</b> вырывает победу из {favorit_title}!\n"
-                    f"🤡 А {obvorovanniy_title} <b>{safe_loser_name}</b> получает утешительные повышенные шансы к Красавчику на завтра!"
+                    f"🤡 Абсолютный облом! {obvorovanniy_title} <b>{safe_loser_name}</b> теряет заслуженную корону на финише, но администрация казино выдаёт ему <b>МОЩНЫЙ БУСТ на завтра</b> в качестве компенсации за дикий нефорт! 🛸🔥"
                 ),
                 parse_mode="HTML"
             )
 
-        # 💾 СОХРАНЯЕМ НЕУДАЧНИКА В БАЗУ ДАННЫХ SUPABASE (Сейв от спячки Render)
+        # 💾 СОХРАНЯЕМ НЕУДАЧНИКА В БАЗУ ДАННЫХ SUPABASE
         save_daily_winner("coin_loser", coin_loser["user_id"])
         
-        # ИСПРАВЛЕНО: Твой верный вариант с индексом [0]
+        # Вытаскиваем текущий вес неудачника из базы
         loser_base = supabase.table("users").select("kras_weight").eq("user_id", coin_loser["user_id"]).execute().data
         current_kras_weight = loser_base[0]["kras_weight"] if loser_base else 100.0
         
-        supabase.table("users").update({"kras_weight": current_kras_weight + 30.0}).eq("user_id", coin_loser["user_id"]).execute()
+        # Начисляем ДИНАМИЧЕСКИЙ вес втихую (+15.0 или +50.0), игрокам это видеть незачем!
+        supabase.table("users").update({"kras_weight": current_kras_weight + added_bonus_weight}).eq("user_id", coin_loser["user_id"]).execute()
+
     else:
         # ================= ✨ ПУТЬ А: СТАНДАРТНЫЙ ПРОКРУТ (70%) =================
         # Тут тоже отправляем напрямую в чат, чтобы застраховаться от удаления сообщений!
