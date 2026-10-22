@@ -297,10 +297,12 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id  #ФИКС БАГА: Объявили переменную!
     user = update.effective_user
     
     # 1. Проверяем, был ли пользователь вообще когда-то в базе
     res = supabase.table("users").select("*").eq("user_id", user.id).execute()
+
     
     if res.data:
         player = res.data[0]
@@ -1414,43 +1416,93 @@ async def procents_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     all_users = get_users()
     active_users = [u for u in all_users if u.get("is_active", True)]
-    N = len(active_users)
-
-    if N <= 1:
+    
+    if len(active_users) <= 1:
         await context.bot.send_message(chat_id=chat_id, text="Недостаточно игроков за столом.", parse_mode="HTML")
         return
 
-    # 1. Считаем суммы весов
-    total_pidor_weight = sum(u.get("pidor_weight", 100.0) for u in active_users)
-    total_kras_weight = sum(u.get("kras_weight", 100.0) for u in active_users)
-    
-    # Константы Ромы для точности (учитывают рулетку + переброс монетки)
+    # Константы Ромы-Монте-Карло для Красавчика
     m = 0.30  
     q = 0.50  
 
-    # --- СБОР И СОРТИРОВКА ДАННЫХ ПИДОРА ---
+    # Проверяем, кто уже занял титулы сегодня, чтобы исключить их из реальных пулов
+    today_pidor = get_today_winner("pidor")
+    today_kras = get_today_winner("krasavchik")
+
+    # =====================================================================
+    # 🤡 1. ЧЕСТНЫЙ РАСЧЁТ ПИДОРА ДНЯ
+    # =====================================================================
+    # Исключаем из пула сегодняшнего Красавчика (как в функции pidor())
+    opposite_kras_id = today_kras["user_id"] if today_kras else get_opposite_winner_id("pidor")
+    filtered_p_users = [u for u in active_users if u["user_id"] != opposite_kras_id]
+    if not filtered_p_users:
+        filtered_p_users = active_users
+
+    total_p_weight = sum(u.get("pidor_weight", 100.0) for u in filtered_p_users)
+    
     pidor_list = []
     for u in active_users:
-        p_i = u.get("pidor_weight", 100.0) / total_pidor_weight
-        chance_pct = p_i * 100
         safe_name = u["first_name"].replace("<", "&lt;").replace(">", "&gt;")
         username_str = f" (@{u['username']})" if u.get("username") else ""
-        pidor_list.append({"display": f"{safe_name}{username_str}", "chance": chance_pct})
+        display_name = f"{safe_name}{username_str}"
+
+        if today_pidor:
+            # Если Пидор дня УЖЕ выбран — у победителя 100%, у остальных 0%
+            chance_pct = 100.0 if u["user_id"] == today_pidor["user_id"] else 0.0
+        elif u["user_id"] not in [user["user_id"] for user in filtered_p_users]:
+            # Если игрока нет в пуле кандидатов рулетки — строго 0%
+            chance_pct = 0.0
+        else:
+            # Честная доля веса в РЕАЛЬНОМ пуле кандидатов
+            chance_pct = (u.get("pidor_weight", 100.0) / total_p_weight) * 100
+            
+        pidor_list.append({"display": display_name, "chance": chance_pct})
+    
+    # Сортируем от большего к меньшему
     pidor_list = sorted(pidor_list, key=lambda x: x["chance"], reverse=True)
 
-    # --- СБОР И СОРТИРОВКА ДАННЫХ КРАСАВЧИКА ---
+    # =====================================================================
+    # 👑 2. ЧЕСТНЫЙ РАСЧЁТ КРАСАВЧИКА ДНЯ
+    # =====================================================================
+    # Исключаем из пула сегодняшнего Пидора (как в функции run_command())
+    opposite_pidor_id = today_pidor["user_id"] if today_pidor else get_opposite_winner_id("krasavchik")
+    filtered_k_users = [u for u in active_users if u["user_id"] != opposite_pidor_id]
+    if not filtered_k_users:
+        filtered_k_users = active_users
+
+    N_kras = len(filtered_k_users)
+    total_k_weight = sum(u.get("kras_weight", 100.0) for u in filtered_k_users)
+
     kras_list = []
     for u in active_users:
-        p_i = u.get("kras_weight", 100.0) / total_kras_weight
-        # Ультимативная формула Ромы-Монте-Карло
-        real_chance = (1 - m) * p_i + m * (q * p_i + ((1 - p_i) / (N - 1)) * q)
-        chance_pct = real_chance * 100
         safe_name = u["first_name"].replace("<", "&lt;").replace(">", "&gt;")
         username_str = f" (@{u['username']})" if u.get("username") else ""
-        kras_list.append({"name": f"{safe_name}{username_str}", "chance": chance_pct})
+        display_name = f"{safe_name}{username_str}"
+
+        if today_kras:
+            # Если Красавчик дня УЖЕ выбран — у победителя 100%, у остальных 0%
+            chance_pct = 100.0 if u["user_id"] == today_kras["user_id"] else 0.0
+        elif u["user_id"] not in [user["user_id"] for user in filtered_k_users]:
+            # Если игрок исключён (он сегодняшний Пидор) — строго 0%
+            chance_pct = 0.0
+        else:
+            # Базовая вероятность внутри реального усечённого пула
+            p_i = u.get("kras_weight", 100.0) / total_k_weight
+            if N_kras > 1:
+                # Применяем формулу Ромы-Монте-Карло строго к усечённому знаменателю N_kras!
+                real_chance = (1 - m) * p_i + m * (q * p_i + ((1 - p_i) / (N_kras - 1)) * q)
+                chance_pct = real_chance * 100
+            else:
+                chance_pct = p_i * 100
+                
+        kras_list.append({"name": display_name, "chance": chance_pct})
+    
+    # Сортируем от большего к меньшему
     kras_list = sorted(kras_list, key=lambda x: x["chance"], reverse=True)
 
-    # --- ФОРМИРОВАНИЕ ТВОЕГО КРАСИВОГО СТИЛЯ ТЕКСТА ---
+    # =====================================================================
+    # 🎯 3. ФОРМИРОВАНИЕ ТВОЕГО КРАСИВОГО СТИЛЯ ТЕКСТА
+    # =====================================================================
     response = "🎯 <b>ТЕКУЩИЕ ШАНСЫ УЧАСТНИКОВ</b>\n\n"
     
     response += "🔥 <b>Шансы стать Пидором дня:</b>\n"
@@ -1463,7 +1515,7 @@ async def procents_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for idx, item in enumerate(kras_list, 1):
         response += f"{idx}. {item['name']} — <code>{item['chance']:.1f}%</code>\n"
 
-    response += "\n🎰 <i>Казино играет честно. Коэффициенты рассчитаны с учётом возможного переброса монетки!</i>"
+    response += "\n🎰 <i>Казино играет честно. Коэффициенты рассчитаны с учётом живого пула и переброса монетки!</i>"
 
     await context.bot.send_message(chat_id=chat_id, text=response, parse_mode="HTML")
 
@@ -2229,6 +2281,9 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ================= 🎉🎉🎉 УСПЕШНЫЙ ПЕРЕВОД 🎉🎉🎉 =================
     if is_success:
         context.user_data.pop("switch_retry", None) # очищаем память ретрая
+        
+        # ЖЕЛЕЗНЫЙ ФИКС БАГА: Объявляем дефолтный множитель, чтобы не было NameError при краже короны!
+        pidor_multiplier = 1 
         
         # 👑 ПУТЬ А: УСПЕШНОЕ ОГРАБЛЕНИЕ КРАСАВЧИКА (КД НЕ ЗАПИСЫВАЕМ!)
         if is_robbing_chad:
