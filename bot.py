@@ -3241,7 +3241,7 @@ async def main():
     app.add_handler(CommandHandler("run", run_command))
     app.add_handler(CommandHandler("stats", stats))
     app.add_handler(CommandHandler("mimic", mimic))
-    app.add_handler(CommandHandler("procents", procents))
+    app.add_handler(CommandHandler("procents", procents_command))
     app.add_handler(CommandHandler("switch", switch))
     app.add_handler(CommandHandler("records", records))
     app.add_handler(CommandHandler("mystats", my_stats))
