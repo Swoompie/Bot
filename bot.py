@@ -1410,7 +1410,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         print(f"Ошибка вывода общей статистики stats: {e}")
 
-async def procents(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def procents_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     all_users = get_users()
     active_users = [u for u in all_users if u.get("is_active", True)]
@@ -1424,38 +1424,51 @@ async def procents(update: Update, context: ContextTypes.DEFAULT_TYPE):
     total_pidor_weight = sum(u.get("pidor_weight", 100.0) for u in active_users)
     total_kras_weight = sum(u.get("kras_weight", 100.0) for u in active_users)
     
-    # Константы Ромы для точности (учитывают рулетку + баттл 50/50)
+    # Константы Ромы для точности (учитывают рулетку + переброс монетки)
     m = 0.30  
     q = 0.50  
 
-    response = "📊 <b>РЕАЛЬНЫЕ ШАНСЫ ЗА ИГРОВЫМ СТОЛОМ:</b>\n"
-    response += "<i>(Расчёт процентов с учётом возможного переброса монетки)</i>\n\n"
-
-    # --- БЛОК ПИДОРА ---
-    response += "🤡 <b>Претенденты на Пидора дня:</b>\n"
+    # --- СБОР И СОРТИРОВКА ДАННЫХ ПИДОРА ---
+    pidor_list = []
     for u in active_users:
         p_i = u.get("pidor_weight", 100.0) / total_pidor_weight
-        # Пидор у нас крутится без аномалий, но Рома подсветил, что из бассейна исключается обладатель другой роли!
-        # Для простоты выводим честный скорректированный пул:
+        chance_pct = p_i * 100
         safe_name = u["first_name"].replace("<", "&lt;").replace(">", "&gt;")
-        response += f" ├ <b>{safe_name}</b>: <code>{p_i * 100:.2f}%</code>\n"
+        pidor_list.append({"name": safe_name, "chance": chance_pct})
+    # Сортируем от большего к меньшему
+    pidor_list = sorted(pidor_list, key=lambda x: x["chance"], reverse=True)
+
+    # --- СБОР И СОРТИРОВКА ДАННЫХ КРАСАВЧИКА ---
+    kras_list = []
+    for u in active_users:
+        p_i = u.get("kras_weight", 100.0) / total_kras_weight
+        # Ультимативная формула Ромы-Монте-Карло
+        real_chance = (1 - m) * p_i + m * (q * p_i + ((1 - p_i) / (N - 1)) * q)
+        chance_pct = real_chance * 100
+        safe_name = u["first_name"].replace("<", "&lt;").replace(">", "&gt;")
+        kras_list.append({"name": safe_name, "chance": chance_pct})
+    # Сортируем от большего к меньшему
+    kras_list = sorted(kras_list, key=lambda x: x["chance"], reverse=True)
+
+    # --- ФОРМИРОВАНИЕ ИТОГОВОГО ТЕКСТА ---
+    response = "📊 <b>РЕАЛЬНЫЕ ШАНСЫ ЗА ИГРОВЫМ СТОЛОМ:</b>\n"
+    response += "<i>(Расчёт весов с учётом возможного переброса монетки)</i>\n\n"
+
+    # Вывод Пидора
+    response += "🤡 <b>Претенденты на Пидора дня:</b>\n"
+    for item in pidor_list:
+        response += f" ├ <b>{item['name']}</b>: <code>{item['chance']:.2f}%</code>\n"
 
     response += "\n"
 
-    # --- БЛОК КРАСАВЧИКА ---
+    # Вывод Красавчика
     response += "👑 <b>Претенденты на Красавчика дня:</b>\n"
-    for u in active_users:
-        p_i = u.get("kras_weight", 100.0) / total_kras_weight
-        # Ультимативная формула Ромы: учитывает стандартный прокрут + переброс монетки претендентов
-        real_chance = (1 - m) * p_i + m * (q * p_i + ((1 - p_i) / (N - 1)) * q)
-        
-        safe_name = u["first_name"].replace("<", "&lt;").replace(">", "&gt;")
-        response += f" ├ <b>{safe_name}</b>: <code>{real_chance * 100:.2f}%</code>\n"
+    for item in kras_list:
+        response += f" ├ <b>{item['name']}</b>: <code>{item['chance']:.2f}%</code>\n"
 
     response += "\n🎰 <i>Казино играет честно. Все коэффициенты зафиксированы Крупье!</i>"
     
     await context.bot.send_message(chat_id=chat_id, text=response, parse_mode="HTML")
-
 
 async def records(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
