@@ -611,13 +611,34 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 multiplier = 5
                 multiplier_text = "💀 *ТОТАЛЬНЫЙ АПОКАЛИПСИС СТАТИСТИКИ (х5)!!!!!* Смертельный джекпот за рекордные 5+ дней топа! Получай *+5 позоров* разом! 🎪🤡"
 
+    # === 🎰 [ФИКС РОМЫ №1]: ЗАПОМИНАЕМ УТРЕННИЙ МНОЖИТЕЛЬ ДЛЯ КАРТЫ UNO ===
+    if context.bot_data is None:
+        context.bot_data = {}
+    context.bot_data["today_pidor_multiplier"] = multiplier
+
     # Рассчитываем итоговую статистику с учётом множителя позора
     new_count = winner["pidor_count"] + multiplier
-    supabase.table("users").update({"pidor_count": new_count}).eq("user_id", winner["user_id"]).execute()
-    
-    # Сбрасываем стрик победителя обратно в 0
-    supabase.table("users").update({"pidor_streak": 0}).eq("user_id", winner["user_id"]).execute()
 
+    # =====================================================================
+    # 🚨 [ФИКС РОМЫ №2]: СНАЧАЛА ЗАПИСЬ В БАЗУ, ПОТОМ ПРАЗДНИК! 🚨
+    # =====================================================================
+    try:
+        # 1. Сразу фиксируем начисление позора в профиль
+        supabase.table("users").update({"pidor_count": new_count}).eq("user_id", winner["user_id"]).execute()
+        
+        # 2. Сбрасываем стрик удержания веса победителя обратно в 0
+        supabase.table("users").update({"pidor_streak": 0}).eq("user_id", winner["user_id"]).execute()
+        
+        # 3. Пересчитываем веса под финального победителя и сохраняем его в историю дня
+        redistribute_weights(winner["user_id"], "pidor_weight")
+        save_daily_winner("pidor", winner["user_id"])
+    except Exception as db_err:
+        print(f"Критическая ошибка сохранения транзакции рулетки /pidor в базу: {db_err}")
+        return  # Если база недоступна — прерываемся
+
+    # =====================================================================
+    # 🎉 ОФОРМЛЕНИЕ И ВЫВОД В ЧАТ (Полностью защищено от NameError)
+    # =====================================================================
     # Полная изоляция никнейма от багов разметки Телеграма (в скобки)
     w_username_display = f" (@{winner['username']})" if winner.get('username') else ""
     safe_winner_name = f"{winner['first_name']}{w_username_display}"
@@ -629,18 +650,22 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
         uderzhival_text = g_text(winner, "удерживал", "удерживала")
         schet_title = g_text(winner, "позорный счёт", "позорный счёт леди")
 
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text=(
-                f"🎰 <b>АКТИВАЦИЯ МНОЖИТЕЛЯ ПОЗОРА!</b> 🎰\n\n"
-                f"Поскольку {favorit_title} <b>{safe_winner_name}</b> {uderzhival_text} максимальный шанс стать Пидором дня уже <b>{streak_days} дн.</b> подряд, казино активирует бонусное колесо наказаний!\n\n"
-                f"{multiplier_text}\n\n"
-                f"📊 <i>Личная статистика обновлена. Текущий {schet_title}: {new_count}</i>"
-            ),
-            parse_mode="HTML"
-        )
-        if multiplier == 5:
-            await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgUAAxkBAAERr4pqeX-dpAQpHvj3CZnAcPY0_UmGSQACgggAAjiksVVM5Vj4fvPn0z0E')
+        try:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=(
+                    f"🎰 <b>АКТИВАЦИЯ МНОЖИТЕЛЯ ПОЗОРА!</b> 🎰\n\n"
+                    f"Поскольку {favorit_title} <b>{safe_winner_name}</b> {uderzhival_text} максимальный шанс стать Пидором дня уже <b>{streak_days} дн.</b> подряд, казино активирует бонусное колесо наказаний!\n\n"
+                    f"{multiplier_text}\n\n"
+                    f"📊 <i>Личная статистика обновлена. Текущий {schet_title}: {new_count}</i>"
+                ),
+                parse_mode="HTML"
+            )
+            if multiplier == 5:
+                await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgUAAxkBAAERr4pqeX-dpAQpHvj3CZnAcPY0_UmGSQACgggAAjiksVVM5Vj4fvPn0z0E')
+        except Exception as tg_err:
+            print(f"Косметическая ошибка отправки плашки множителя: {tg_err}")
+
 
     # === 🎪 ПОЗОРНЫЙ ВИНСТРИК ПИДОРА (БЕЗБАГОВЫЙ СБРОС) ===
     # 1. Железный сброс в один клик: обнуляем позорный стрик ВСЕМ, кроме сегодняшнего призера
