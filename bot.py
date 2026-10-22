@@ -1434,8 +1434,8 @@ async def procents_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         p_i = u.get("pidor_weight", 100.0) / total_pidor_weight
         chance_pct = p_i * 100
         safe_name = u["first_name"].replace("<", "&lt;").replace(">", "&gt;")
-        pidor_list.append({"name": safe_name, "chance": chance_pct})
-    # Сортируем от большего к меньшему
+        username_str = f" (@{u['username']})" if u.get("username") else ""
+        pidor_list.append({"display": f"{safe_name}{username_str}", "chance": chance_pct})
     pidor_list = sorted(pidor_list, key=lambda x: x["chance"], reverse=True)
 
     # --- СБОР И СОРТИРОВКА ДАННЫХ КРАСАВЧИКА ---
@@ -1446,27 +1446,24 @@ async def procents_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         real_chance = (1 - m) * p_i + m * (q * p_i + ((1 - p_i) / (N - 1)) * q)
         chance_pct = real_chance * 100
         safe_name = u["first_name"].replace("<", "&lt;").replace(">", "&gt;")
-        kras_list.append({"name": safe_name, "chance": chance_pct})
-    # Сортируем от большего к меньшему
+        username_str = f" (@{u['username']})" if u.get("username") else ""
+        kras_list.append({"name": f"{safe_name}{username_str}", "chance": chance_pct})
     kras_list = sorted(kras_list, key=lambda x: x["chance"], reverse=True)
 
-    # --- ФОРМИРОВАНИЕ ИТОГОВОГО ТЕКСТА (ЖЕЛЕЗНО ИЗ ОТСОРТИРОВАННЫХ СПИСКОВ) ---
-    response = "📊 <b>РЕАЛЬНЫЕ ШАНСЫ ЗА ИГРОВЫМ СТОЛОМ:</b>\n"
-    response += "<i>(Расчёт весов с учётом возможного переброса монетки)</i>\n\n"
+    # --- ФОРМИРОВАНИЕ ТВОЕГО КРАСИВОГО СТИЛЯ ТЕКСТА ---
+    response = "🎯 <b>ТЕКУЩИЕ ШАНСЫ УЧАСТНИКОВ</b>\n\n"
+    
+    response += "🔥 <b>Шансы стать Пидором дня:</b>\n"
+    for idx, item in enumerate(pidor_list, 1):
+        response += f"{idx}. {item['display']} — <code>{item['chance']:.1f}%</code>\n"
 
-    # Вывод Пидора (Теперь строго по отсортированному pidor_list!)
-    response += "🤡 <b>Претенденты на Пидора дня:</b>\n"
-    for item in pidor_list:
-        response += f" ├ <b>{item['name']}</b>: <code>{item['chance']:.2f}%</code>\n"
+    response += "\n———————————————\n\n"
 
-    response += "\n"
+    response += "👑 <b>Шансы стать Красавчиком дня:</b>\n"
+    for idx, item in enumerate(kras_list, 1):
+        response += f"{idx}. {item['name']} — <code>{item['chance']:.1f}%</code>\n"
 
-    # Вывод Красавчика (Теперь строго по отсортированному kras_list!)
-    response += "👑 <b>Претенденты на Красавчика дня:</b>\n"
-    for item in kras_list:
-        response += f" ├ <b>{item['name']}</b>: <code>{item['chance']:.2f}%</code>\n"
-
-    response += "\n🎰 <i>Казино играет честно. Все коэффициенты зафиксированы Крупье!</i>"
+    response += "\n🎰 <i>Казино играет честно. Коэффициенты рассчитаны с учётом возможного переброса монетки!</i>"
 
     await context.bot.send_message(chat_id=chat_id, text=response, parse_mode="HTML")
 
