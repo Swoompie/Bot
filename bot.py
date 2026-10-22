@@ -3138,28 +3138,35 @@ async def command_notbed(update: Update, context: ContextTypes.DEFAULT_TYPE):
     victim_name = clash.get("victim_name")
     mult = clash.get("multiplier", 1)
 
-    # Если маркер равен -1 — это провал перевода!
     if mult == -1:
         await context.bot.send_message(chat_id=chat_id, text="🙅‍♂️ Какой 'notbad'? В последнем замесе карта UNO дала жёсткую осечку! Тут уместна другая команда... 😏💣", parse_mode="HTML")
         return
 
-    if user.first_name != sender_name and user.first_name != victim_name:
+    # УЛЬТИМАТИВНЫЙ ЛЕНИВЫЙ ФИКС: Вытаскиваем реальные профили участников по их именам из лога
+    db_sender = supabase.table("users").select("user_id").eq("first_name", sender_name).execute().data
+    db_victim = supabase.table("users").select("user_id").eq("first_name", victim_name).execute().data
+    
+    sender_id = db_sender[0]["user_id"] if db_sender else None
+    victim_id = db_victim[0]["user_id"] if db_victim else None
+
+    # Проверяем причастность строго по железным цифровым ID Телеграма!
+    if user.id != sender_id and user.id != victim_id:
         await context.bot.send_message(chat_id=chat_id, text="🙅‍♂️ Ты не участвовал в сегодняшнем карточном замесе. Не лезь за чужой игровой стол!", parse_mode="HTML")
         return
 
     player_res = supabase.table("users").select("*").eq("user_id", user.id).execute()
-    # ЖЕЛЕЗНО ИСПРАВЛЕНО: Вытаскиваем чистый словарь по индексу, а не список!
     player = player_res.data[0] if player_res.data and len(player_res.data) > 0 else {"gender": "boy"}
     safe_name = user.first_name.replace("<", "&lt;").replace(">", "&gt;")
 
-    if user.first_name == sender_name:
+    if user.id == sender_id:
         msg_boy = "Чистая тактика, пацаны! Я перевёл, сучки, учитесь, пока я добрый! Коддинг высокого уровня! 😎🎰"
         msg_girl = "Абсолютная грация, мальчики! Забрала этот раунд на чистом интуитивном расчёте. Учитесь! 💎💅"
         await context.bot.send_message(chat_id=chat_id, text=f"🥂 <b>{safe_name}</b> вальяжно откидывается на стуле и объявляет:\n\n🔥 <b>{g_text(player, msg_boy, msg_girl)}</b>", parse_mode="HTML")
     else:
         msg_boy = "Признаю, разыграно красиво... Технично подловил. Но игровой день ещё длинный, я отыграюсь! 🚬"
-        msg_girl = "Это был дерзкий выпад, признаю... Но фортуна в казино капризна, мой ход ещё впереди! "
+        msg_girl = "Это был дерзкий выпад, признаю... Но фортуна в казино капризна, мой ход ещё впереди! 🐍"
         await context.bot.send_message(chat_id=chat_id, text=f"🐌 <b>{safe_name}</b> грустно цедит свой напиток у барной стойки и бормочет:\n\n🎭 <i>{g_text(player, msg_boy, msg_girl)}</i>", parse_mode="HTML")
+
 
 async def command_sosamba(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
@@ -3177,29 +3184,33 @@ async def command_sosamba(update: Update, context: ContextTypes.DEFAULT_TYPE):
     victim_name = clash.get("victim_name")
     mult = clash.get("multiplier", 1)
 
-    # Сосамба работает ТОЛЬКО если последний раунд закончился провалом (-1)
     if mult != -1:
         await context.bot.send_message(chat_id=chat_id, text="🙅‍♂️ Оппонент успешно перевёл стрелки, какая тут сосамба? Зализывай раны! 🐌", parse_mode="HTML")
         return
 
-    if user.first_name != sender_name and user.first_name != victim_name:
+    # УЛЬТИМАТИВНЫЙ ЛЕНИВЫЙ ФИКС: Вытаскиваем реальные профили участников по их именам из лога
+    db_sender = supabase.table("users").select("user_id").eq("first_name", sender_name).execute().data
+    db_victim = supabase.table("users").select("user_id").eq("first_name", victim_name).execute().data
+    
+    sender_id = db_sender[0]["user_id"] if db_sender else None
+    victim_id = db_victim[0]["user_id"] if db_victim else None
+
+    # Проверяем причастность строго по железным цифровым ID Телеграма!
+    if user.id != sender_id and user.id != victim_id:
         await context.bot.send_message(chat_id=chat_id, text="🙅‍♂️ Ты не причастен к этой разборке, право на глумление имеют только участники!", parse_mode="HTML")
         return
 
     player_res = supabase.table("users").select("*").eq("user_id", user.id).execute()
-    # ЖЕЛЕЗНО ИСПРАВЛЕНО: Вытаскиваем чистый словарь по индексу, а не список!
     player = player_res.data[0] if player_res.data and len(player_res.data) > 0 else {"gender": "boy"}
     safe_name = user.first_name.replace("<", "&lt;").replace(">", "&gt;")
 
-    # ЖЕЛЕЗНО ИСПРАВЛЕНО: Добавили индекс, чтобы читать словарь из списка Supabase
     loser_res = supabase.table("users").select("pidor_weight").eq("first_name", sender_name).execute()
     is_karma_triple = False
     if loser_res.data and len(loser_res.data) > 0:
-        # Берём первую найденную строку [0] и спокойно вызываем .get()
         if loser_res.data[0].get("pidor_weight", 100.0) >= 150.0:
             is_karma_triple = True
 
-    if user.first_name == victim_name:
+    if user.id == victim_id:
         if is_karma_triple:
             msg_boy = "<b>СОСАМБА, БРАТИК!</b> Хотел перевести на меня, но сам сожрал свой позор в тройном размере! Карма — вещь! 😂💣"
             msg_girl = "<b>СОСАМБА, МИЛАЯ!</b> Пыталась скинуть на меня клеймо, а в итоге сама улевела в тройной позор! Учись играть! 💅🔥"
