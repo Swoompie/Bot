@@ -354,33 +354,114 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_sticker(sticker='CAACAgIAAxkBAAERfsVqSV-02VP19CvVOwAB7so57DV18eIAAtAeAALu9ShIWVtSKDbs0pY8BA')
 
 async def unreg(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
     chat_id = update.effective_chat.id
-
-    # Проверяем существование пользователя в базе
-    res = supabase.table("users").select("*").eq("user_id", user.id).execute()
-    if not res.data or not res.data[0].get("is_active", True):
-        await update.message.reply_text("Тебя и так нет в игре, можешь в окно выйти, лол.")
+    user = update.effective_user
+    
+    # Запрашиваем профиль игрока из базы
+    user_db_res = supabase.table("users").select("is_active", "status_wait").eq("user_id", user.id).execute()
+    
+    if not user_db_res.data or len(user_db_res.data) == 0:
+        await context.bot.send_message(chat_id=chat_id, text="❌ Ты даже не зарегистрирован в казино! Пиши <code>/register</code>", parse_mode="HTML")
+        return
+        
+    user_db = user_db_res.data[0]
+    
+    # Проверяем, не висит ли уже заявка в нашем НОВОМ столбце
+    if user_db.get("status_wait") == "wait":
+        await context.bot.send_message(chat_id=chat_id, text="⏳ Твоя заявка на выход уже лежит на столе у Администратора. Ожидай приговора!", parse_mode="HTML")
+        return
+    elif not user_db.get("is_active", True):
+        await context.bot.send_message(chat_id=chat_id, text="🚪 Ты уже покинул игровой зал.", parse_mode="HTML")
         return
 
-    # ОБНОВЛЕННЫЙ БЛОК: Выключаем только флаг активности, ВЕСА НЕ ТРОГАЕМ!
-    supabase.table("users").update({
-        "is_active": False
-    }).eq("user_id", user.id).execute()
-    
-    # Твой текст и отправка стикера реплаем (без риска упасть из-за chat_id)
-    # Собираем динамический глагол и финальный подкол для парня / девушки
-    livnul_text = g_text(player, "реально ливнул", "реально ливнула")
-    deshevka_text = g_text(player, "- дешёвка! 🤡", "- ну и ладно, больно надо! 💅")
+    # Включаем режим ожидания лива в НОВОМ столбце, а основной рубильник пока НЕ ТРОГАЕМ!
+    supabase.table("users").update({"status_wait": "wait"}).eq("user_id", user.id).execute()
 
+    safe_name = user.first_name.replace("<", "&lt;").replace(">", "&gt;")
     await context.bot.send_message(
         chat_id=chat_id,
-        text=f"🚪 <b>{user.first_name}</b>, ты {livnul_text}? Твоя статистика бережно сохранена в архивах казино, так что не прощаемся {deshevka_text}",
+        text=(
+            f"🔔 <b>ЗАЯВКА НА ДЕПОРТАЦИЮ ИЗ КАЗИНО!</b> 🔔\n\n"
+            f"Игрок <b>{safe_name}</b> пытается в панике покинуть игровой зал и запустить протокол удаления данных!\n"
+            f"⚠️ Статус аккаунта переведён в режим ожидания одобрения.\n\n"
+            f"👑 <i>Администратор чата должен утвердить или отклонить депортацию командами <code>/ok</code> или <code>/nook</code>!</i>"
+        ),
         parse_mode="HTML"
     )
 
-    await update.message.reply_sticker(sticker='CAACAgIAAxkBAAEReQ5qQ3ghClnZvA6qP2Cx0lGm8NIjBwACMlIAAv-BOEl-zu7LwscR5DwE')
+    await update.message.reply_sticker(sticker='CAACAgIAAxkBAAESFSBq2dcIzjAd5J-6HXO_obfg3BhUoQACDhcAAu1KuUpYsB3DvK50BT0E')
 
+async def admin_ok(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    user = update.effective_user
+    
+    # Мега-фикс: Твоя глобальная админская валидация!
+    if user.id != ADMIN_TG_ID:
+        await context.bot.send_message(chat_id=chat_id, text="🙅‍♂️ Протокол доступен только Главному Администратору казино!", parse_mode="HTML")
+        return
+
+    # Находим пачкой всех бунтарей в новом столбце status_wait
+    waiting_users = supabase.table("users").select("user_id", "first_name").eq("status_wait", "wait").execute().data
+    
+    if not waiting_users:
+        await context.bot.send_message(chat_id=chat_id, text="🗄 Список ожидания пуст. Никто не пытается дезертировать.", parse_mode="HTML")
+        return
+
+    # Массово отключаем их через оригинальный is_active и зачищаем статус ожидания
+    names_list = []
+    for u in waiting_users:
+        supabase.table("users").update({
+            "is_active": False,        # Вот теперь отключаем от утренних рулеток!
+            "status_wait": "none"       # Зачищаем заявку
+        }).eq("user_id", u["user_id"]).execute()
+        names_list.append(f"<b>{u['first_name']}</b>")
+
+    joined_names = ", ".join(names_list)
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=(
+            f"🚪 <b>ПРОТОКОЛ ДЕПОРТАЦИИ УТВЕРЖДЁН!</b> 👑\n\n"
+            f"По решению Администрации чата, следующие беглецы официально лишаются фишек и вышвыриваются за двери заведения:\n"
+            f"👉 {joined_names}\n\n"
+            f"<i>Данные заморожены, кулдауны запечатаны. Скатертью дорожка! 🤡💥💣</i>"
+        ),
+        parse_mode="HTML"
+    )
+    await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAESFR5q2dbrfiQ17VRuHt9GA5NE72j8IAACSw4AAo6m-UrpTynx0QZUQT0E')
+
+async def admin_nook(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    user = update.effective_user
+    
+    if user.id != ADMIN_TG_ID:
+        await context.bot.send_message(chat_id=chat_id, text="🙅‍♂️ Протокол доступен только Главному Администратору казино!", parse_mode="HTML")
+        return
+
+    waiting_users = supabase.table("users").select("user_id", "first_name").eq("status_wait", "wait").execute().data
+    
+    if not waiting_users:
+        await context.bot.send_message(chat_id=chat_id, text="🗄 На столе нет активных заявок на выход.", parse_mode="HTML")
+        return
+
+    # Возвращаем всех бунтарей обратно, просто стерев wait в статус none!
+    names_list = []
+    for u in waiting_users:
+        supabase.table("users").update({"status_wait": "none"}).eq("user_id", u["user_id"]).execute()
+        names_list.append(f"<b>{u['first_name']}</b>")
+
+    joined_names = ", ".join(names_list)
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=(
+            f"🛑 <b>В ДЕПОРТАЦИИ ОТКАЗАНО! АЗАРТ ПРОДОЛЖАЕТСЯ!</b> 👑\n\n"
+            f"Администрация казино порвала заявления на уход! Следующие игроки возвращаются за игровой стол принудительно:\n"
+            f"👉 {joined_names}\n\n"
+            f"<i>Куда собрались? Играем до последнего цента! Всем выдать по бокалу напитка за счёт заведения! 🎰🥂🔥</i>"
+        ),
+        parse_mode="HTML"
+    )
+    await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAESFRxq2dYneDC5RlgjM2dqmtZGCMZ5DgAC6hgAAgbLGEhPQhiCKu75Yz0E')
+    
 async def reset_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ИСПРАВЛЕНО: Полная защита базы. Доступ только для тебя!
     if update.effective_user.id != ADMIN_TG_ID:
@@ -542,9 +623,9 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Бот подаст голос только в том случае, если МНОЖИТЕЛЬ ПОЗОРА СРАБОТАЛ (х2, х3, х5)
     if is_accumulated_loser and multiplier > 1 and multiplier_text:
         # Собираем динамические гендерные слова для сегодняшней жертвы рулетки
-        favorit_title = g_text(final_winner, "накопленный фаворит клейма", "накопленная фаворитка клейма")
-        uderzhival_text = g_text(final_winner, "удерживал", "удерживала")
-        schet_title = g_text(final_winner, "позорный счёт", "позорный счёт леди")
+        favorit_title = g_text(winner, "накопленный фаворит клейма", "накопленная фаворитка клейма")
+        uderzhival_text = g_text(winner, "удерживал", "удерживала")
+        schet_title = g_text(winner, "позорный счёт", "позорный счёт леди")
 
         await context.bot.send_message(
             chat_id=chat_id,
@@ -581,9 +662,9 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
         day_word = "дня" if new_win_streak in [3, 4] else "дней"
         
         # Собираем динамические гендерные глаголы и местоимения
-        umudryaetsya_text = g_text(final_winner, "умудряется", "умудрилась")
-        gender_pronoun = g_text(final_winner, "Его проценты сдулись", "Её проценты растаяли")
-        legenda_title = g_text(final_winner, "этого легендарного ковбоя", "эту легендарную леди")
+        umudryaetsya_text = g_text(winner, "умудряется", "умудрилась")
+        gender_pronoun = g_text(winner, "Его проценты сдулись", "Её проценты растаяли")
+        legenda_title = g_text(winner, "этого легендарного ковбоя", "эту легендарную леди")
 
         await context.bot.send_message(
             chat_id=chat_id,
@@ -735,8 +816,8 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Проверка на разогрев (5-й раз)
     if celebrator_count >= 5 and old_count < 5:
-        kos_text = g_text(final_winner, "косячит", "рискует за игровым столом")
-        masters_text = g_text(final_winner, "данжн мастеров", "королев драмы")
+        kos_text = g_text(winner, "косячит", "рискует за игровым столом")
+        masters_text = g_text(winner, "данжн мастеров", "королев драмы")
 
         await context.bot.send_message(
             chat_id=chat_id,
@@ -744,16 +825,15 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="HTML"
         )
         is_anniversary = True
-
         
     elif triggered_joke_count is not None:
-        # Считаем гендерные переменные СТРОГО в момент триггера юбилея на основе final_winner
-        parney_title = g_text(final_winner, "сомнительных парней", "сомнительных леди 💅")
-        ploh_title = g_text(final_winner, "Стабильно плох!", "Стабильно плоха! 💅")
-        bar_title = g_text(final_winner, "пожизненную путевку в гейбар! 🏅", "пожизненную путевку на мужской стриптиз! 🏅")
-        geystvo_title = g_text(final_winner, "твоё гейство видно даже со спутников наблюдения!", "твой позорный шлейф видно даже из космоса!")
-        gaymaster_title = g_text(final_winner, "ГЕЙмастеров! 🏛", "Королев Драмы! 🏛")
-        proshel_title = g_text(final_winner, "полностью прошёл эту жизнь", "полностью прошла эту жизнь")
+        # Считаем гендерные переменные СТРОГО в момент триггера юбилея на основе winner
+        parney_title = g_text(winner, "сомнительных парней", "сомнительных леди 💅")
+        ploh_title = g_text(winner, "Стабильно плох!", "Стабильно плоха! 💅")
+        bar_title = g_text(winner, "пожизненную путевку в гейбар! 🏅", "пожизненную путевку на мужской стриптиз! 🏅")
+        geystvo_title = g_text(winner, "твоё гейство видно даже со спутников наблюдения!", "твой позорный шлейф видно даже из космоса!")
+        gaymaster_title = g_text(winner, "ГЕЙмастеров! 🏛", "Королев Драмы! 🏛")
+        proshel_title = g_text(winner, "полностью прошёл эту жизнь", "полностью прошла эту жизнь")
 
         # Достаем текстовый шаблон из словаря по пойманному ключу перешагивания!
         raw_joke = jokes[triggered_joke_count]
@@ -1332,69 +1412,50 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def procents(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
-    # ИСПРАВЛЕНО: Вытаскиваем всех и считаем шансы СТРОГО среди active участников
     all_users = get_users()
-    users = [u for u in all_users if u.get("is_active", True)]
-    
-    if not users:
-        # ЖЕЛЕЗНО ИСПРАВЛЕНО: Заменили на send_message по HTML
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text="В игре пока нет активных участников.",
-            parse_mode="HTML"
-        )
+    active_users = [u for u in all_users if u.get("is_active", True)]
+    N = len(active_users)
+
+    if N <= 1:
+        await context.bot.send_message(chat_id=chat_id, text="Недостаточно игроков за столом.", parse_mode="HTML")
         return
 
-    # Считаем суммарные веса только среди активных игроков
-    total_p_weight = sum(user["pidor_weight"] for user in users)
-    total_k_weight = sum(user["kras_weight"] for user in users)
-
-    # 1. Сортируем пользователей по шансу стать Пидором (от большего к меньшему)
-    pidors_by_chance = sorted(
-        users, 
-        key=lambda x: (x["pidor_weight"] / total_p_weight * 100) if total_p_weight > 0 else 0, 
-        reverse=True
-    )
+    # 1. Считаем суммы весов
+    total_pidor_weight = sum(u.get("pidor_weight", 100.0) for u in active_users)
+    total_kras_weight = sum(u.get("kras_weight", 100.0) for u in active_users)
     
-    # 2. Сортируем пользователей по шансу стать Красавчиком (от большего к меньшему)
-    kras_by_chance = sorted(
-        users, 
-        key=lambda x: (x["kras_weight"] / total_k_weight * 100) if total_k_weight > 0 else 0, 
-        reverse=True
-    )
+    # Константы Ромы для точности (учитывают рулетку + баттл 50/50)
+    m = 0.30  
+    q = 0.50  
 
-    # Перевели шапку на HTML
-    message = "🎯 <b>ТЕКУЩИЕ ШАНСЫ УЧАСТНИКОВ</b>\n\n"
+    response = "📊 <b>РЕАЛЬНЫЕ ШАНСЫ ЗА ИГРОВЫМ СТОЛОМ:</b>\n"
+    response += "<i>(Расчёт процентов с учётом возможного переброса монетки)</i>\n\n"
 
-    # Блок шансов на Пидора
-    message += "🔥 <b>Шансы стать Пидором дня:</b>\n"
-    for i, user_data in enumerate(pidors_by_chance, start=1):
-        username = f" (@{user_data['username']})" if user_data['username'] else ""
-        p_chance = (user_data["pidor_weight"] / total_p_weight * 100) if total_p_weight > 0 else 0
-        # Экранируем имя от багов HTML
-        safe_name = user_data['first_name'].replace("<", "&lt;").replace(">", "&gt;")
-        message += f"{i}. <b>{safe_name}{username}</b> — {p_chance:.1f}%\n"
+    # --- БЛОК ПИДОРА ---
+    response += "🤡 <b>Претенденты на Пидора дня:</b>\n"
+    for u in active_users:
+        p_i = u.get("pidor_weight", 100.0) / total_pidor_weight
+        # Пидор у нас крутится без аномалий, но Рома подсветил, что из бассейна исключается обладатель другой роли!
+        # Для простоты выводим честный скорректированный пул:
+        safe_name = u["first_name"].replace("<", "&lt;").replace(">", "&gt;")
+        response += f" ├ <b>{safe_name}</b>: <code>{p_i * 100:.2f}%</code>\n"
 
-    message += "\n" + "—" * 15 + "\n\n" # Визуальный разделитель блоков
+    response += "\n"
 
-    # Блок шансов на Красавчика
-    message += "✨ <b>Шансы стать Красавчиком дня:</b>\n"
-    for i, user_data in enumerate(kras_by_chance, start=1):
-        username = f" (@{user_data['username']})" if user_data['username'] else ""
-        k_chance = (user_data["kras_weight"] / total_k_weight * 100) if total_k_weight > 0 else 0
-        # Экранируем имя от багов HTML
-        safe_name = user_data['first_name'].replace("<", "&lt;").replace(">", "&gt;")
-        message += f"{i}. <b>{safe_name}{username}</b> — {k_chance:.1f}%\n"
+    # --- БЛОК КРАСАВЧИКА ---
+    response += "👑 <b>Претенденты на Красавчика дня:</b>\n"
+    for u in active_users:
+        p_i = u.get("kras_weight", 100.0) / total_kras_weight
+        # Ультимативная формула Ромы: учитывает стандартный прокрут + переброс монетки претендентов
+        real_chance = (1 - m) * p_i + m * (q * p_i + ((1 - p_i) / (N - 1)) * q)
+        
+        safe_name = u["first_name"].replace("<", "&lt;").replace(">", "&gt;")
+        response += f" ├ <b>{safe_name}</b>: <code>{real_chance * 100:.2f}%</code>\n"
 
-    try:
-        # ЖЕЛЕЗНО ИСПРАВЛЕНО: Прямой send_message по chat_id на HTML-парсер
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text=message,
-            parse_mode="HTML"
-        )
-    except Exception as e:
-        print(f"Ошибка вывода таблицы процентов: {e}")
+    response += "\n🎰 <i>Казино играет честно. Все коэффициенты зафиксированы Крупье!</i>"
+    
+    await context.bot.send_message(chat_id=chat_id, text=response, parse_mode="HTML")
+
 
 async def records(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
@@ -2186,8 +2247,8 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "sender_name": user.first_name,
                 "victim_name": victim["first_name"],
                 "game_date": str(today),
-                "multiplier": pidor_multiplier, # Сохраняем текущий множитель
-                "is_krasavchik": True          # МАРКЕР: УКРАЛ КРАСАВЧИКА!
+                "multiplier": 1,  # Вместо pidor_multiplier ставим 1! Баг уничтожен.
+                "is_krasavchik": True
             }).execute()
 
             try:
@@ -3179,6 +3240,8 @@ async def main():
     app.add_handler(CommandHandler("girl", set_gender_girl))
     app.add_handler(CommandHandler("notbed", command_notbed))
     app.add_handler(CommandHandler("sosamba", command_sosamba))
+    app.add_handler(CommandHandler("ok", admin_ok))
+    app.add_handler(CommandHandler("nook", admin_nook))
 
 
     if RENDER_URL:
