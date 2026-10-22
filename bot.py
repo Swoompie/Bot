@@ -1527,7 +1527,7 @@ async def procents_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if today_pidor and today_kras:
         response += (
             "\n🎰 <i>Новые коэффициенты на завтрашнее утро загрузятся ровно в полночь (00:00)! "
-            "А пока — качайте свои веса и меняйте расклады сил на дуэлях <code>/duel</code> и кубиках кармы <code>/dice</code>! 🔥🥂</i>"
+            "А если хочешь узнать процент на завтра пораньше, пиши <code>/mystats</code>! 🔥🥂</i>"
         )
     else:
         response += "\n🎰 <i>Казино играет честно. Фортуна начинает свой ход... 🍸</i>"
