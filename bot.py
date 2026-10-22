@@ -2601,13 +2601,24 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # 2. РАССЧИТЫВАЕМ ПРОЦЕНТЫ ШАНСОВ НА ТЕКУЩИЙ МОМЕНТ (Как в /procents)
+    # 2. РАССЧИТЫВАЕМ ЧЕСТНЫЕ ПРОЦЕНТЫ ШАНСОВ (Математическая синхронизация с /procents)
     total_pidor_weight = sum(u.get("pidor_weight", 100.0) for u in active_users)
     total_kras_weight = sum(u.get("kras_weight", 100.0) for u in active_users)
     
-    # Считаем чистый процент (защита от деления на ноль)
+    # Константы Ромы-Монте-Карло для точности Красавчика
+    m = 0.30  
+    q = 0.50  
+
+    # Честный процент Пидора (без аномалий)
     pidor_chance = (player.get("pidor_weight", 100.0) / total_pidor_weight * 100) if total_pidor_weight > 0 else 0.0
-    kras_chance = (player.get("kras_weight", 100.0) / total_kras_weight * 100) if total_kras_weight > 0 else 0.0
+    
+    # УЛЬТИМАТИВНЫЙ ФИКС: Честный процент Красавчика с учетом переброса монетки!
+    if total_kras_weight > 0:
+        p_i = player.get("kras_weight", 100.0) / total_kras_weight
+        real_kras_chance = (1 - m) * p_i + m * (q * p_i + ((1 - p_i) / (N - 1)) * q)
+        kras_chance = real_kras_chance * 100
+    else:
+        kras_chance = 0.0
 
     # 3. Проверяем статус КД карты UNO
     uno_status = "🟢 ГОТОВА К БОЮ!"
