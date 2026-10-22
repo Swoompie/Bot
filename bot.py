@@ -2980,27 +2980,21 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     print(f"Ошибка вывода недельных итогов кубиков: {e}")
 
 async def uno_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # === 🕵️‍♂️ [ФИКС] ВЫТАСКИВАЕМ АВТОРА КОМАНДЫ ДЛЯ ГЕНДЕРНОГО АВТОМАТА ===
     chat_id = update.effective_chat.id
-    # ЖЕЛЕЗНО ИСПРАВЛЕНО: Фильтруем провалы! Берём только успешные переводы (где множитель > 0)
     user = update.effective_user
-    res = supabase.table("uno_logs").select("*").eq("sender_name", user.first_name).gt("multiplier", 0).execute()
-
     
+    # 1. ЖЕЛЕЗНЫЙ ВЕРНЫЙ ЗАПРОС: Вытаскиваем только успешные переводы (multiplier > 0)
+    # Сортируем по id от свежих к старым сразу в базе!
+    res = supabase.table("uno_logs").select("*").eq("sender_name", user.first_name).gt("multiplier", 0).order("id", desc=True).execute()
+
     player_res = supabase.table("users").select("*").eq("user_id", user.id).execute()
     player = player_res.data[0] if player_res.data and len(player_res.data) > 0 else {"gender": "boy"}
-    
-    # Готовим безопасное HTML-имя вызывающего игрока
     safe_sender_name = user.first_name.replace("<", "&lt;").replace(">", "&gt;")
 
-    # Вытягиваем из базы ВООБЩЕ ВСЕ логи, где sender_name равен имени этого игрока
-    res = supabase.table("uno_logs").select("*").eq("sender_name", user.first_name).order("id", desc=True).execute()
-    
+    # Проверяем на пустоту ОДИН РАЗ
     if not res.data or len(res.data) == 0:
-        # Собираем динамические гендерные подколы для пустой хроники (на основе player)
-        smog_text = g_text(player, "смог успешно перевести карту", "смогла успешно перевести карту ")
+        smog_text = g_text(player, "смог успешно перевести карту", "смогла успешно перевести карту")
         nevezet_text = g_text(player, "чертовски не везёт на переводы, либо ты слишком мирный ковбой", "не везёт на риски, либо ты слишком мирная леди")
-
         await context.bot.send_message(
             chat_id=chat_id, 
             text=f"🃏 <b>{safe_sender_name}</b>, твоя личная хроника UNO пуста!\n\nТы ещё ни разу в истории чатика не {smog_text}. Либо тебе {nevezet_text}! 😏", 
@@ -3008,99 +3002,71 @@ async def uno_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Шапка персонального досье
-    header = f"🃏 <b>ЛИЧНАЯ ХРОНИКА СПЕЦОПЕРАЦИЙ: {safe_sender_name.upper()}</b> 🃏\n"
+    # Шапка досье
+    header = f"🃏 <b>ЛИЧНАЯ ХРОНИКА : {safe_sender_name.upper()}</b> 🃏\n"
     header += f"<i>Крупье поднял архивные записи казино... Вот твои успешные переводы стрелок за игровым столом:</i>\n\n"
     
     lines = []
-    
     for log in res.data:
-        # Форматируем дату в красивый вид (12.09)
         try:
             raw_date = date.fromisoformat(log["game_date"])
             formatted_date = raw_date.strftime("%d.%m")
         except Exception:
             formatted_date = log["game_date"]
 
-        # Экранируем имя жертвы
         safe_victim = log["victim_name"].replace("<", "&lt;").replace(">", "&gt;")
         mult = log.get("multiplier", 1)
 
-        # === 🕵️‍♂️ АВТОМАТИЧЕСКИЙ ПРОБИВ ПОЛА ЖЕРТВЫ ИЗ БАЗЫ SUPABASE ===
-        # Вытаскиваем гендер жертвы по её имени прямо из таблицы users
+        # Чекаем пол жертвы
         victim_user_res = supabase.table("users").select("gender").eq("first_name", log["victim_name"]).execute()
-        
-        # Если нашли игрока в базе — берём его реальный пол, если не нашли (вдруг ливнул) — по дефолту boy
-        if victim_user_res.data and len(victim_user_res.data) > 0:
-            victim_gender = victim_user_res.data[0].get("gender", "boy")
-        else:
-            victim_gender = "boy"
+        victim_gender = victim_user_res.data[0].get("gender", "boy") if victim_user_res.data else "boy"
 
-        # Проверяем, девушка ли Автор лога (/unostats) и девушка ли Жертва
         is_sender_girl = (player.get("gender") == "girl")
         is_victim_girl = (victim_gender == "girl")
 
-        # === 🎰 РАССТАВЛЯЕМ ГЛАГОЛЫ НА ОСНОВЕ ЧЕТЫРЕХ КОМБИНАЦИЙ (М/М, М/Ж, Ж/М, Ж/Ж) ===
         if not is_sender_girl and not is_victim_girl:
-            # 👦 ➡️ 👦 (Парень на Парня)
             perevel_action = f"ты перевёл стрелки на <b>{safe_victim}</b>! Жертва ушёл на дно! 🤡"
             tehn_action = f"ты технично перевёл позорный статус на <b>{safe_victim}</b>"
         elif not is_sender_girl and is_victim_girl:
-            # 👦 ➡️ 👩 (Парень на Девушку)
-            perevel_action = f"ты перевёл стрелки на <b>{safe_victim}</b>! Она ушла на дно от такого наката! 🤡💣"
+            perevel_action = f"ты перевёл стрелки на <b>{safe_victim}</b>! Она ушла на дно! 🤡💣"
             tehn_action = f"ты технично перевёл позорный статус на <b>{safe_victim}</b>"
         elif is_sender_girl and not is_victim_girl:
-            # 👩 ➡️ 👦 (Девушка на Парня)
             perevel_action = f"ты перевела стрелки на <b>{safe_victim}</b>! Жертва ушёл на дно! 🤡"
             tehn_action = f"ты технично перевела позорный статус на <b>{safe_victim}</b>"
         else:
-            # 👩 ➡️ 👩 (Девушка на Девушку)
             perevel_action = f"ты перевела стрелки на <b>{safe_victim}</b>! Она ушла на дно! 🤡"
             tehn_action = f"ты технично перевела позорный статус на <b>{safe_victim}</b>"
 
-        # Собираем остальные кастомные фразы для автора
         ofigel_text = g_text(player, "ты вообще офигел и <b>Украл статус Красавчика дня</b>", "ты проявила дерзость и <b>Забрала статус Красавицы дня</b> 👑")
         ahuel_text = g_text(player, "ты вообще ахуел и умудрился спиздить множитель Красавчика", "ты устроила абсолютный разнос и перехватила джекпот Красавицы")
 
-        # 👑 РАЗВЕТВЛЕНИЕ ТЕКСТА ПО ТИПАМ ГРАБЕЖЕЙ ДЛЯ СТРОКИ АРХИВА
         if log.get("is_krasavchik", False):
-            if mult >= 5:
-                action_text = f"{ahuel_text} <b>[х{mult}]</b>! Это легендарный раунд! 🤯🚀"
-            else:
-                action_text = f"{ofigel_text}! Королевский налёт! 💎"
+            action_text = f"{ahuel_text} <b>[х{mult}]</b>! Это легендарный раунд! 🤯🚀" if mult >= 5 else f"{ofigel_text}! Королевский налёт! 💎"
         else:
-            if mult > 1:
-                action_text = f"{perevel_action} с жёстким множителем позора <b>[х{mult}]</b>! 💣"
-            else:
-                action_text = f"{tehn_action}. Чистая работа! 💥"
+            action_text = f"{perevel_action} с жёстким множителем позора <b>[х{mult}]</b>! 💣" if mult > 1 else f"{tehn_action}. Чистая работа! 💥"
 
         lines.append(f"📅 <code>{formatted_date}</code> — {action_text}")
 
-    # Финальная сборка и отправка
-    final_text = header + "\n".join(lines)
-    await context.bot.send_message(chat_id=chat_id, text=final_text, parse_mode="HTML")
-
-# === 🎰 АВТО-РАЗБИВКА НА ЧАСТИ (ЗАЩИТА ОТ ЛИМИТОВ ТЕЛЕГРАМА С ГЕНДЕРОМ) ===
+    # === 🔥 ИСПРАВЛЕННЫЙ БЛОК ВЫВОДА (СПАМ УНИЧТОЖЕН!) ===
     chunk_size = 30
-    try:
-        # Собираем сочный динамический финал для подведения итогов в казино (на основе player)
-        end_phrase = g_text(player, "каждого твоего подлеца, друг... 😏⚔️", "каждую твою хитрую комбинацию за столом... 😏🔮")
+    end_phrase = g_text(player, "каждого твоего подлеца, друг... 😏⚔️", "каждую твою хитрую комбинацию за столом... 😏🔮")
 
-        if len(lines) <= chunk_size:
-            full_message = header + "\n".join(lines) + f"\n\n<i>Архивы казино помнят {end_phrase}</i>"
-            await context.bot.send_message(chat_id=chat_id, text=full_message, parse_mode="HTML")
-        else:
-            await context.bot.send_message(chat_id=chat_id, text=header, parse_mode="HTML")
-            for chunk_index in range(0, len(lines), chunk_size):
-                chunk = lines[chunk_index:chunk_index + chunk_size]
-                chunk_message = "\n".join(chunk)
-                if chunk_index + chunk_size >= len(lines):
-                    chunk_message += f"\n\n<i>Архивы казино помнят {end_phrase}</i>"
-                await context.bot.send_message(chat_id=chat_id, text=chunk_message, parse_mode="HTML")
-                await asyncio.sleep(0.5)
+    if len(lines) <= chunk_size:
+        # Отправляем ВСЕГО ОДНО сообщение, если логов мало!
+        full_message = header + "\n".join(lines) + f"\n\n<i>Архивы казино помнят {end_phrase}</i>"
+        await context.bot.send_message(chat_id=chat_id, text=full_message, parse_mode="HTML")
+    else:
+        # Бьём по чанкам, только если логов реально огромная гора
+        for chunk_index in range(0, len(lines), chunk_size):
+            chunk = lines[chunk_index:chunk_index + chunk_size]
+            chunk_message = "\n".join(chunk)
+            if chunk_index == 0:
+                chunk_message = header + chunk_message
+            if chunk_index + chunk_size >= len(lines):
+                chunk_message += f"\n\n<i>Архивы казино помнят {end_phrase}</i>"
+            await context.bot.send_message(chat_id=chat_id, text=chunk_message, parse_mode="HTML")
+            await asyncio.sleep(0.5)
 
-    except Exception as e:
-        print(f"Ошибка вывода личной уно-статистики: {e}")
 
 async def set_gender_boy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
