@@ -1501,21 +1501,36 @@ async def procents_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     kras_list = sorted(kras_list, key=lambda x: x["chance"], reverse=True)
 
     # =====================================================================
-    # 🎯 3. ФОРМИРОВАНИЕ ТВОЕГО КРАСИВОГО СТИЛЯ ТЕКСТА
+    # 🎯 3. УМНОЕ ДИНАМИЧЕСКОЕ ФОРМИРОВАНИЕ ТЕКСТА ШАПКИ
     # =====================================================================
-    response = "🎯 <b>ТЕКУЩИЕ ШАНСЫ УЧАСТНИКОВ</b>\n\n"
+    # Чекаем, завершён ли полностью сегодняшний день
+    if today_pidor and today_kras:
+        response = "🏆 <b>ИТОГИ СЕГОДНЯШНИХ РОЗЫГРЫШЕЙ</b> 🏆\n"
+        response += "<i>(Все ставки на сегодня сыграли, крупье зафиксировал результаты)</i>\n\n"
+    else:
+        response = "🎯 <b>ТЕКУЩИЕ ШАНСЫ УЧАСТНИКОВ</b>\n"
+        response += "<i>(Коэффициенты рассчитаны с учётом живого пула и переброса монетки)</i>\n\n"
     
+    # Вывод Пидора
     response += "🔥 <b>Шансы стать Пидором дня:</b>\n"
     for idx, item in enumerate(pidor_list, 1):
         response += f"{idx}. {item['display']} — <code>{item['chance']:.1f}%</code>\n"
 
     response += "\n———————————————\n\n"
 
+    # Вывод Красавчика
     response += "👑 <b>Шансы стать Красавчиком дня:</b>\n"
     for idx, item in enumerate(kras_list, 1):
         response += f"{idx}. {item['name']} — <code>{item['chance']:.1f}%</code>\n"
 
-    response += "\n🎰 <i>Казино играет честно. Коэффициенты рассчитаны с учётом живого пула и переброса монетки!</i>"
+    # Динамический финал-подсказка для лаундж-зоны
+    if today_pidor and today_kras:
+        response += (
+            "\n🎰 <i>Новые коэффициенты на завтрашнее утро загрузятся ровно в полночь (00:00)! "
+            "А пока — качайте свои веса и меняйте расклады сил на дуэлях <code>/duel</code> и кубиках кармы <code>/dice</code>! 🔥🥂</i>"
+        )
+    else:
+        response += "\n🎰 <i>Казино играет честно. Фортуна начинает свой ход... 🍸</i>"
 
     await context.bot.send_message(chat_id=chat_id, text=response, parse_mode="HTML")
 
