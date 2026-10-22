@@ -2612,13 +2612,13 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Честный процент Пидора (без аномалий)
     pidor_chance = (player.get("pidor_weight", 100.0) / total_pidor_weight * 100) if total_pidor_weight > 0 else 0.0
     
-    # УЛЬТИМАТИВНЫЙ ФИКС: Честный процент Красавчика с учетом переброса монетки!
-    if total_kras_weight > 0:
+    # ЖЕЛЕЗНО ИСПРАВЛЕНО: Заменили фантомную N на рабочий len(active_users) чата!
+    if total_kras_weight > 0 and len(active_users) > 1:
         p_i = player.get("kras_weight", 100.0) / total_kras_weight
-        real_kras_chance = (1 - m) * p_i + m * (q * p_i + ((1 - p_i) / (N - 1)) * q)
+        real_kras_chance = (1 - m) * p_i + m * (q * p_i + ((1 - p_i) / (len(active_users) - 1)) * q)
         kras_chance = real_kras_chance * 100
     else:
-        kras_chance = 0.0
+        kras_chance = (player.get("kras_weight", 100.0) / total_kras_weight * 100) if total_kras_weight > 0 else 0.0
 
     # 3. Проверяем статус КД карты UNO
     uno_status = "🟢 ГОТОВА К БОЮ!"
