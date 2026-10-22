@@ -1450,24 +1450,24 @@ async def procents_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Сортируем от большего к меньшему
     kras_list = sorted(kras_list, key=lambda x: x["chance"], reverse=True)
 
-    # --- ФОРМИРОВАНИЕ ИТОГОВОГО ТЕКСТА ---
+    # --- ФОРМИРОВАНИЕ ИТОГОВОГО ТЕКСТА (ЖЕЛЕЗНО ИЗ ОТСОРТИРОВАННЫХ СПИСКОВ) ---
     response = "📊 <b>РЕАЛЬНЫЕ ШАНСЫ ЗА ИГРОВЫМ СТОЛОМ:</b>\n"
     response += "<i>(Расчёт весов с учётом возможного переброса монетки)</i>\n\n"
 
-    # Вывод Пидора
+    # Вывод Пидора (Теперь строго по отсортированному pidor_list!)
     response += "🤡 <b>Претенденты на Пидора дня:</b>\n"
     for item in pidor_list:
         response += f" ├ <b>{item['name']}</b>: <code>{item['chance']:.2f}%</code>\n"
 
     response += "\n"
 
-    # Вывод Красавчика
+    # Вывод Красавчика (Теперь строго по отсортированному kras_list!)
     response += "👑 <b>Претенденты на Красавчика дня:</b>\n"
     for item in kras_list:
         response += f" ├ <b>{item['name']}</b>: <code>{item['chance']:.2f}%</code>\n"
 
     response += "\n🎰 <i>Казино играет честно. Все коэффициенты зафиксированы Крупье!</i>"
-    
+
     await context.bot.send_message(chat_id=chat_id, text=response, parse_mode="HTML")
 
 async def records(update: Update, context: ContextTypes.DEFAULT_TYPE):
