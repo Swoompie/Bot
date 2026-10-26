@@ -177,12 +177,13 @@ def get_opposite_winner_id(role):
     return res.data[0]["user_id"] if res.data else None
 
 
-def save_daily_winner(role, user_id):
+def save_daily_winner(role, user_id, multiplier=1):
     today_str = str(date.today())
     supabase.table("daily_winners").insert({
         "game_date": today_str,
         "role": role,
-        "user_id": user_id
+        "user_id": user_id,
+        "multiplier": multiplier  # ЖЕЛЕЗНЫЙ ФИКС: Сохраняем множитель раунда в базу!
     }).execute()
 
 
@@ -615,26 +616,30 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.bot_data is None:
         context.bot_data = {}
     context.bot_data["today_pidor_multiplier"] = multiplier
-
+    
     # Рассчитываем итоговую статистику с учётом множителя позора
     new_count = winner["pidor_count"] + multiplier
 
     # =====================================================================
-    # 🚨 [ФИКС РОМЫ №2]: СНАЧАЛА ЗАПИСЬ В БАЗУ, ПОТОМ ПРАЗДНИК! 🚨
+    # 🚨 [МЕГА-ФИКС РОМЫ + SUPABASE]: СНАЧАЛА ТРАНЗАКЦИЯ, ПОТОМ ПРАЗДНИК! 🚨
     # =====================================================================
     try:
-        # 1. Сразу фиксируем начисление позора в профиль
+        # 1. Сразу фиксируем начисление позора в профиль игрока
         supabase.table("users").update({"pidor_count": new_count}).eq("user_id", winner["user_id"]).execute()
         
         # 2. Сбрасываем стрик удержания веса победителя обратно в 0
         supabase.table("users").update({"pidor_streak": 0}).eq("user_id", winner["user_id"]).execute()
         
-        # 3. Пересчитываем веса под финального победителя и сохраняем его в историю дня
+        # 3. Сохраняем победителя в daily_winners и ЖЁСТКО запечатываем МНОЖИТЕЛЬ в базу!
+        # Убедись, что добавил колонку multiplier (тип int8) со значением 1 по умолчанию в daily_winners!
+        save_daily_winner("pidor", winner["user_id"], multiplier=multiplier)
+        
+        # 4. Пересчитываем веса под финального победителя
         redistribute_weights(winner["user_id"], "pidor_weight")
-        save_daily_winner("pidor", winner["user_id"])
     except Exception as db_err:
         print(f"Критическая ошибка сохранения транзакции рулетки /pidor в базу: {db_err}")
-        return  # Если база недоступна — прерываемся
+        return  # Предохранитель: если база упала, прерываемся и не спамим в чат
+
 
     # =====================================================================
     # 🎉 ОФОРМЛЕНИЕ И ВЫВОД В ЧАТ (Полностью защищено от NameError)
@@ -1120,74 +1125,84 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Рассчитываем итоговое начисление с учётом множителя
     new_count = final_winner["kras_count"] + multiplier
-    supabase.table("users").update({"kras_count": new_count}).eq("user_id", final_winner["user_id"]).execute()
-    
-    # После победы фаворита сбрасываем его личный стрик макс-шанса обратно в 0
-    supabase.table("users").update({"kras_streak": 0}).eq("user_id", final_winner["user_id"]).execute()
 
+    # =====================================================================
+    # 🚨 [МЕГА-ФИКС РОМЫ + SUPABASE]: СНАЧАЛА ТРАНЗАКЦИЯ, ПОТОМ ПРАЗДНИК! 🚨
+    # =====================================================================
+    try:
+        # 1. Сразу фиксируем начисление крон в профиль чемпиона
+        supabase.table("users").update({"kras_count": new_count}).eq("user_id", final_winner["user_id"]).execute()
+        
+        # 2. После победы фаворита сбрасываем его личный стрик макс-шанса обратно в 0
+        supabase.table("users").update({"kras_streak": 0}).eq("user_id", final_winner["user_id"]).execute()
+        
+        # 3. Пересчитываем веса под финального победителя
+        redistribute_weights(final_winner["user_id"], "kras_weight")
+        
+        # 4. Сохраняем победителя в daily_winners и ЖЁСТКО запечатываем МНОЖИТЕЛЬ Красавчика в базу!
+        save_daily_winner("krasavchik", final_winner["user_id"], multiplier=multiplier)
+    except Exception as db_err:
+        print(f"Критическая ошибка сохранения транзакции рулетки /run в базу: {db_err}")
+        return  # Предохранитель: если база упала, прерываемся
+
+    # =====================================================================
+    # 🎉 КОСМЕТИКА И ОФОРМЛЕНИЕ ЧЕМПИОНА (ПОЛНОСТЬЮ ЗАЩИЩЕНО ОТ NAMEERROR)
+    # =====================================================================
     # Защищаем никнейм от багов разметки Телеграма (изолируем в скобки)
     safe_winner_name = f"{final_winner['first_name']}{favorit_username}"
 
     # Бот подаст голос только в том случае, если МНОЖИТЕЛЬ СРАБОТАЛ (х2, х3, х5)
     if is_accumulated_champion and multiplier > 1 and multiplier_text:
-        # Собираем динамические гендерные слова для сегодняшнего чемпиона рулетки
         favorit_title = g_text(final_winner, "накопленный фаворит дня", "накопленная фаворитка дня")
         uderzhival_text = g_text(final_winner, "удерживал", "удерживала")
         schet_title = g_text(final_winner, "Текущие красавчики", "Текущие короны красавицы")
 
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text=(
-                f"🎰 <b>АКТИВАЦИЯ МНОЖИТЕЛЯ ЧЕМПИОНА!</b> 🎰\n\n"
-                f"Поскольку {favorit_title} <b>{safe_winner_name}</b> {uderzhival_text} максимальный шанс в чате уже <b>{streak_days} дн.</b> подряд, казино активирует бонусное колесо фортуны!\n\n"
-                f"{multiplier_text}\n\n"
-                f"📊 <i>Личная статистика обновлена. {schet_title}: {new_count}</i>"
-            ),
-            parse_mode="HTML"
-        )
-
-        if multiplier == 5:
-            await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERr31qeWv80Ku9FF7n2t9x4eyLRpX9eAAC1jcAAvbPQUmGw6z4J9_owD0E')
+        try:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=(
+                    f"🎰 <b>АКТИВАЦИЯ МНОЖИТЕЛЯ ЧЕМПИОНА!</b> 🎰\n\n"
+                    f"Поскольку {favorit_title} <b>{safe_winner_name}</b> {uderzhival_text} максимальный шанс в чате уже <b>{streak_days} дн.</b> подряд, казино активирует бонусное колесо фортуны!\n\n"
+                    f"{multiplier_text}\n\n"
+                    f"📊 <i>Личная статистика обновлена. {schet_title}: {new_count}</i>"
+                ),
+                parse_mode="HTML"
+            )
+            if multiplier == 5:
+                await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERr31qeWv80Ku9FF7n2t9x4eyLRpX9eAAC1jcAAvbPQUmGw6z4J9_owD0E')
+        except Exception as tg_err:
+            print(f"Косметическая ошибка отправки плашки множителя Красавчика: {tg_err}")
     
     # === 🏆 УЛЬТРА-ВИНСТРИК КРАСАВЧИКА (БЕЗБАГОВЫЙ СБРОС) ===
-    # 1. Железный сброс в один клик: обнуляем стрик ВСЕМ, кроме финального победителя
-    supabase.table("users").update({"kras_win_streak": 0}).neq("user_id", final_winner["user_id"]).execute()
+    try:
+        supabase.table("users").update({"kras_win_streak": 0}).neq("user_id", final_winner["user_id"]).execute()
 
-    # 2. Победителю накидываем +1 к его текущему победному стрику
-    current_win_streak = final_winner.get("kras_win_streak", 0) or 0
-    new_win_streak = current_win_streak + 1
-    supabase.table("users").update({"kras_win_streak": new_win_streak}).eq("user_id", final_winner["user_id"]).execute()
+        current_win_streak = final_winner.get("kras_win_streak", 0) or 0
+        new_win_streak = current_win_streak + 1
+        supabase.table("users").update({"kras_win_streak": new_win_streak}).eq("user_id", final_winner["user_id"]).execute()
 
-    # 3. Проверяем и обновляем ВЕЧНЫЙ ИСТОРИЧЕСКИЙ РЕКОРД подряд в базе данных
-    max_kras_streak = final_winner.get("max_kras_win_streak", 0) or 0
-    if new_win_streak > max_kras_streak:
-        supabase.table("users").update({"max_kras_win_streak": new_win_streak}).eq("user_id", final_winner["user_id"]).execute()
+        max_kras_streak = final_winner.get("max_kras_win_streak", 0) or 0
+        if new_win_streak > max_kras_streak:
+            supabase.table("users").update({"max_kras_win_streak": new_win_streak}).eq("user_id", final_winner["user_id"]).execute()
 
-    # 4. Если везунчик забирает титул 3 дня подряд или дольше — взрываем чат!
-    if new_win_streak >= 3:
-        await asyncio.sleep(1) # Небольшая пауза для эффекта сюрприза
-        
-        # ЖЕЛЕЗНО ИСПРАВЛЕНО: Дописали пропущенный список для проверки
-        day_word = "дня" if new_win_streak in [3, 4] else "дней"
-        
-        # Собираем динамические гендерные глаголы, местоимения и титулы
-        kak_on_text = g_text(final_winner, "Да как он это делает?!", "Да как она это делает?! 💅")
-        vzlomal_text = g_text(final_winner, "взломал", "взломала")
-        lubimchik_title = g_text(final_winner, "Настоящий любимчик фортуны!", "Настоящая любимица фортуны! ✨")
+        if new_win_streak >= 3:
+            await asyncio.sleep(1)
+            day_word = "дня" if new_win_streak in [3, 4] else "дней"
+            kak_on_text = g_text(final_winner, "Да как он это делает?!", "Да как она это делает?! 💅")
+            vzlomal_text = g_text(final_winner, "взломал", "взломала")
+            lubimchik_title = g_text(final_winner, "Настоящий любимчик фортуны!", "Настоящая любимица фортуны! ✨")
 
-        await context.bot.send_message(
-            chat_id=chat_id,
-            text=(
-                f"🎰 <b>БОЖЕСТВЕННЫЙ ХЕТ-ТРИК КАЗИНО!</b> 👑\n\n"
-                f"{kak_on_text} <b>{safe_winner_name}</b> {g_text(final_winner, 'умудряется', 'умудряется')} забрать титул Красавчика дня аж <b>{new_win_streak} {day_word} подряд</b>! 🤯\n\n"
-                f"Имея минимальный процент, {g_text(final_winner, 'он', 'она')} всё равно {vzlomal_text} рандом! {lubimchik_title} 🥂"
-            ),
-            parse_mode="HTML"
-        )
-
-    # Пересчитываем веса под финального победителя и сохраняем его в историю дня
-    redistribute_weights(final_winner["user_id"], "kras_weight")
-    save_daily_winner("krasavchik", final_winner["user_id"])
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=(
+                    f"🎰 <b>БОЖЕСТВЕННЫЙ ХЕТ-ТРИК КАЗИНО!</b> 👑\n\n"
+                    f"{kak_on_text} <b>{safe_winner_name}</b> умудряется забрать титул Красавчика дня аж <b>{new_win_streak} {day_word} подряд</b>! 🤯\n\n"
+                    f"Имея минимальный процент, {g_text(final_winner, 'он', 'она')} всё равно {vzlomal_text} рандом! {lubimchik_title} 🥂"
+                ),
+                parse_mode="HTML"
+            )
+    except Exception as streak_err:
+        print(f"Ошибка расчета винстриков Красавчика: {streak_err}")
 
     # === 🎭 БЛОК КАРТЫ МИМИКРИИ: КРАЖА КРАСАВЧИКА (ВЫНЕСЕНО ВВЕРХ!) ===
     mimic_hunter_res = supabase.table("users").select("*").eq("mimic_target_id", final_winner["user_id"]).execute()
@@ -2259,12 +2274,16 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     is_success = random.randint(1, 100) <= success_chance
 
-    # --- 📊 [ЧЕСТНЫЙ ФИКС]: СЧИТАЕМ СИЛУ ТОЛЬКО СЕГОДНЯШНЕГО УТРЕННЕГО ПОЗОРА ---
-    fresh_winner_res = supabase.table("users").select("pidor_count").eq("user_id", user.id).execute()
-    fresh_pidor_count = fresh_winner_res.data[0]["pidor_count"] if fresh_winner_res.data else today_winner["pidor_count"]
+    # === 🧮 [УЛЬТИМАТИВНЫЙ ФИКС РОМЫ + SUPABASE]: ВЫТАСКИВАЕМ МНОЖИТЕЛЬ ИЗ БАЗЫ ===
+    today_str = str(date.today())
+    # Стучимся в daily_winners за сегодняшним реальным множителем Пидора
+    winner_log_res = supabase.table("daily_winners").select("multiplier").eq("game_date", today_str).eq("role", "pidor").execute()
     
-    # Сила утреннего позора (сколько прилетело сегодня: 1, 2, 3 или 5)
-    today_gained_pidors = max(1, fresh_pidor_count - today_winner["pidor_count"])
+    # Если запись нашли — забираем multiplier из базы, если что-то пошло не так — страхуемся дефолтом 1
+    if winner_log_res.data and len(winner_log_res.data) > 0:
+        today_gained_pidors = winner_log_res.data[0].get("multiplier", 1)
+    else:
+        today_gained_pidors = 1
     
     if is_coin_loser_target:
         # Х3 НАКАЗАНИЕ ЗА РАНЕНОГО: Утренний позор умножается на 3. 
@@ -2277,8 +2296,13 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         added_penalty = today_gained_pidors
         total_day_gained = today_gained_pidors * 2
 
-    # Переменная для вывода в текст сообщения теперь СТРОГО равна чистой прибавке в базу!
+    # Сила утреннего позора для записи в логи и тексты сообщений
+    pidor_multiplier = today_gained_pidors  
     penalty_p_count = added_penalty
+    
+    # Считываем свежий счёт Пидора для дальнейших обновлений
+    fresh_winner_res = supabase.table("users").select("pidor_count").eq("user_id", user.id).execute()
+    fresh_pidor_count = fresh_winner_res.data[0]["pidor_count"] if fresh_winner_res.data else today_winner["pidor_count"]
 
     # Жесткое х3 наказание за провал добивания раненого (Вес взлетает до 150.0)
     if not is_success and is_coin_loser_target:
