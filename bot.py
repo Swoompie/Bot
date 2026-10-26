@@ -2411,29 +2411,29 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "is_krasavchik": True
             }).execute()
 
-            try:
-                # 1. Собираем динамические гендерные статусы и глаголы
-                winner_status = g_text(player, "СТАНОВИТСЯ НОВЫМ КРАСАВЧИКОМ ДНЯ!", "СТАНОВИТСЯ НОВОЙ КРАСАВИЦЕЙ ДНЯ! 👑")
-                victim_status = g_text(victim, "признаётся <b>ПИДОРОМ ДНЯ</b>!", "признаётся <b>ПИДОРОМ ДНЯ</b>! ")
-                fallen_text = g_text(victim, "с позором падает на дно и", "теряет всё за игровым столом и")
+        # === 🚨 КАТАСТРОФОУСТОЙЧИВЫЙ БЛОК ОТПРАВКИ ТРИУМФА ОГРАБЛЕНИЯ КРАСАВЧИКА 🚨 ===
+        try:
+            # 1. Собираем динамические гендерные статусы и глаголы
+            winner_status = g_text(player, "СТАНОВИТСЯ НОВЫМ КРАСАВЧИКОМ ДНЯ!", "СТАНОВИТСЯ НОВОЙ КРАСАВИЦЕЙ ДНЯ! 👑")
+            victim_status = g_text(victim, "признаётся <b>ПИДОРОМ ДНЯ</b>!", "признаётся <b>ПИДОРОМ ДНЯ</b>! ")
+            fallen_text = g_text(victim, "с позором падает на дно и", "теряет всё за игровым столом и")
 
-                # 2. Формируем чистый текст без вложенных скобок внутри вызова
-                success_text = (
-                    f"💥 <b>БОЖЕ МОЙ, ЭТО ИСТОРИЧЕСКИЙ МОМЕНТ! КАРТА ОСТАЕТСЯ ЦЕЛОЙ!</b> 💥\n\n"
-                    f"Королевское ограбление завершилось полным триумфом за игровым столом!\n\n"
-                    f"😎 <b>{safe_user_name}</b> забирает главный куш и {winner_status}\n\n"
-                    f"🤡 А вот <b>{safe_victim_name}</b> {fallen_text} {victim_status}"
-                )
+            # 2. Формируем чистый текст без вложенных скобок внутри вызова
+            success_text = (
+                f"💥 <b>БОЖЕ МОЙ, ЭТО ИСТОРИЧЕСКИЙ МОМЕНТ! КАРТА ОСТАЕТСЯ ЦЕЛОЙ!</b> 💥\n\n"
+                f"Королевское ограбление завершилось полным триумфом за игровым столом!\n\n"
+                f"😎 <b>{safe_user_name}</b> забирает главный куш и {winner_status}\n\n"
+                f"🤡 А вот <b>{safe_victim_name}</b> {fallen_text} {victim_status}"
+            )
 
-                # 3. Отправляем готовое сообщение
-                await context.bot.send_message(
-                    chat_id=chat_id,
-                    text=success_text,
-                    parse_mode="HTML"
-                )
-        except Exception as e:
-            # === 🎰 [МЕГА-КЛИНИНГ РОМЫ]: ИДЕАЛЬНЫЕ ОТСТУПЫ ПИТОНА ===
-            print(f"Критическая ошибка вывода триумфа ограбления UNO: {e}")
+            # 3. Отправляем готовое сообщение в чат
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=success_text,
+                parse_mode="HTML"
+            )
+        except Exception as tg_text_err:
+            print(f"Косметическая ошибка отправки текста триумфа ограбления: {tg_text_err}")
             try:
                 await context.bot.send_message(
                     chat_id=chat_id,
@@ -2443,8 +2443,15 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception:
                 pass
             
+        try:
+            # 4. Следом пробуем отправить твой чемпионский стикер триумфа
+            await context.bot.send_sticker(
+                chat_id=chat_id, 
+                sticker='CAACAgIAAxkBAAERfwtqSi0WKXA0-slyXjuDMUAC14PGkAAC6BMAAp7K8UkQAAGdV1VM7UI8BA'
+            )
+        except Exception as tg_sticker_err:
+            print(f"Косметическая ошибка отправки стикера триумфа ограбления: {tg_sticker_err}")
             try:
-                # Отправляем сочный аварийный стикер отдельно, защитив его своим try
                 await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERv_1qh-RMBre9eek9ykdsovu3gf-SvwACCnUAAlgXsEkCKvJjaqw9iT0E')
             except Exception:
                 pass
