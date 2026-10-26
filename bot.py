@@ -2431,16 +2431,23 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     text=success_text,
                     parse_mode="HTML"
                 )
-            except Exception as e:
-                print(f"Критическая ошибка вывода триумфа ограбления UNO: {e}")
-                try:
-                    await context.bot.send_message(
+        except Exception as e:
+            # === 🎰 [МЕГА-КЛИНИНГ РОМЫ]: ИДЕАЛЬНЫЕ ОТСТУПЫ ПИТОНА ===
+            print(f"Критическая ошибка вывода триумфа ограбления UNO: {e}")
+            try:
+                await context.bot.send_message(
                     chat_id=chat_id,
                     text="🔧 <b>Сука, опять вы всё сломали!</b> 🤦‍♂️\n\nКоролевское ограбление Красавчика зависло в текстурах Телеграма! Корона украдена, база всё записала, админ пошёл чинить!",
                     parse_mode="HTML"
                 )
-                # Отправляем сочный аварийный стикер
+            except Exception:
+                pass
+            
+            try:
+                # Отправляем сочный аварийный стикер отдельно, защитив его своим try
                 await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERv_1qh-RMBre9eek9ykdsovu3gf-SvwACCnUAAlgXsEkCKvJjaqw9iT0E')
+            except Exception:
+                pass
 
         # 🃏 ПУТЬ Б: УСПЕШНЫЙ ОБЫЧНЫЙ ПЕРЕВОД / ДОБИВАНИЕ (ВЫЧИСЛЯЕМ МНОЖИТЕЛЬ ПОЗОРА)
         if not is_robbing_chad:
