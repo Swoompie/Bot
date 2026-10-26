@@ -1666,6 +1666,11 @@ async def records(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print(f"Ошибка вывода абсолютного лидера records: {e}")
 
 async def mimic(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # === 🛡️ ЖЕЛЕЗНЫЙ АНТИ-РЕПЛАЙ ЩИТ КАЗИНО: ЗАЩИТА ОТ ФАНТАНМНЫХ ТЕГОВ ===
+    if update.message and update.message.text:
+        if not update.message.text.strip().startswith("/mimic"):
+            return
+
     user = update.effective_user
     chat_id = update.effective_chat.id
     today = date.today()
@@ -1820,6 +1825,11 @@ async def mimic(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERl5RqYy9g5SuIKeL-HYdt9H78f80S9wACGTkAAnsn4UlP1wuYX7Od8j0E')
 
 async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # === 🛡️ ЖЕЛЕЗНЫЙ АНТИ-РЕПЛАЙ ЩИТ КАЗИНО: ЗАЩИТА ОТ ФАНТАНМНЫХ ТЕГОВ ===
+    if update.message and update.message.text:
+        if not update.message.text.strip().startswith("/duel"):
+            return
+
     user = update.effective_user
     chat_id = update.effective_chat.id
 
@@ -2134,6 +2144,11 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERnnhqaMio_yi6YSjV0Ysi5q16lPq1ogAC9xIAAvmEAUtGFDZQ8K2jFj0E')
     
 async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # === 🛡️ ЖЕЛЕЗНЫЙ АНТИ-РЕПЛАЙ ЩИТ КАЗИНО: ЗАЩИТА ОТ ФАНТАНМНЫХ ТЕГОВ ===
+    if update.message and update.message.text:
+        if not update.message.text.strip().startswith("/switch"):
+            return # Если сообщение просто содержит тег, но не начинается с команды — тихо игнорируем!
+
     # === 🕵️‍♂️ [ФИКС] ВЫТАСКИВАЕМ СТРЕЛОЧНИКА ДЛЯ ГЕНДЕРНОГО АВТОМАТА ===
     user = update.effective_user
     player_res = supabase.table("users").select("*").eq("user_id", user.id).execute()
