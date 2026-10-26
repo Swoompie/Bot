@@ -521,7 +521,16 @@ async def reset_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
     today = date.today()
+    user = update.effective_user  # ЖЕЛЕЗНЫЙ ФИКС: Вытащили профиль нажавшего!
     
+    # === 🛡️ ТИТАНОВЫЙ АВТО-ОБНОВИТЕЛЬ ТЕГОВ КАЗИНО: ЗАЩИТА ОТ СМЕНЫ НИКНЕЙМОВ ===
+    # Как только игрок жмёт кнопку, база на лету освежает его актуальный тег и имя!
+    if user and user.username:
+        try:
+            supabase.table("users").update({"username": user.username, "first_name": user.first_name}).eq("user_id", user.id).execute()
+        except Exception:
+            pass
+            
     # 1. Вытаскиваем только АКТИВНЫХ игроков (is_active == True)
     all_users = get_users()
     users = [u for u in all_users if u.get("is_active", True)]
@@ -945,12 +954,19 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # 3. И только теперь окончательно выходим из функции!
         return
 
+    # === 🛡️ ТИТАНОВЫЙ АВТО-ОБНОВИТЕЛЬ ТЕГОВ КАЗИНО: ЗАЩИТА ОТ СМЕНЫ НИКНЕЙМОВ ===
+    # Как только игрок жмёт кнопку /run, база на лету освежает его актуальный тег и имя!
+    user = update.effective_user
+    if user and user.username:
+        try:
+            supabase.table("users").update({"username": user.username, "first_name": user.first_name}).eq("user_id", user.id).execute()
+        except Exception:
+            pass
         
     # 1. Вытаскиваем только АКТИВНЫХ игроков (is_active == True)
     all_users = get_users()
     users = [u for u in all_users if u.get("is_active", True)]
 
-    
     if len(users) < 1:
         await update.message.reply_text("В боте еще никто не зарегистрировался. Напишите /register")
         return
@@ -2761,12 +2777,21 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     today = date.today()
     
+    # === 🛡️ ТИТАНОВЫЙ АВТО-ОБНОВИТЕЛЬ ТЕГОВ КАЗИНО: ЗАЩИТА ОТ СМЕНЫ НИКНЕЙМОВ ===
+    # Как только игрок запрашивает досье, база на лету освежает его актуальный тег и имя!
+    if user and user.username:
+        try:
+            supabase.table("users").update({"username": user.username, "first_name": user.first_name}).eq("user_id", user.id).execute()
+        except Exception:
+            pass
+    
     # 1. Вытаскиваем ВСЕХ пользователей для расчета общей суммы весов
     all_users = get_users()
     active_users = [u for u in all_users if u.get("is_active", True)]
     
     # Ищем среди них конкретно нашего игрока
     player = next((u for u in active_users if u["user_id"] == user.id), None)
+
     
     if not player:
         # ЖЕЛЕЗНО ИСПРАВЛЕНО: Перевели стартовый отлуп на HTML и безопасный send_message
