@@ -179,12 +179,37 @@ def get_opposite_winner_id(role):
 
 def save_daily_winner(role, user_id, multiplier=1):
     today_str = str(date.today())
-    supabase.table("daily_winners").insert({
-        "game_date": today_str,
-        "role": role,
-        "user_id": user_id,
-        "multiplier": multiplier  # ЖЕЛЕЗНЫЙ ФИКС: Сохраняем множитель раунда в базу!
-    }).execute()
+    
+    try:
+        # === 🎰 [ЖЕЛЕЗНЫЙ АНТИ-ДУБЛЬ ФИКС]: ЗАЩИТА ОТ ДВУХ НАЖАТИЙ ОДНОВРЕМЕННО ===
+        # Перед тем как записать победителя, принудительно выжигаем любой дубликат на сегодня,
+        # если он успел проскочить асинхронно. Двух Пидоров в один день быть не может!
+        supabase.table("daily_winners").delete().eq("game_date", today_str).eq("role", role).execute()
+        
+        # Теперь со спокойной душой делаем чистый единичный инсерт
+        supabase.table("daily_winners").insert({
+            "game_date": today_str,
+            "role": role,
+            "user_id": user_id,
+            "multiplier": multiplier
+        }).execute()
+    except Exception as e:
+        print(f"Ошибка сохранения сингл-победителя daily_winners: {e}")
+
+def safe_parse_date(db_value):
+    """
+    Универсальный сейф-парсер дат Казиныча.
+    Защищает от капризов типов данных Supabase (str, date, datetime).
+    """
+    if not db_value:
+        return None
+    if isinstance(db_value, str):
+        # Если пришла строка — безопасно парсим её, отсекая время, если оно прилипло
+        return date.fromisoformat(db_value.split("T")[0])
+    if hasattr(db_value, "date"):
+        # If это объект datetime — выдёргиваем чистую дату
+        return db_value.date()
+    return db_value # Если это уже объект date — отдаём как есть
 
 
 def weighted_choice(users, column_name):
@@ -779,7 +804,7 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     if final_pidor_user.get("last_switch_date"):
-        last_date = date.fromisoformat(final_pidor_user["last_switch_date"])
+        last_date = safe_parse_date(final_pidor_user.get("last_switch_date"))
         days_passed = (today - last_date).days
         
         if days_passed < 6:
@@ -1127,7 +1152,7 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     new_count = final_winner["kras_count"] + multiplier
 
     # =====================================================================
-    # 🚨 [МЕГА-ФИКС РОМЫ + SUPABASE]: СНАЧАЛА ТРАНЗАКЦИЯ, ПОТОМ ПРАЗДНИК! 🚨
+    # 🚨 [МЕГА-ФИКС + SUPABASE]: СНАЧАЛА ТРАНЗАКЦИЯ, ПОТОМ ПРАЗДНИК! 🚨
     # =====================================================================
     try:
         # 1. Сразу фиксируем начисление крон в профиль чемпиона
@@ -1257,9 +1282,16 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERl5ZqYzAUBU7z06cdM38fa4YZfog1xAACYwEAAnHpkDYtQnUiFYhhSj0E')
+        
+    # === 🎭 [УМНЫЙ ФИКС РОМЫ]: ФИКСАЦИЯ СГОРЕВШИХ МИМИКОВ ===
+    # Если у игрока до сих пор висит цель, но дата last_mimic_date старая (значит, сегодня он НЕ выигрывал)
+    # переводим его цель в статус "failed" (сгорела), а не затираем втихую в None!
+    try:
+        supabase.table("users").update({"mimic_target_id": "failed"}).neq("last_mimic_date", str(game_today)).neq("mimic_target_id", None).execute()
+        print("🎭 Все несыгравшие сегодня карты мимикрии официально признаны сгоревшими.")
+    except Exception as mimic_clear_err:
+        print(f"Ошибка фиксации сгоревших мимиков: {mimic_clear_err}")
 
-    # Если никто победителя не мимикрировал, сжигаем все остальные сегодняшние ставки участников
-    supabase.table("users").update({"mimic_target_id": None}).neq("user_id", 0).execute()
 
     # ---------------- БЛОК ЮБИЛЕЙНЫХ ПОЗДРАВЛЕНИЙ С ИЗДЁВКОЙ ----------------
     kras_stickers_pool = [
@@ -1654,16 +1686,25 @@ async def mimic(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     current_user = user_res.data[0]
 
+    # ЖЕЛЕЗНЫЙ ФИКС РОМЫ: Ливнувшие или висящие в wait не имеют права юзать карты!
+    if not current_user.get("is_active", True) or current_user.get("status_wait") == "wait":
+        await context.bot.send_message(
+            chat_id=chat_id, 
+            text="🚪 <b>Доступ заблокирован!</b> Ты находишься в процессе депортации или покинул игровой зал. Карты UNO и Мимикрии для тебя недоступны!", 
+            parse_mode="HTML"
+        )
+        return
+        
     # 2. ПРОВЕРКА КУЛДАУНА (14 ДНЕЙ) С УМНЫМ ПАРСИНГОМ ТИПА DATE
     if current_user.get("last_mimic_date"):
-        last_db_date = current_user["last_mimic_date"]
-        last_date = date.fromisoformat(last_db_date) if isinstance(last_db_date, str) else last_db_date
+        # ЖЕЛЕЗНО ИСПРАВЛЕНО: Прогоняем через наш универсальный сейф-парсер!
+        last_date = safe_parse_date(current_user.get("last_mimic_date"))
         days_passed = (today - last_date).days
         
         if days_passed < 14:
             days_left = 14 - days_passed
             day_word = "день" if days_left == 1 else ("дня" if days_left in [2, 3, 4] else "дней")
-            
+
             # ЖЕЛЕЗНО ИСПРАВЛЕНО: Прямой send_message на HTML-разметке защитит от комы при удалении команды
             await context.bot.send_message(
                 chat_id=chat_id,
@@ -1898,8 +1939,6 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
                  f"❌ Отставить вызовы! Дай человеку спокойно допить {alko_text}.",
             parse_mode="HTML"
         )
-        return
-
         await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERocRqavSrSDLKuprwdNbdTUucfvAVIgACkREAAj7PkUlwAAH9MmAfvmE9BA')
         return
 
@@ -2112,22 +2151,19 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(chat_id=chat_id, text="🤡 Ты не сегодняшний пидор дня, чтобы активировать карту UNO. Сиди тихо!")
         return
 
-    # 2. Проверяем КД команды (Умная детекция 6 обычных или 12 штрафных дней)
-    user_res = supabase.table("users").select("last_switch_date").eq("user_id", user.id).execute()
-    
+    # 2. ПРОВЕРКА КУЛДАУНА (Стандартные 6 дней или штрафные 12 дней за кражу короны)
     if user_res.data and len(user_res.data) > 0 and user_res.data[0].get("last_switch_date"): 
-        last_date = date.fromisoformat(user_res.data[0]["last_switch_date"]) 
+        last_date = safe_parse_date(user_res.data[0].get("last_switch_date"))
         days_passed = (today - last_date).days
         
-        # Если прошло меньше 6 дней от записанной даты (с учетом штрафного сдвига — КД заблокирован)
+        # Если days_passed меньше 6 (включая отрицательные числа от штрафного сдвига) — КД активен!
         if days_passed < 6:
             days_left = 6 - days_passed
             day_word = "день" if days_left == 1 else ("дня" if days_left in [2, 3, 4] else "дней")
             
-            # --- 👑 [НОВОЕ] ДЕТЕКЦИЯ КОРОЛЕВСКОГО ПОЗОРА (Если кулдаун больше 6 дней) ---
+            # ЖЕЛЕЗНО ИСПРАВЛЕНО: Теперь если days_left больше 6 — это легитимный королевский штраф!
             if days_left > 6:
-                # Собираем динамические гендерные глаголы для Стрелка (player)
-                promazal_text = g_text(player, "ты позорно промазал", "ты позорно промазала ")
+                promazal_text = g_text(player, "ты позорно промазал", "ты позорно промазала")
                 poluchil_text = g_text(player, "получил удвоенное наказание", "получила удвоенное наказание")
 
                 cd_message = (
@@ -2135,16 +2171,11 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"При попытке ограбить Красавчика дня {promazal_text}, поэтому {poluchil_text}.\n"
                     f"Отдохни пока от карт в лаунж-зоне за барной стойкой, доступ вернётся только через <b>{days_left} {day_word}</b>! ⏳🎰"
                 )
-
             else:
                 # Обычный стандартный кулдаун на 6 дней
                 cd_message = f"❌ Твоя карта UNO всё еще на перезарядке! Доступ появится через <b>{days_left} {day_word}</b>."
 
-            await context.bot.send_message(
-                chat_id=chat_id,
-                text=cd_message,
-                parse_mode="HTML"
-            )
+            await context.bot.send_message(chat_id=chat_id, text=cd_message, parse_mode="HTML")
             await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAEReRpqQ3-pZ9QRME44W1Es3DPWTGUPNAACkAIAAladvQoy0qlxuNTQtTwE')
             return
 
@@ -2262,7 +2293,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(chat_id=chat_id, text=phrase, parse_mode="HTML")
         await asyncio.sleep(1.0) # Оптимизировали паузу до 1 секунды для ускорения функции
 
-    # --- 🎰 ПОВЫШЕННЫЙ РАСЧЕТ ШАНСОВ (15% / 30% / 15% / 75%) ---
+    # --- 🎰 ПОВЫШЕННЫЙ РАСЧЕТ ШАНСОВ (15% / 45% / 50% / 30%) ---
     if is_robbing_chad:
         success_chance = 15  
     elif is_coin_loser_target:
@@ -2401,17 +2432,14 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     parse_mode="HTML"
                 )
             except Exception as e:
-                print(f"Ошибка вывода триумфа ограбления: {e}")
-
-                await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERfwtqSi0WKXA0-slyXjuDMUAC14PGkAAC6BMAAp7K8UkQAAGdV1VM7UI8BA')
-                
-            except Exception as e:
-                print(f"Ошибка вывода триумфа UNO: {e}")
-                await context.bot.send_message(
+                print(f"Критическая ошибка вывода триумфа ограбления UNO: {e}")
+                try:
+                    await context.bot.send_message(
                     chat_id=chat_id,
-                    text="🔧 <b>Сука, опять вы всё сломали!</b> 🤦‍♂️\n\nКоролевское ограбление Красавчика зависло в текстурах Телеграма! Корона украдена, админ пошёл чинить!",
+                    text="🔧 <b>Сука, опять вы всё сломали!</b> 🤦‍♂️\n\nКоролевское ограбление Красавчика зависло в текстурах Телеграма! Корона украдена, база всё записала, админ пошёл чинить!",
                     parse_mode="HTML"
                 )
+                # Отправляем сочный аварийный стикер
                 await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERv_1qh-RMBre9eek9ykdsovu3gf-SvwACCnUAAlgXsEkCKvJjaqw9iT0E')
 
         # 🃏 ПУТЬ Б: УСПЕШНЫЙ ОБЫЧНЫЙ ПЕРЕВОД / ДОБИВАНИЕ (ВЫЧИСЛЯЕМ МНОЖИТЕЛЬ ПОЗОРА)
@@ -2479,7 +2507,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERl5ZqYzAUBU7z06cdM38fa4YZfog1xAACYwEAAnHpkDYtQnUiFYhhSj0E')
             
             elif is_retry_attempt:
-                # 🦊 УСПЕШНЫЙ ВТОРОЙ ШАНС (20% ШАНС) — ЧИСТЫЙ ВАРИАНТ БЕЗ TRY
+                # 🦊 УСПЕШНЫЙ ВТОРОЙ ШАНС (50% ШАНС) — ЧИСТЫЙ ВАРИАНТ БЕЗ TRY
                 # Собираем динамические титулы и глаголы для Стрелка (player)
                 fox_title = g_text(player, "ХИТРЫЙ ЛИС В ДЕЛЕ", "ХИТРАЯ ЛИСА В ДЕЛЕ 🦊")
                 ochishen_text = g_text(player, "полностью очищен от подозрений, мастер тактики", "полностью очищена от подозрений, королева интуиции 💎")
@@ -2491,7 +2519,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     chat_id=chat_id,
                     text=(
                         f"🦊 <b>КАК ТАК-ТО?! {fox_title}!</b> 🦊\n\n"
-                        f"Первая карта задымилась, но со второго шанса <b>{safe_user_name}</b> {g_text(player, 'совершает невозможное', 'совершает невозможное')} и выбивает заветные 20%!\n"
+                        f"Первая карта задымилась, но со второго шанса <b>{safe_user_name}</b> {g_text(player, 'совершает невозможное', 'совершает невозможное')} и выбивает заветные 50%!\n"
                         f"👑 Ты {ochishen_text}!\n\n"
                         f"🤡 А вот <b>{safe_victim_name}</b> {victim_status} со второй подачи за игровым столом! Ставки приняты! 🎰"
                     ),
@@ -2551,14 +2579,14 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         try:
             if is_robbing_chad:
-                # Провал Красавчика: 12 дней КД и х2 утреннего штрафа
-                fake_cd_date = today - timedelta(days=6)
+                # ЖЕЛЕЗНЫЙ ФИКС РОМЫ: Сдвигаем кулдаун на +6 дней в будущее, чтобы суммарно вышло 12 дней КД!
+                fake_cd_date = today + timedelta(days=6)
                 supabase.table("users").update({
                     "last_switch_date": str(fake_cd_date), 
                     "pidor_count": fresh_pidor_count + added_penalty,
                     "pidor_weight": 110.0
                 }).eq("user_id", user.id).execute()
-                
+
                 try:
                     # ЖЕЛЕЗНО ИСПРАВЛЕНО: Записываем жесткий маркер провала -1 вместо нуля!
                     supabase.table("uno_logs").insert({
@@ -2742,7 +2770,7 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 3. Проверяем статус КД карты UNO
     uno_status = "🟢 ГОТОВА К БОЮ!"
     if player.get("last_switch_date"):
-        last_date = date.fromisoformat(player["last_switch_date"])
+        last_date = safe_parse_date(player.get("last_switch_date"))
         days_passed = (today - last_date).days
         if days_passed < 6:
             days_left = 6 - days_passed
@@ -2794,7 +2822,7 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # === 🃏 УМНЫЙ ПОДГРУЗ СТАТИСТИКИ ИЗ ТАБЛИЦЫ ЛОГОВ UNO ===
     # Считаем, сколько раз имя этого игрока записано вsender_name (его успешные переводы)
-    uno_wins_res = supabase.table("uno_logs").select("id").eq("sender_name", player["first_name"]).execute()
+    uno_wins_res = supabase.table("uno_logs").select("id").eq("sender_name", player["first_name"]).gt("multiplier", 0).execute()
     uno_wins_total = len(uno_wins_res.data) if uno_wins_res.data else 0
     
     # Экранируем имена, чтобы спецсимволы в никах не ломали разметку Телеграма
@@ -2989,19 +3017,24 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         intro_text = f"🎲 На кубике выпадает: <b>{dice_value}</b>!\n\n😎 <b>ФОРТУНА УЛЫБАЕТСЯ ТЕБЕ!</b> <b>{safe_name}</b>, это {power_text}"
 
-    # 📊 МАТЕМАТИКА 2: [ЖЕЛЕЗНО ОПТИМИЗИРОВАНО] Пересчитываем новые проценты в памяти без повторного запроса к базе!
+    # 📊 МАТЕМАТИКА 2: [ЖЕЛЕЗНО ИСПРАВЛЕНО] Пересчитываем точные суммы чата с учётом клампинга веса игрока!
     if dice_value <= 3:
-        # Ветка позора: сумма пидоров чата выросла на step, а красавчиков упала на k_minus
+        # Ветка позора: вычисляем РЕАЛЬНУЮ дельту просадки красавчика у игрока после среза до пола 1.0
+        real_kras_delta = player.get("kras_weight", 100.0) - new_kras_weight
+        
         total_p_after = total_p_before + step
-        total_k_after = max(1.0, total_k_before - k_minus)
+        total_k_after = total_k_before - real_kras_delta
     else:
-        # Ветка удачи: сумма красавчиков чата выросла на step, а пидоров упала на p_minus
+        # Ветка удачи: вычисляем РЕАЛЬНУЮ дельту просадки пидора у игрока после среза до пола 1.0
+        real_pidor_delta = player.get("pidor_weight", 100.0) - new_pidor_weight
+        
         total_k_after = total_k_before + step
-        total_p_after = max(1.0, total_p_before - p_minus)
+        total_p_after = total_p_before - real_pidor_delta
     
     # Считаем точные новые проценты игрока на основе его свежих весов, сохраненных в ветках выше
     new_p_chance = (new_pidor_weight / total_p_after * 100) if total_p_after > 0 else 0.0
     new_k_chance = (new_kras_weight / total_k_after * 100) if total_k_after > 0 else 0.0
+
 
     # --- 🚨 ПЕРЕХВАТ ДУБЛЕЙ (С НОВЫМИ ПРОЦЕНТАМИ И ГЕНДЕРАМИ ВНУТРИ) ---
     if current_attempts == 1 and prev_balance == -19.0 and dice_value == 1:
@@ -3147,10 +3180,25 @@ async def uno_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         safe_victim = log["victim_name"].replace("<", "&lt;").replace(">", "&gt;")
         mult = log.get("multiplier", 1)
 
-        # Чекаем пол жертвы
-        victim_user_res = supabase.table("users").select("gender").eq("first_name", log["victim_name"]).execute()
-        victim_gender = victim_user_res.data[0].get("gender", "boy") if victim_user_res.data else "boy"
+        # === 🛡️ УЛЬТИМАТИВНЫЙ ФИКС ТЁЗОК ОТ РОМЫ: ИЩЕМ ЖЕРТВУ БЕЗ ОШИБОК ===
+        # Пытаемся вытащить юзернейм из victim_name, если он там есть в скобках (например, "Артём (@artem)")
+        import re
+        username_match = re.search(r'\(@([\w_]+)\)', log["victim_name"])
+        
+        if username_match:
+            # Если у жертвы есть ник — бьём по базе со стопроцентной точностью!
+            victim_user_res = supabase.table("users").select("gender").eq("username", username_match.group(1)).execute()
+        else:
+            # Если ника нет, страхуемся по имени, забирая первую попавшуюся запись
+            victim_user_res = supabase.table("users").select("gender").eq("first_name", log["victim_name"]).execute()
+            
+        # ЖЕЛЕЗНО ИСПРАВЛЕНО: Безопасный забор элемента [0] только если список НЕ пустой!
+        if victim_user_res.data and len(victim_user_res.data) > 0:
+            victim_gender = victim_user_res.data[0].get("gender", "boy")
+        else:
+            victim_gender = "boy"
 
+        # Объявляем логические флаги полов для развилки текстов
         is_sender_girl = (player.get("gender") == "girl")
         is_victim_girl = (victim_gender == "girl")
 
@@ -3223,7 +3271,7 @@ async def command_notbed(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     today_str = str(date.today())
     
-    res = supabase.table("uno_logs").select("*").eq("game_date", today_str).execute()
+    res = supabase.table("uno_logs").select("*").eq("game_date", today_str).order("id").execute()
     
     if not res.data or len(res.data) == 0:
         await context.bot.send_message(chat_id=chat_id, text="🃏 За игровым столом сегодня не было активированных карт UNO. Команда недоступна!", parse_mode="HTML")
@@ -3269,7 +3317,7 @@ async def command_sosamba(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     today_str = str(date.today())
     
-    res = supabase.table("uno_logs").select("*").eq("game_date", today_str).execute()
+    res = supabase.table("uno_logs").select("*").eq("game_date", today_str).order("id").execute()
     
     if not res.data or len(res.data) == 0:
         await context.bot.send_message(chat_id=chat_id, text="🃏 Вокруг тишина. Сосамба взводится только после реального экшена за столом!", parse_mode="HTML")
@@ -3365,29 +3413,28 @@ async def main():
         print("Бот запускается в режиме Webhook на Render...")
         PORT = int(os.getenv("PORT", 10000))
         
-        # Правильный асинхронный запуск вебхука без зависания потока
+        # ЖЕЛЕЗНЫЙ БЭКЕНД-ФИКС РОМЫ: Инициализируем приложение. 
+        # Метод start() сам правильно и безопасно поднимет JobQueue под капотом!
         await app.initialize()
-        if app.job_queue:
-            await app.job_queue.start()
-            
         await app.start()
+        
+        # Запускаем сам вебхук
         await app.updater.start_webhook(
             listen="0.0.0.0",
             port=PORT,
             url_path=TOKEN,
             webhook_url=f"{RENDER_URL}/{TOKEN}"
         )
-        print("Вебхук и Таймеры успешно запущены!")
+        print("Вебхук успешно запущен! Планировщик активен.")
         
-        # Вместо кривого while True используем встроенный асинхронный ожидалщик библиотеки
         from asyncio import Event
         await Event().wait()
     else:
-        # ИСПРАВЛЕНО: Безопасный запуск поллинга для тестов на ПК
         print("Бот запущен локально в режиме Polling!")
         await app.initialize()
         await app.start()
         await app.updater.start_polling()
+        
         from asyncio import Event
         await Event().wait()
 
