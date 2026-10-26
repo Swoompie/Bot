@@ -5,7 +5,7 @@ import asyncio
 import json
 from datetime import date, datetime, timedelta
 from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes, ConversationHandler, MessageHandler, filters
+from telegram.ext import Application, CommandHandler, ContextTypes, ConversationHandler, MessageHandler, filters, TypeHandler
 from supabase import create_client, Client
 from io import BytesIO
 
@@ -28,6 +28,19 @@ print(f"------------------------")
 
 # Инициализация 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# ---------------- 🪐 [ГЛОБАЛЬНЫЙ МИДЛВАРЬ-ЩИТ СИСТЕМЫ] ----------------
+async def global_anti_spam_middleware(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from telegram.ext import ApplicationHandlerStop
+    
+    # 1. Если это скрытое служебное уведомление Телеграма (смена титула, аватарка, права)
+    # у него в пакете НЕТ полноценного объекта message. Выжигаем на подлёте!
+    if not update.message:
+        raise ApplicationHandlerStop()
+        
+    # 2. Проверяем скрытые сервисные флаги (смена титулов админа часто прилетает без текста как pinned или системный фид)
+    if update.message.pinned_message or update.message.new_chat_members or update.message.left_chat_member:
+        raise ApplicationHandlerStop()
 
 # ---------------- КОД ТИХОГО БЭКАПА ----------------
 async def silent_backup(context: ContextTypes.DEFAULT_TYPE):
@@ -3436,6 +3449,10 @@ async def main():
     # ИСПРАВЛЕНО: Ровный отступ для проверки планировщика
     if app.job_queue is None:
         print("Критическая ошибка: Планировщик задач не инициализирован. Проверьте requirements.txt")
+        
+    # === 🛡️ АКТИВАЦИЯ ТИТАНОВОГО КУПОЛА КАЗИНО ОТ АДМИНСКОГО СПАМА НИКИТЫ ===
+    # Привязываем мидлварь к рождённому приложению в приоритетную группу -1!
+    app.add_handler(TypeHandler(Update, global_anti_spam_middleware), group=-1)
         
     # Все команды теперь реагируют СТРОГО на живой пользовательский текст!
     app.add_handler(CommandHandler("start", help_command, filters=filters.TEXT))
