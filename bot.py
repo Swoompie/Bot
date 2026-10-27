@@ -33,14 +33,22 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 async def global_anti_spam_middleware(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from telegram.ext import ApplicationHandlerStop
     
-    # 1. Если это скрытое служебное уведомление Телеграма (смена титула, аватарка, права)
-    # у него в пакете НЕТ полноценного объекта message. Выжигаем на подлёте!
+    # ЖЕЛЕЗНЫЙ ИСПРАВЛЕННЫЙ ФИКС: Проверяем, что это ИМЕННО системное уведомление чата.
+    # Если сообщения нет, или это обычный технический апдейт (не от юзера) — пропускаем базу данных!
     if not update.message:
-        raise ApplicationHandlerStop()
+        return  # ПУСКАЕМ ТЕХНИЧЕСКИЕ ПАКЕТЫ БАЗЫ ДАННЫХ И ПЛАНИРОВЩИКА!
         
-    # 2. Проверяем скрытые сервисные флаги (смена титулов админа часто прилетает без текста как pinned или системный фид)
-    if update.message.pinned_message or update.message.new_chat_members or update.message.left_chat_member:
-        raise ApplicationHandlerStop()
+    # Бьём по кастомным сервисным триггерам Телеграма (смена титулов, закрепы, ливы)
+    # Если в сообщении присутствует служебный флаг изменения чата:
+    if (update.message.pinned_message or 
+        update.message.new_chat_members or 
+        update.message.left_chat_member or 
+        update.message.group_chat_created or 
+        update.message.supergroup_chat_created):
+        
+        print("🎰 Мидлварь: Системный флуд успешно сожжён в группе -1.")
+        raise ApplicationHandlerStop()  # Выжигаем только админскую чепуху!
+
 
 # ---------------- КОД ТИХОГО БЭКАПА ----------------
 async def silent_backup(context: ContextTypes.DEFAULT_TYPE):
