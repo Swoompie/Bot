@@ -5,7 +5,7 @@ import asyncio
 import json
 from datetime import date, datetime, timedelta
 from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes, ConversationHandler, MessageHandler, filters
+from telegram.ext import Application, CommandHandler, ContextTypes, ConversationHandler, MessageHandler, filters, TypeHandler
 from supabase import create_client, Client
 from io import BytesIO
 
@@ -28,6 +28,19 @@ print(f"------------------------")
 
 # Инициализация 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# ---------------- 🪐 [ГЛОБАЛЬНЫЙ МИДЛВАРЬ-ЩИТ СИСТЕМЫ] ----------------
+async def global_anti_spam_middleware(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    from telegram.ext import ApplicationHandlerStop
+    
+    # 1. Если это скрытое служебное уведомление Телеграма (смена титула, аватарка, права)
+    # у него в пакете НЕТ полноценного объекта message. Выжигаем на подлёте!
+    if not update.message:
+        raise ApplicationHandlerStop()
+        
+    # 2. Проверяем скрытые сервисные флаги (смена титулов админа часто прилетает без текста как pinned или системный фид)
+    if update.message.pinned_message or update.message.new_chat_members or update.message.left_chat_member:
+        raise ApplicationHandlerStop()
 
 # ---------------- КОД ТИХОГО БЭКАПА ----------------
 async def silent_backup(context: ContextTypes.DEFAULT_TYPE):
@@ -180,12 +193,12 @@ def get_opposite_winner_id(role):
 def save_daily_winner(role, user_id, multiplier=1):
     today_str = str(date.today())
     
-    # Защита: принудительно переводим ID и множитель в чистые целые числа Питона
+    # Принудительно страхуемся от дробных чисел Питона
     clean_user_id = int(user_id)
     clean_multiplier = int(multiplier)
     
     try:
-        # План А: Пробуем записать со всеми новыми наворотами и множителем
+        # План А: Пробуем записать со всеми наворотами и множителем
         supabase.table("daily_winners").insert({
             "game_date": today_str,
             "role": role,
@@ -197,7 +210,6 @@ def save_daily_winner(role, user_id, multiplier=1):
         print(f"⚠️ План А не прошёл (возможно, нет колонки multiplier): {e1}")
         try:
             # План Б (Аварийный): Пишем по старой классической схеме без multiplier!
-            # Это спасёт бот от бесконечного цикла в любом случае!
             supabase.table("daily_winners").insert({
                 "game_date": today_str,
                 "role": role,
@@ -532,7 +544,16 @@ async def reset_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
     today = date.today()
-
+    user = update.effective_user  # ЖЕЛЕЗНЫЙ ФИКС: Вытащили профиль нажавшего!
+    
+    # === 🛡️ ТИТАНОВЫЙ АВТО-ОБНОВИТЕЛЬ ТЕГОВ КАЗИНО: ЗАЩИТА ОТ СМЕНЫ НИКНЕЙМОВ ===
+    # Как только игрок жмёт кнопку, база на лету освежает его актуальный тег и имя!
+    if user and user.username:
+        try:
+            supabase.table("users").update({"username": user.username, "first_name": user.first_name}).eq("user_id", user.id).execute()
+        except Exception:
+            pass
+            
     # 1. Вытаскиваем только АКТИВНЫХ игроков (is_active == True)
     all_users = get_users()
     users = [u for u in all_users if u.get("is_active", True)]
@@ -596,17 +617,20 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             supabase.table("users").update({"pidor_streak": 0}).eq("user_id", u["user_id"]).execute()
 
-    # === 🤡 ЖЕЛЕЗНЫЙ ФИКС СТРИКОВ ПИДОРА ОТ РОМЫ: МАТЕМАТИКА В ПАМЯТИ ПИТОНА ===
-    # Считываем стрик победителя безопасно через .get(), защищая от KeyError!
-    streak_days = winner.get("pidor_streak", 0) if winner.get("pidor_streak") is not None else 0
+    # Считываем свежий стрик Пидора для победителя
+    winner_res = supabase.table("users").select("pidor_streak").eq("user_id", winner["user_id"]).execute()
+    streak_days = winner_res.data[0]["pidor_streak"] if (winner_res.data and len(winner_res.data) > 0) else 0
 
     # Если победитель — это фаворит, и его стрик удержания топа длится 3 дня или дольше
-    if winner.get("pidor_weight", 100.0) == max_chat_pidor_weight and streak_days >= 3:
+    if winner["pidor_weight"] == max_chat_pidor_weight and streak_days >= 3:
         is_accumulated_loser = True
+        
+        # Крутим скрытую кость от 1 до 100
         bonus_roll = random.randint(1, 100)
         
-        # === 👑 ЗЕРКАЛЬНАЯ НАСТРОЙКА ВЕСОВ ПОЗОРА (ШКАЛА 5 / 10 / 15 ДНЕЙ) ===
+        # === 🤡 ЗЕРКАЛЬНАЯ НАСТРОЙКА ВЕСОВ ПОЗОРА (ШКАЛА 5 / 10 / 15 ДНЕЙ) ===
         if streak_days >= 15:
+            # 15+ дней удержания Топ-1 шанса: Осечки нет! х5 равен ровно 15% (от 86 до 100)
             if bonus_roll <= 35:
                 multiplier = 2
                 multiplier_text = "🎪 *ЦИРКОВАЯ КУРТКА (х2)!!!* Скрытая кость бьёт наотмашь — лови двойной позор и *+2 к счётчику* позора! "
@@ -618,6 +642,7 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 multiplier_text = "💀 *ТОТАЛЬНЫЙ АПОКАЛИПСИС СТАТИСТИКИ (х5)!!!!!* Смертельный джекпот за рекордные 15+ дней топа! Получай *+5 позоров* разом! 🎪🤡"
         
         elif streak_days >= 10:
+            # 10-14 дней удержания Топ-1 шанса: Осечка падает до 5%, х5 поднят до 10%
             if bonus_roll <= 45:
                 multiplier = 2
                 multiplier_text = "🎪 *ЦИРКОВАЯ КУРТКА (х2)!!!* Скрытая кость бьёт наотмашь — лови двойной позор и *+2 к счётчику* позора! "
@@ -625,12 +650,13 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 multiplier = 3
                 multiplier_text = "📣 *ПАРАД ПОЗОРА (х3)!!!* Матрица казино взломана мега-застоем — забирай сразу *+3 пидора* в досье! "
             elif bonus_roll <= 90:
-                multiplier = 1  
+                multiplier = 1  # Осечка множителя, бот промолчит для секретности!
             else:
                 multiplier = 5
                 multiplier_text = "💀 *ТОТАЛЬНЫЙ АПОКАЛИПСИС СТАТИСТИКИ (х5)!!!!!* Смертельный джекпот за рекордные 10+ дней топа! Получай *+5 позоров* разом! 🎪🤡"
         
         elif streak_days >= 5:
+            # 5-9 дней удержания Топ-1 шанса: Базовые шансы для запуска колеса
             if bonus_roll <= 50:
                 multiplier = 2
                 multiplier_text = "🎪 *ЦИРКОВАЯ КУРТКА (х2)!!!* Скрытая кость бьёт наотмашь — лови двойной позор и *+2 к счётчику* позора! "
@@ -638,7 +664,7 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 multiplier = 3
                 multiplier_text = "📣 *ПАРАД ПОЗОРА (х3)!!!* Матрица казино взломана мега-застоем — забирай сразу *+3 пидора* в досье! "
             elif bonus_roll <= 95:
-                multiplier = 1  
+                multiplier = 1  # Осечка множителя, бот промолчит для секретности!
             else:
                 multiplier = 5
                 multiplier_text = "💀 *ТОТАЛЬНЫЙ АПОКАЛИПСИС СТАТИСТИКИ (х5)!!!!!* Смертельный джекпот за рекордные 5+ дней топа! Получай *+5 позоров* разом! 🎪🤡"
@@ -656,22 +682,21 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # =====================================================================
     try:
         # 1. Сразу фиксируем начисление позора в профиль игрока
-        supabase.table("users").update({"pidor_count": int(new_count)}).eq("user_id", winner["user_id"]).execute()
+        supabase.table("users").update({"pidor_count": new_count}).eq("user_id", winner["user_id"]).execute()
         
         # 2. Сбрасываем стрик удержания веса победителя обратно в 0
         supabase.table("users").update({"pidor_streak": 0}).eq("user_id", winner["user_id"]).execute()
         
         # 3. Сохраняем победителя в daily_winners и ЖЁСТКО запечатываем МНОЖИТЕЛЬ в базу!
-        save_daily_winner("pidor", winner["user_id"], multiplier=int(multiplier))
+        # Убедись, что добавил колонку multiplier (тип int8) со значением 1 по умолчанию в daily_winners!
+        save_daily_winner("pidor", winner["user_id"], multiplier=multiplier)
         
         # 4. Пересчитываем веса под финального победителя
         redistribute_weights(winner["user_id"], "pidor_weight")
     except Exception as db_err:
-        # ЖЕЛЕЗНЫЙ ВЫВОД ОШИБКИ: Выводим детальный трейсбек, чтобы понять, на какой именно строчке база стонет!
-        import traceback
-        print(f"❌ КРИТИЧЕСКИЙ КРАШ БАЗЫ В /pidor: {db_err}")
-        print(traceback.format_exc())
-        # Убрали аварийный return! Бот продолжит выполнение и выведет раунд в чат в любом случае!
+        print(f"Критическая ошибка сохранения транзакции рулетки /pidor в базу: {db_err}")
+        return  # Предохранитель: если база упала, прерываемся и не спамим в чат
+
 
     # =====================================================================
     # 🎉 ОФОРМЛЕНИЕ И ВЫВОД В ЧАТ (Полностью защищено от NameError)
@@ -740,10 +765,12 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="HTML"
         )
 
+    # Пересчитываем веса под финального победителя и сохраняем его в историю дня
+    redistribute_weights(winner["user_id"], "pidor_weight")
+    save_daily_winner("pidor", winner["user_id"])
 
     # === 🎭 БЛОК КАРТЫ МИМИКРИИ: КРАЖА ПИДОРА ===
     mimic_hunter_res = supabase.table("users").select("*").eq("mimic_target_id", winner["user_id"]).execute()
-
     
     is_mimic_triggered = False
     celebrator_name = winner["first_name"]
@@ -950,6 +977,15 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # 3. И только теперь окончательно выходим из функции!
         return
 
+    # === 🛡️ ТИТАНОВЫЙ АВТО-ОБНОВИТЕЛЬ ТЕГОВ КАЗИНО: ЗАЩИТА ОТ СМЕНЫ НИКНЕЙМОВ ===
+    # Как только игрок жмёт кнопку /run, база на лету освежает его актуальный тег и имя!
+    user = update.effective_user
+    if user and user.username:
+        try:
+            supabase.table("users").update({"username": user.username, "first_name": user.first_name}).eq("user_id", user.id).execute()
+        except Exception:
+            pass
+        
     # 1. Вытаскиваем только АКТИВНЫХ игроков (is_active == True)
     all_users = get_users()
     users = [u for u in all_users if u.get("is_active", True)]
@@ -1099,17 +1135,20 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             supabase.table("users").update({"kras_streak": 0}).eq("user_id", u["user_id"]).execute()
 
-    # === 👑 ЖЕЛЕЗНЫЙ ФИКС СТРИКОВ КРАСАВЧИКА ОТ РОМЫ: БЕЗОПАСНЫЙ СБОР ===
-    # Забираем стрик из готового словаря final_winner без лишних запросов и KeyError!
-    streak_days = final_winner.get("kras_streak", 0) if final_winner.get("kras_streak") is not None else 0
+    # Считываем свежий стрик Красавчика для победителя
+    winner_res = supabase.table("users").select("kras_streak").eq("user_id", final_winner["user_id"]).execute()
+    streak_days = winner_res.data[0]["kras_streak"] if (winner_res.data and len(winner_res.data) > 0) else 0
 
     # Если победитель — это именно фаворит, и его стрик удержания топа длится 3 дня или дольше
-    if final_winner.get("kras_weight", 100.0) == max_chat_weight and streak_days >= 3:
+    if final_winner["kras_weight"] == max_chat_weight and streak_days >= 3:
         is_accumulated_champion = True
+        
+        # Крутим скрытую кость от 1 до 100
         bonus_roll = random.randint(1, 100)
         
         # === 👑 ЗЕРКАЛЬНАЯ НАСТРОЙКА ВЕСОВ ЧЕМПИОНА (ШКАЛА 5 / 10 / 15 ДНЕЙ) ===
         if streak_days >= 15:
+            # 15+ дней удержания Топ-1 шанса: Осечки нет вообще! Шанс на х5 увеличен до 25%!
             if bonus_roll <= 30:
                 multiplier = 2
                 multiplier_text = "🔥 *КРАТНЫЙ УДАР (х2)!* Монетка упала удачно — лови сразу *+2 к счётчику* в досье! "
@@ -1121,6 +1160,7 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 multiplier_text = "💥 *ЛЕГЕНДАРНЫЙ ДЖЕКПОТ (х5)!!!* История чата переписана! Колесо фортуны выдало максимальный сектор — лови сразу *+5*, красавчик! 👑🥂"
         
         elif streak_days >= 10:
+            # 10-14 дней удержания Топ-1 шанса: Осечка падает до 5%, шансы на х3 и х5 повышены
             if bonus_roll <= 45:
                 multiplier = 2
                 multiplier_text = "🔥 *КРАТНЫЙ УДАР (х2)!* Монетка упала удачно — лови сразу *+2 к счётчику* в досье! "
@@ -1128,12 +1168,13 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 multiplier = 3
                 multiplier_text = "🚀 *КОРОЛЕВСКИЙ ТРИУМФ (х3)!* Матрица казино взломана фаворитом — забирай *+3*! "
             elif bonus_roll <= 90:
-                multiplier = 1  
+                multiplier = 1  # Осечка джекпота, бот промолчит для секретности!
             else:
                 multiplier = 5
                 multiplier_text = "💥 *ЛЕГЕНДАРНЫЙ ДЖЕКПОТ (х5)!!!* История чата переписана! Колесо фортуны выдало максимальный сектор — лови сразу *+5*, красавчик! 👑🥂"
         
         elif streak_days >= 5:
+            # 5-9 дней удержания Топ-1 шанса: Базовые шансы для запуска колеса
             if bonus_roll <= 50:
                 multiplier = 2
                 multiplier_text = "🔥 *КРАТНЫЙ УДАР (х2)!* Монетка упала удачно — лови сразу *+2 к счётчику* в досье! "
@@ -1141,7 +1182,7 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 multiplier = 3
                 multiplier_text = "🚀 *КОРОЛЕВСКИЙ ТРИУМФ (х3)!* Матрица казино взломана фаворитом — забирай *+3*! "
             elif bonus_roll <= 95:
-                multiplier = 1  
+                multiplier = 1  # Осечка джекпота, бот промолчит для секретности!
             else:
                 multiplier = 5
                 multiplier_text = "💥 *ЛЕГЕНДАРНЫЙ ДЖЕКПОТ (х5)!!!* История чата переписана! Колесо фортуны выдало максимальный сектор — лови сразу *+5*, красавчик! 👑🥂"
@@ -1426,12 +1467,9 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             except Exception:
                 print(f"Даже админу не удалось отправить лог ошибки: {e}")
-                
-    # --- ТИХИЙ БЭКАП ПОСЛЕ ИГРЫ С ПУЛЕНЕПРОБИВАЕМЫМ ЗАПУСКОМ ---
-    # Используем нативный asyncio.create_task, который работает на любой прошивке Питона!
-    import asyncio
-    asyncio.create_task(silent_backup(context))
 
+    # --- ТИХИЙ БЭКАП ПОСЛЕ ИГРЫ ---
+    context.application.create_task(silent_backup(context))
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
@@ -2168,8 +2206,8 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # 2. ПРОВЕРКА КУЛДАУНА (Стандартные 6 дней или штрафные 12 дней за кражу короны)
-    if player_res.data and len(player_res.data) > 0 and player_res.data[0].get("last_switch_date"): 
-        last_date = safe_parse_date(player_res.data[0].get("last_switch_date"))
+    if user_res.data and len(user_res.data) > 0 and user_res.data[0].get("last_switch_date"): 
+        last_date = safe_parse_date(user_res.data[0].get("last_switch_date"))
         days_passed = (today - last_date).days
         
         # Если days_passed меньше 6 (включая отрицательные числа от штрафного сдвига) — КД активен!
@@ -2761,7 +2799,15 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     chat_id = update.effective_chat.id
     today = date.today()
-       
+    
+    # === 🛡️ ТИТАНОВЫЙ АВТО-ОБНОВИТЕЛЬ ТЕГОВ КАЗИНО: ЗАЩИТА ОТ СМЕНЫ НИКНЕЙМОВ ===
+    # Как только игрок запрашивает досье, база на лету освежает его актуальный тег и имя!
+    if user and user.username:
+        try:
+            supabase.table("users").update({"username": user.username, "first_name": user.first_name}).eq("user_id", user.id).execute()
+        except Exception:
+            pass
+    
     # 1. Вытаскиваем ВСЕХ пользователей для расчета общей суммы весов
     all_users = get_users()
     active_users = [u for u in all_users if u.get("is_active", True)]
@@ -3414,30 +3460,34 @@ async def main():
     if app.job_queue is None:
         print("Критическая ошибка: Планировщик задач не инициализирован. Проверьте requirements.txt")
         
-    # Добавляем все хэндлеры
-    app.add_handler(CommandHandler("start", help_command))
-    app.add_handler(CommandHandler("help", help_command))
-    app.add_handler(CommandHandler("register", register))
-    app.add_handler(CommandHandler("unreg", unreg))
-    app.add_handler(CommandHandler("reset", reset_stats))
-    app.add_handler(CommandHandler("pidor", pidor))
-    app.add_handler(CommandHandler("run", run_command))
-    app.add_handler(CommandHandler("stats", stats))
-    app.add_handler(CommandHandler("mimic", mimic))
-    app.add_handler(CommandHandler("procents", procents_command))
-    app.add_handler(CommandHandler("switch", switch))
-    app.add_handler(CommandHandler("records", records))
-    app.add_handler(CommandHandler("mystats", my_stats))
-    app.add_handler(CommandHandler("backup", manual_backup))
-    app.add_handler(CommandHandler("dice", dice_command))
-    app.add_handler(CommandHandler("duel", duel))
-    app.add_handler(CommandHandler("unostats", uno_stats))
-    app.add_handler(CommandHandler("boy", set_gender_boy))
-    app.add_handler(CommandHandler("girl", set_gender_girl))
-    app.add_handler(CommandHandler("notbed", command_notbed))
-    app.add_handler(CommandHandler("sosamba", command_sosamba))
-    app.add_handler(CommandHandler("ok", admin_ok))
-    app.add_handler(CommandHandler("nook", admin_nook))
+    # === 🛡️ АКТИВАЦИЯ ТИТАНОВОГО КУПОЛА КАЗИНО ОТ АДМИНСКОГО СПАМА НИКИТЫ ===
+    # Привязываем мидлварь к рождённому приложению в приоритетную группу -1!
+    app.add_handler(TypeHandler(Update, global_anti_spam_middleware), group=-1)
+        
+    # Все команды теперь реагируют СТРОГО на живой пользовательский текст!
+    app.add_handler(CommandHandler("start", help_command, filters=filters.TEXT))
+    app.add_handler(CommandHandler("help", help_command, filters=filters.TEXT))
+    app.add_handler(CommandHandler("register", register, filters=filters.TEXT))
+    app.add_handler(CommandHandler("unreg", unreg, filters=filters.TEXT))
+    app.add_handler(CommandHandler("reset", reset_stats, filters=filters.TEXT))
+    app.add_handler(CommandHandler("pidor", pidor, filters=filters.TEXT))
+    app.add_handler(CommandHandler("run", run_command, filters=filters.TEXT))
+    app.add_handler(CommandHandler("stats", stats, filters=filters.TEXT))
+    app.add_handler(CommandHandler("mimic", mimic, filters=filters.TEXT))
+    app.add_handler(CommandHandler("procents", procents_command, filters=filters.TEXT))
+    app.add_handler(CommandHandler("switch", switch, filters=filters.TEXT))
+    app.add_handler(CommandHandler("records", records, filters=filters.TEXT))
+    app.add_handler(CommandHandler("mystats", my_stats, filters=filters.TEXT))
+    app.add_handler(CommandHandler("backup", manual_backup, filters=filters.TEXT))
+    app.add_handler(CommandHandler("dice", dice_command, filters=filters.TEXT))
+    app.add_handler(CommandHandler("duel", duel, filters=filters.TEXT))
+    app.add_handler(CommandHandler("unostats", uno_stats, filters=filters.TEXT))
+    app.add_handler(CommandHandler("boy", set_gender_boy, filters=filters.TEXT))
+    app.add_handler(CommandHandler("girl", set_gender_girl, filters=filters.TEXT))
+    app.add_handler(CommandHandler("notbed", command_notbed, filters=filters.TEXT))
+    app.add_handler(CommandHandler("sosamba", command_sosamba, filters=filters.TEXT))
+    app.add_handler(CommandHandler("ok", admin_ok, filters=filters.TEXT))
+    app.add_handler(CommandHandler("nook", admin_nook, filters=filters.TEXT))
 
 
     if RENDER_URL:
