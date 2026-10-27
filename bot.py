@@ -575,20 +575,17 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             supabase.table("users").update({"pidor_streak": 0}).eq("user_id", u["user_id"]).execute()
 
-    # Считываем свежий стрик Пидора для победителя
-    winner_res = supabase.table("users").select("pidor_streak").eq("user_id", winner["user_id"]).execute()
-    streak_days = winner_res.data[0]["pidor_streak"] if (winner_res.data and len(winner_res.data) > 0) else 0
+    # === 🤡 ЖЕЛЕЗНЫЙ ФИКС СТРИКОВ ПИДОРА ОТ РОМЫ: МАТЕМАТИКА В ПАМЯТИ ПИТОНА ===
+    # Считываем стрик победителя безопасно через .get(), защищая от KeyError!
+    streak_days = winner.get("pidor_streak", 0) if winner.get("pidor_streak") is not None else 0
 
     # Если победитель — это фаворит, и его стрик удержания топа длится 3 дня или дольше
-    if winner["pidor_weight"] == max_chat_pidor_weight and streak_days >= 3:
+    if winner.get("pidor_weight", 100.0) == max_chat_pidor_weight and streak_days >= 3:
         is_accumulated_loser = True
-        
-        # Крутим скрытую кость от 1 до 100
         bonus_roll = random.randint(1, 100)
         
-        # === 🤡 ЗЕРКАЛЬНАЯ НАСТРОЙКА ВЕСОВ ПОЗОРА (ШКАЛА 5 / 10 / 15 ДНЕЙ) ===
+        # === 👑 ЗЕРКАЛЬНАЯ НАСТРОЙКА ВЕСОВ ПОЗОРА (ШКАЛА 5 / 10 / 15 ДНЕЙ) ===
         if streak_days >= 15:
-            # 15+ дней удержания Топ-1 шанса: Осечки нет! х5 равен ровно 15% (от 86 до 100)
             if bonus_roll <= 35:
                 multiplier = 2
                 multiplier_text = "🎪 *ЦИРКОВАЯ КУРТКА (х2)!!!* Скрытая кость бьёт наотмашь — лови двойной позор и *+2 к счётчику* позора! "
@@ -600,7 +597,6 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 multiplier_text = "💀 *ТОТАЛЬНЫЙ АПОКАЛИПСИС СТАТИСТИКИ (х5)!!!!!* Смертельный джекпот за рекордные 15+ дней топа! Получай *+5 позоров* разом! 🎪🤡"
         
         elif streak_days >= 10:
-            # 10-14 дней удержания Топ-1 шанса: Осечка падает до 5%, х5 поднят до 10%
             if bonus_roll <= 45:
                 multiplier = 2
                 multiplier_text = "🎪 *ЦИРКОВАЯ КУРТКА (х2)!!!* Скрытая кость бьёт наотмашь — лови двойной позор и *+2 к счётчику* позора! "
@@ -608,13 +604,12 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 multiplier = 3
                 multiplier_text = "📣 *ПАРАД ПОЗОРА (х3)!!!* Матрица казино взломана мега-застоем — забирай сразу *+3 пидора* в досье! "
             elif bonus_roll <= 90:
-                multiplier = 1  # Осечка множителя, бот промолчит для секретности!
+                multiplier = 1  
             else:
                 multiplier = 5
                 multiplier_text = "💀 *ТОТАЛЬНЫЙ АПОКАЛИПСИС СТАТИСТИКИ (х5)!!!!!* Смертельный джекпот за рекордные 10+ дней топа! Получай *+5 позоров* разом! 🎪🤡"
         
         elif streak_days >= 5:
-            # 5-9 дней удержания Топ-1 шанса: Базовые шансы для запуска колеса
             if bonus_roll <= 50:
                 multiplier = 2
                 multiplier_text = "🎪 *ЦИРКОВАЯ КУРТКА (х2)!!!* Скрытая кость бьёт наотмашь — лови двойной позор и *+2 к счётчику* позора! "
@@ -622,7 +617,7 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 multiplier = 3
                 multiplier_text = "📣 *ПАРАД ПОЗОРА (х3)!!!* Матрица казино взломана мега-застоем — забирай сразу *+3 пидора* в досье! "
             elif bonus_roll <= 95:
-                multiplier = 1  # Осечка множителя, бот промолчит для секретности!
+                multiplier = 1  
             else:
                 multiplier = 5
                 multiplier_text = "💀 *ТОТАЛЬНЫЙ АПОКАЛИПСИС СТАТИСТИКИ (х5)!!!!!* Смертельный джекпот за рекордные 5+ дней топа! Получай *+5 позоров* разом! 🎪🤡"
@@ -723,12 +718,10 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="HTML"
         )
 
-    # Пересчитываем веса под финального победителя и сохраняем его в историю дня
-    redistribute_weights(winner["user_id"], "pidor_weight")
-    save_daily_winner("pidor", winner["user_id"])
 
     # === 🎭 БЛОК КАРТЫ МИМИКРИИ: КРАЖА ПИДОРА ===
     mimic_hunter_res = supabase.table("users").select("*").eq("mimic_target_id", winner["user_id"]).execute()
+
     
     is_mimic_triggered = False
     celebrator_name = winner["first_name"]
@@ -1084,20 +1077,17 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             supabase.table("users").update({"kras_streak": 0}).eq("user_id", u["user_id"]).execute()
 
-    # Считываем свежий стрик Красавчика для победителя
-    winner_res = supabase.table("users").select("kras_streak").eq("user_id", final_winner["user_id"]).execute()
-    streak_days = winner_res.data[0]["kras_streak"] if (winner_res.data and len(winner_res.data) > 0) else 0
+    # === 👑 ЖЕЛЕЗНЫЙ ФИКС СТРИКОВ КРАСАВЧИКА ОТ РОМЫ: БЕЗОПАСНЫЙ СБОР ===
+    # Забираем стрик из готового словаря final_winner без лишних запросов и KeyError!
+    streak_days = final_winner.get("kras_streak", 0) if final_winner.get("kras_streak") is not None else 0
 
     # Если победитель — это именно фаворит, и его стрик удержания топа длится 3 дня или дольше
-    if final_winner["kras_weight"] == max_chat_weight and streak_days >= 3:
+    if final_winner.get("kras_weight", 100.0) == max_chat_weight and streak_days >= 3:
         is_accumulated_champion = True
-        
-        # Крутим скрытую кость от 1 до 100
         bonus_roll = random.randint(1, 100)
         
         # === 👑 ЗЕРКАЛЬНАЯ НАСТРОЙКА ВЕСОВ ЧЕМПИОНА (ШКАЛА 5 / 10 / 15 ДНЕЙ) ===
         if streak_days >= 15:
-            # 15+ дней удержания Топ-1 шанса: Осечки нет вообще! Шанс на х5 увеличен до 25%!
             if bonus_roll <= 30:
                 multiplier = 2
                 multiplier_text = "🔥 *КРАТНЫЙ УДАР (х2)!* Монетка упала удачно — лови сразу *+2 к счётчику* в досье! "
@@ -1109,7 +1099,6 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 multiplier_text = "💥 *ЛЕГЕНДАРНЫЙ ДЖЕКПОТ (х5)!!!* История чата переписана! Колесо фортуны выдало максимальный сектор — лови сразу *+5*, красавчик! 👑🥂"
         
         elif streak_days >= 10:
-            # 10-14 дней удержания Топ-1 шанса: Осечка падает до 5%, шансы на х3 и х5 повышены
             if bonus_roll <= 45:
                 multiplier = 2
                 multiplier_text = "🔥 *КРАТНЫЙ УДАР (х2)!* Монетка упала удачно — лови сразу *+2 к счётчику* в досье! "
@@ -1117,13 +1106,12 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 multiplier = 3
                 multiplier_text = "🚀 *КОРОЛЕВСКИЙ ТРИУМФ (х3)!* Матрица казино взломана фаворитом — забирай *+3*! "
             elif bonus_roll <= 90:
-                multiplier = 1  # Осечка джекпота, бот промолчит для секретности!
+                multiplier = 1  
             else:
                 multiplier = 5
                 multiplier_text = "💥 *ЛЕГЕНДАРНЫЙ ДЖЕКПОТ (х5)!!!* История чата переписана! Колесо фортуны выдало максимальный сектор — лови сразу *+5*, красавчик! 👑🥂"
         
         elif streak_days >= 5:
-            # 5-9 дней удержания Топ-1 шанса: Базовые шансы для запуска колеса
             if bonus_roll <= 50:
                 multiplier = 2
                 multiplier_text = "🔥 *КРАТНЫЙ УДАР (х2)!* Монетка упала удачно — лови сразу *+2 к счётчику* в досье! "
@@ -1131,7 +1119,7 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 multiplier = 3
                 multiplier_text = "🚀 *КОРОЛЕВСКИЙ ТРИУМФ (х3)!* Матрица казино взломана фаворитом — забирай *+3*! "
             elif bonus_roll <= 95:
-                multiplier = 1  # Осечка джекпота, бот промолчит для секретности!
+                multiplier = 1  
             else:
                 multiplier = 5
                 multiplier_text = "💥 *ЛЕГЕНДАРНЫЙ ДЖЕКПОТ (х5)!!!* История чата переписана! Колесо фортуны выдало максимальный сектор — лови сразу *+5*, красавчик! 👑🥂"
@@ -1416,9 +1404,12 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
             except Exception:
                 print(f"Даже админу не удалось отправить лог ошибки: {e}")
+                
+    # --- ТИХИЙ БЭКАП ПОСЛЕ ИГРЫ С ПУЛЕНЕПРОБИВАЕМЫМ ЗАПУСКОМ ---
+    # Используем нативный asyncio.create_task, который работает на любой прошивке Питона!
+    import asyncio
+    asyncio.create_task(silent_backup(context))
 
-    # --- ТИХИЙ БЭКАП ПОСЛЕ ИГРЫ ---
-    context.application.create_task(silent_backup(context))
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
