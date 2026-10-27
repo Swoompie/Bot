@@ -179,22 +179,12 @@ def get_opposite_winner_id(role):
 
 def save_daily_winner(role, user_id, multiplier=1):
     today_str = str(date.today())
-    
-    try:
-        # === 🎰 [ЖЕЛЕЗНЫЙ АНТИ-ДУБЛЬ ФИКС]: ЗАЩИТА ОТ ДВУХ НАЖАТИЙ ОДНОВРЕМЕННО ===
-        # Перед тем как записать победителя, принудительно выжигаем любой дубликат на сегодня,
-        # если он успел проскочить асинхронно. Двух Пидоров в один день быть не может!
-        supabase.table("daily_winners").delete().eq("game_date", today_str).eq("role", role).execute()
-        
-        # Теперь со спокойной душой делаем чистый единичный инсерт
-        supabase.table("daily_winners").insert({
-            "game_date": today_str,
-            "role": role,
-            "user_id": user_id,
-            "multiplier": multiplier
-        }).execute()
-    except Exception as e:
-        print(f"Ошибка сохранения сингл-победителя daily_winners: {e}")
+    supabase.table("daily_winners").insert({
+        "game_date": today_str,
+        "role": role,
+        "user_id": user_id,
+        "multiplier": multiplier  # ЖЕЛЕЗНЫЙ ФИКС: Сохраняем множитель раунда в базу!
+    }).execute()
 
 def safe_parse_date(db_value):
     """
