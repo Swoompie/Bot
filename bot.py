@@ -3642,9 +3642,37 @@ async def pizdec_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAESGx9q4HV0YjRZMVJdve5jX0pXLGQfiQAC7gADxSPMB-w67DIZkjqMPQQ')
         return
 
-    # 😎 ВЕТКА 5: БЕЛАЯ КОСТЬ, ЧИСТЫЙ ВЕЗУНЧИК (Если ни одно условие не выполнено)
-    msg_lucky_boy = "Ты какого хера тут сопли развёл? Ты чист перед законом, кубики в плюсе, клейма нет. Скройся с глаз Крупье, пока фортуна не передумала! 🥂"
-    msg_lucky_girl = "У вас всё идеально, милая! Никаких позоров, проценты в полном порядке (как минимум не в топе). Оставьте эту стену плача для местных неудачников Казиныча! ✨"
+    # === 😎 ВЕТКА 5: БЕЛАЯ КОСТЬ ИЛИ ПРИНУДИТЕЛЬНОЕ УНИЖЕНИЕ МАЗУРИКОВ-ВЕЗУНЧИКОВ ===
+    # Проверяем, не является ли этот нытик сегодняшним Красавчиком дня
+    today_krasavchik_res = get_today_winner("krasavchik")
+    is_today_krasavchik = False
+    if today_krasavchik_res and today_krasavchik_res["user_id"] == user.id:
+        is_today_krasavchik = True
+
+    # 💎 СУПЕР-ВЕТКА 5.А: ЕСЛИ ЭТО ОБНАГЛЕВШИЙ КРАСАВЧИК ДНЯ 💎
+    if is_today_krasavchik:
+        msg_kras_boy = (
+            "ты чё, вообще ахуел на столько?! У тебя ни одного позора, кости в порядке, "
+            "так ты ещё и официальный <b>КРАСАВЧИК ДНЯ</b> сегодня! 👑 Сними корону, не жми "
+            "кнопку для бедолаг и скройся с глаз Крупье, пока пацаны тебе лицо не начистили! 🥂🔥🎰"
+        )
+        msg_kras_girl = (
+            "вы чё, вообще ахуели на столько, милая?! Ни единого косяка в досье, проценты чистые, "
+            "так вы ещё и официальная <b>КРАСАВИЦА ДНЯ</b> сегодня! 👑 Корона чата на месте, "
+            "хватит отжимать кнопки у местных неудачников казино, идите праздновать! ✨💅🥂"
+        )
+        
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"👑 <b>ОТКАЗ В ИСПУСКАНЬЕ НЫТЬЯ ДЛЯ ЭЛИТЫ!</b> 👑\n\nЭй, <b>{safe_name}</b>, {g_text(player, msg_kras_boy, msg_kras_girl)}",
+            parse_mode="HTML"
+        )
+        await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAESGyVq4HrsCHg7IpSVnDOWNC0J5pjuDQACHgADEEN3JZQnNINQ0cI2PQQ')
+        return
+
+    # ⚪️ СТАНДАРТНАЯ ВЕТКА 5.Б: ЧИСТЫЙ МИРНЫЙ ВЕЗУНЧИК
+    msg_lucky_boy = "Ты какого хера тут сопли развёл? Ты чист перед законом, проценты кубов в порядке, утреннего клейма нет. Скройся с глаз Крупье, пока фортуна не передумала! 🥂"
+    msg_lucky_girl = "У вас всё идеально, милая! Никаких позоров, проценты в полном порядке (как минимум не в топе). Оставьте эту стену плача для местных неудачников Казиныча! ✨💅"
     
     await context.bot.send_message(
         chat_id=chat_id,
