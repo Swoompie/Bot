@@ -635,21 +635,22 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # =====================================================================
     try:
         # 1. Сразу фиксируем начисление позора в профиль игрока
-        supabase.table("users").update({"pidor_count": new_count}).eq("user_id", winner["user_id"]).execute()
+        supabase.table("users").update({"pidor_count": int(new_count)}).eq("user_id", winner["user_id"]).execute()
         
         # 2. Сбрасываем стрик удержания веса победителя обратно в 0
         supabase.table("users").update({"pidor_streak": 0}).eq("user_id", winner["user_id"]).execute()
         
         # 3. Сохраняем победителя в daily_winners и ЖЁСТКО запечатываем МНОЖИТЕЛЬ в базу!
-        # Убедись, что добавил колонку multiplier (тип int8) со значением 1 по умолчанию в daily_winners!
-        save_daily_winner("pidor", winner["user_id"], multiplier=multiplier)
+        save_daily_winner("pidor", winner["user_id"], multiplier=int(multiplier))
         
         # 4. Пересчитываем веса под финального победителя
         redistribute_weights(winner["user_id"], "pidor_weight")
     except Exception as db_err:
-        print(f"Критическая ошибка сохранения транзакции рулетки /pidor в базу: {db_err}")
-        return  # Предохранитель: если база упала, прерываемся и не спамим в чат
-
+        # ЖЕЛЕЗНЫЙ ВЫВОД ОШИБКИ: Выводим детальный трейсбек, чтобы понять, на какой именно строчке база стонет!
+        import traceback
+        print(f"❌ КРИТИЧЕСКИЙ КРАШ БАЗЫ В /pidor: {db_err}")
+        print(traceback.format_exc())
+        # Убрали аварийный return! Бот продолжит выполнение и выведет раунд в чат в любом случае!
 
     # =====================================================================
     # 🎉 ОФОРМЛЕНИЕ И ВЫВОД В ЧАТ (Полностью защищено от NameError)
