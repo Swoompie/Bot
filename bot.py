@@ -179,12 +179,33 @@ def get_opposite_winner_id(role):
 
 def save_daily_winner(role, user_id, multiplier=1):
     today_str = str(date.today())
-    supabase.table("daily_winners").insert({
-        "game_date": today_str,
-        "role": role,
-        "user_id": user_id,
-        "multiplier": multiplier  # ЖЕЛЕЗНЫЙ ФИКС: Сохраняем множитель раунда в базу!
-    }).execute()
+    
+    # Защита: принудительно переводим ID и множитель в чистые целые числа Питона
+    clean_user_id = int(user_id)
+    clean_multiplier = int(multiplier)
+    
+    try:
+        # План А: Пробуем записать со всеми новыми наворотами и множителем
+        supabase.table("daily_winners").insert({
+            "game_date": today_str,
+            "role": role,
+            "user_id": clean_user_id,
+            "multiplier": clean_multiplier
+        }).execute()
+        print(f"🎰 [БАЗА]: Успешно записан победитель {role} с множителем {clean_multiplier}")
+    except Exception as e1:
+        print(f"⚠️ План А не прошёл (возможно, нет колонки multiplier): {e1}")
+        try:
+            # План Б (Аварийный): Пишем по старой классической схеме без multiplier!
+            # Это спасёт бот от бесконечного цикла в любом случае!
+            supabase.table("daily_winners").insert({
+                "game_date": today_str,
+                "role": role,
+                "user_id": clean_user_id
+            }).execute()
+            print(f"🎰 [БАЗА]: Сработал аварийный План Б! Победитель {role} зафиксирован.")
+        except Exception as e2:
+            print(f"❌ ПОЛНЫЙ ОТКАЗ БАЗЫ ДАННЫХ SUPABASE: {e2}")
 
 def safe_parse_date(db_value):
     """
