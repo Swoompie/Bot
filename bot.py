@@ -3580,15 +3580,18 @@ async def pizdec_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"парень уничтожен как личность за игровым столом! Крупье сочувственно наливает за счёт заведения. 💀💣🎰"
         )
         msg_girl = (
-            f"попала в эпицентр космического нефорта! Боги рандома устроили ей абсолютный разнос, "
+            f"попала в эпицентр космического пиздеца! Боги рандома устроили ей абсолютный разнос, "
             f"леди официально и громко негодует, требуя сжечь это казино к чертям! 🔥🎪"
         )
+
+        # ДИНАМИЧЕСКОЕ ОПРЕДЕЛЕНИЕ МЕСТОИМЕНИЯ ДЛЯ ПАЦАНОВ И ДЕВЧОНОК
+        gender_pronoun = g_text(player, "Так он ещё и", "Так она ещё и ")
 
         combo_text = (
             f"☢️ <b>УЛЬТРА-ПИЗДЕЦ ЗАФИКСИРОВАН! СИНГУЛЯРНОСТЬ БОЛИ!</b> ☢️\n\n"
             f"Мало того, что игрок <b>{safe_name}</b> умудрился собрать комбо-страйк неудачника:\n"
             f"{joined_reasons}\n\n"
-            f"🎯 Так он/она ещё и {g_text(player, msg_boy, msg_girl)}"
+            f"🎯 {gender_pronoun} {g_text(player, msg_boy, msg_girl)}"
         )
 
         await context.bot.send_message(
@@ -3603,40 +3606,40 @@ async def pizdec_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 🎲 ВЕТКА 2: ПАРШИВЫЕ КОСТИ В КУБИКАХ СУДЬБЫ
     if is_horrible_dice:
         msg_boy = "смотрит на эти ебучие кубики кармы и проклинает этот день! Выбросил паршивые кости (1/1, 1/2 или 2/2) и намертво засадил свои проценты в болото! 🎲📉"
-        msg_girl = "выкинула паршивые кости на этой неделе и изящно топает каблуком от злости! Её шансы растаяли, леди у барной стойки дико негодует! 💅💔🎲"
+        msg_girl = "выкинула паршивые кости на этой неделе и изящно топает каблуком от злости! Её шансы на Пидорессу поднялись, леди у барной стойки дико негодует! 💔🎲"
         
         await context.bot.send_message(
             chat_id=chat_id,
             text=f"🎲 <b>ПРОТОКОЛ ПИЗДЕЦА: ЕБУЧИЕ КОСТИ!</b> 🎲\n\n🤡 <b>{safe_name}</b> {g_text(player, msg_boy, msg_girl)}",
             parse_mode="HTML"
         )
-        await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERg9tqT2Lb7EssiCPdH7XeEz1W5sbVswAC6S8AApkAAYhJDcx-Vp6-Sco8BA')
+        await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAESGyNq4Ha80GhfCpNeS51OZF0-Syb24QAC-gADq3tGJJ4tNCyp1pByPQQ')
         return
 
     # 🤡 ВЕТКА 3: СЕГОДНЯШНИЙ ПИДОР ДНЯ
     if is_today_pidor:
         msg_boy = "негодует от полученного статуса Пидора дня на сегодня! Клеймо позора жжёт ему лоб, Салун глумится во весь голос! 🎪🤡"
-        msg_girl = "негодует от утреннего вердикта Крупье! Статус Пидорессы дня обрушил её настроение, леди требует перезагрузить этот чертов автомат! 💅🔥"
+        msg_girl = "негодует от утреннего вердикта Крупье! Статус Пидорессы дня обрушил её настроение, леди требует перезагрузить этот чертов автомат! 😡🔥"
         
         await context.bot.send_message(
             chat_id=chat_id,
             text=f"🤡 <b>ПРОТОКОЛ ПИЗДЕЦА: СЕГОДНЯШНИЙ ПОЗОР!</b> 🤡\n\n👉 <b>{safe_name}</b> {g_text(player, msg_boy, msg_girl)}",
             parse_mode="HTML"
         )
-        await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERePBqQ27RxFYFJcHGEaZ9kPTDkhO1EAACSk4AAuAKOUlEfzO0OLfimzwE')
+        await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAESGx1q4HRbOozCsnD1qAF-3XBAUE71wAACVxsAApox0EqHiM2ENpsl9D0E')
         return
 
     # 🎯 ВЕТКА 4: МАКСИМАЛЬНЫЙ ШАНС СТАТЬ ПИДОРОМ (ЛИДЕР СЕТКИ ПОЗОРНЫХ ВЕСОВ)
     if is_max_chance_leader:
-        msg_boy = "прямо сейчас сидит на пороховой бочке! У него максимальный шанс на Пидора в чате на текущий момент, парень люто негодует от этой подкрутки! 🌋🚨"
-        msg_girl = "возглавляет позорный рейтинг шансов на завтрашнее утро! Её веса взлетели в топ, прекрасная леди за игровым столом дико паникует и негодует! 💅🚨"
+        msg_boy = "прямо сейчас сидит на пороховой бочке! У него максимальный шанс на Пидора в чате на текущий момент, парень люто негодует! 🌋🚨"
+        msg_girl = "возглавляет позорный рейтинг шансов на завтрашнее утро! Её проценты взлетели в топ, прекрасная леди за игровым столом дико паникует и негодует! 🚨"
         
         await context.bot.send_message(
             chat_id=chat_id,
             text=f"🚨 <b>ПРОТОКОЛ ПИЗДЕЦА: ФАВОРИТ КЛЕЙМА!</b> 🚨\n\n👀 Наш парень/леди с максимальным шансом на пидора на текущий момент негодует:\n👉 <b>{safe_name}</b> {g_text(player, msg_boy, msg_girl)}",
             parse_mode="HTML"
         )
-        await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERocZqavV1gUjQriQqP3uLpw6uz9qdAwAChhEAAoC6wEokCKx8CQHogD0E')
+        await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAESGx9q4HV0YjRZMVJdve5jX0pXLGQfiQAC7gADxSPMB-w67DIZkjqMPQQ')
         return
 
     # 😎 ВЕТКА 5: БЕЛАЯ КОСТЬ, ЧИСТЫЙ ВЕЗУНЧИК (Если ни одно условие не выполнено)
