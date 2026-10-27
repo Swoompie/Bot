@@ -5,7 +5,7 @@ import asyncio
 import json
 from datetime import date, datetime, timedelta
 from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes, ConversationHandler, MessageHandler, filters, TypeHandler
+from telegram.ext import Application, CommandHandler, ContextTypes, ConversationHandler, MessageHandler, filters
 from supabase import create_client, Client
 from io import BytesIO
 
@@ -28,28 +28,6 @@ print(f"------------------------")
 
 # Инициализация 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-# ---------------- 🪐 [ГЛОБАЛЬНЫЙ МИДЛВАРЬ-ЩИТ СИСТЕМЫ] ----------------
-async def global_anti_spam_middleware(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    from telegram.ext import ApplicationHandlerStop
-    
-    # 1. ЖЕЛЕЗНЫЙ КАПКАН НА ТИТУЛЫ НИКИТЫ: Если обновился статус админа/юзера (chat_member)
-    # или прилетело любое системное не-текстовое событие — ВЫЖИГАЕМ НА КОРНЮ!
-    if update.chat_member or update.my_chat_member:
-        # print("🎰 Мидлварь: Попытка Никиты сменить админский титул стёрта в порошок!")
-        raise ApplicationHandlerStop()
-
-    # 2. Если это асинхронный ответ от базы данных Supabase или тик JobQueue (у них нет message)
-    # МЫ ИХ ПУСКАЕМ, чтобы рулетки /pidor и /run записывались в базу с первого раза!
-    if not update.message:
-        return  
-        
-    # 3. Если это живой человек в чате, но в его пакете НЕТ ТЕКСТА 
-    # или его текст не начинается со священного командного слэша "/"
-    # (Например, скрытые сервисные закрепы сообщений или системный флуд)
-    if not update.message.text or not update.message.text.strip().startswith("/"):
-        raise ApplicationHandlerStop()  # Уничтожаем фантомный спам на месте!
-
 
 # ---------------- КОД ТИХОГО БЭКАПА ----------------
 async def silent_backup(context: ContextTypes.DEFAULT_TYPE):
@@ -2205,8 +2183,8 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # 2. ПРОВЕРКА КУЛДАУНА (Стандартные 6 дней или штрафные 12 дней за кражу короны)
-    if user_res.data and len(user_res.data) > 0 and user_res.data[0].get("last_switch_date"): 
-        last_date = safe_parse_date(user_res.data[0].get("last_switch_date"))
+    if player_res.data and len(player_res.data) > 0 and player_res.data[0].get("last_switch_date"): 
+        last_date = safe_parse_date(player_res.data[0].get("last_switch_date"))
         days_passed = (today - last_date).days
         
         # Если days_passed меньше 6 (включая отрицательные числа от штрафного сдвига) — КД активен!
@@ -3459,34 +3437,30 @@ async def main():
     if app.job_queue is None:
         print("Критическая ошибка: Планировщик задач не инициализирован. Проверьте requirements.txt")
         
-    # === 🛡️ АКТИВАЦИЯ ТИТАНОВОГО КУПОЛА КАЗИНО ОТ АДМИНСКОГО СПАМА НИКИТЫ ===
-    # Привязываем мидлварь к рождённому приложению в приоритетную группу -1!
-    app.add_handler(TypeHandler(Update, global_anti_spam_middleware), group=-1)
-        
-    # Все команды теперь реагируют СТРОГО на живой пользовательский текст!
-    app.add_handler(CommandHandler("start", help_command, filters=filters.TEXT))
-    app.add_handler(CommandHandler("help", help_command, filters=filters.TEXT))
-    app.add_handler(CommandHandler("register", register, filters=filters.TEXT))
-    app.add_handler(CommandHandler("unreg", unreg, filters=filters.TEXT))
-    app.add_handler(CommandHandler("reset", reset_stats, filters=filters.TEXT))
-    app.add_handler(CommandHandler("pidor", pidor, filters=filters.TEXT))
-    app.add_handler(CommandHandler("run", run_command, filters=filters.TEXT))
-    app.add_handler(CommandHandler("stats", stats, filters=filters.TEXT))
-    app.add_handler(CommandHandler("mimic", mimic, filters=filters.TEXT))
-    app.add_handler(CommandHandler("procents", procents_command, filters=filters.TEXT))
-    app.add_handler(CommandHandler("switch", switch, filters=filters.TEXT))
-    app.add_handler(CommandHandler("records", records, filters=filters.TEXT))
-    app.add_handler(CommandHandler("mystats", my_stats, filters=filters.TEXT))
-    app.add_handler(CommandHandler("backup", manual_backup, filters=filters.TEXT))
-    app.add_handler(CommandHandler("dice", dice_command, filters=filters.TEXT))
-    app.add_handler(CommandHandler("duel", duel, filters=filters.TEXT))
-    app.add_handler(CommandHandler("unostats", uno_stats, filters=filters.TEXT))
-    app.add_handler(CommandHandler("boy", set_gender_boy, filters=filters.TEXT))
-    app.add_handler(CommandHandler("girl", set_gender_girl, filters=filters.TEXT))
-    app.add_handler(CommandHandler("notbed", command_notbed, filters=filters.TEXT))
-    app.add_handler(CommandHandler("sosamba", command_sosamba, filters=filters.TEXT))
-    app.add_handler(CommandHandler("ok", admin_ok, filters=filters.TEXT))
-    app.add_handler(CommandHandler("nook", admin_nook, filters=filters.TEXT))
+    # Добавляем все хэндлеры
+    app.add_handler(CommandHandler("start", help_command))
+    app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("register", register))
+    app.add_handler(CommandHandler("unreg", unreg))
+    app.add_handler(CommandHandler("reset", reset_stats))
+    app.add_handler(CommandHandler("pidor", pidor))
+    app.add_handler(CommandHandler("run", run_command))
+    app.add_handler(CommandHandler("stats", stats))
+    app.add_handler(CommandHandler("mimic", mimic))
+    app.add_handler(CommandHandler("procents", procents_command))
+    app.add_handler(CommandHandler("switch", switch))
+    app.add_handler(CommandHandler("records", records))
+    app.add_handler(CommandHandler("mystats", my_stats))
+    app.add_handler(CommandHandler("backup", manual_backup))
+    app.add_handler(CommandHandler("dice", dice_command))
+    app.add_handler(CommandHandler("duel", duel))
+    app.add_handler(CommandHandler("unostats", uno_stats))
+    app.add_handler(CommandHandler("boy", set_gender_boy))
+    app.add_handler(CommandHandler("girl", set_gender_girl))
+    app.add_handler(CommandHandler("notbed", command_notbed))
+    app.add_handler(CommandHandler("sosamba", command_sosamba))
+    app.add_handler(CommandHandler("ok", admin_ok))
+    app.add_handler(CommandHandler("nook", admin_nook))
 
 
     if RENDER_URL:
