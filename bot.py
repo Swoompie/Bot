@@ -2206,9 +2206,11 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # 2. ПРОВЕРКА КУЛДАУНА (Стандартные 6 дней или штрафные 12 дней за кражу короны)
-    if user_res.data and len(user_res.data) > 0 and user_res.data[0].get("last_switch_date"): 
-        last_date = safe_parse_date(user_res.data[0].get("last_switch_date"))
+    # ЖЕЛЕЗНО ИСПРАВЛЕНО: Заменили user_res на player_res по всему блоку кулдауна!
+    if player_res.data and len(player_res.data) > 0 and player_res.data[0].get("last_switch_date"): 
+        last_date = safe_parse_date(player_res.data[0].get("last_switch_date"))
         days_passed = (today - last_date).days
+
         
         # Если days_passed меньше 6 (включая отрицательные числа от штрафного сдвига) — КД активен!
         if days_passed < 6:
@@ -2389,16 +2391,21 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     fresh_winner_res = supabase.table("users").select("pidor_count").eq("user_id", user.id).execute()
     fresh_pidor_count = fresh_winner_res.data[0]["pidor_count"] if fresh_winner_res.data else today_winner["pidor_count"]
 
-    # Жесткое х3 наказание за провал добивания раненого (Вес взлетает до 150.0)
+    # Жесткое х3 наказание за провал добивания раненого (Вес взлетает на +30.0)
     if not is_success and is_coin_loser_target:
-        # Прибавляем ЧИСТУЮ добавку added_penalty к текущему счету
+        # Вытаскиваем текущий вес стрелочника из базы до броска карты
+        current_p_weight = player_res.data[0].get("pidor_weight", 100.0) if player_res.data else 100.0
+        new_p_weight = current_p_weight + 25.0  # Локально плюсуем 30 веса!
+        
+        # Прибавляем ЧИСТУЮ добавку added_penalty к текущему счету и обновляем вес
         supabase.table("users").update({
             "last_switch_date": str(today), 
             "pidor_count": fresh_pidor_count + added_penalty,
-            "pidor_weight": 150.0
+            "pidor_weight": new_p_weight  # Записали идеальное динамическое число!
         }).eq("user_id", user.id).execute()
         
         # Записываем провал в лог
+
         try:
             supabase.table("uno_logs").insert({
                 "sender_name": user.first_name,
@@ -2436,21 +2443,37 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # 👑 ПУТЬ А: УСПЕШНОЕ ОГРАБЛЕНИЕ КРАСАВЧИКА (КД НЕ ЗАПИСЫВАЕМ!)
         if is_robbing_chad:
+            # Вытаскиваем текущие веса Стрелочника из базы до ограбления
+            current_kras_w = player_res.data.get("kras_weight", 100.0) if player_res.data else 100.0
+            current_pidor_w = player_res.data.get("pidor_weight", 100.0) if player_res.data else 100.0
+            
+            # Считаем динамические дельты (+20 к красавчику и -15 к пидору)
+            new_kras_w = current_kras_w + 20.0
+            new_pidor_w = max(1.0, current_pidor_w - 15.0)  # Жесткий пол 1.0 от ухода в минус
+            
             # 1. Обновляем Стрелочника (берем старый pidor_count/kras_count из today_winner)
             supabase.table("users").update({
                 "pidor_count": max(0, today_winner["pidor_count"] - 1), 
                 "kras_count": today_winner["kras_count"] + 1, 
-                "pidor_weight": 95.0, 
-                "kras_weight": 80.0
+                "pidor_weight": new_pidor_w, 
+                "kras_weight": new_kras_w
             }).eq("user_id", user.id).execute()
+
             
-            # 2. Обновляем Жертву (минус красавчик, плюс пидор, веса 70/70)
+            # 2. Обновляем Жертву (минус красавчик, плюс пидор, веса: -10 к красавчику +10 к пидору)
+            current_vic_kras_w = victim.get("kras_weight", 100.0)
+            current_vic_pidor_w = victim.get("pidor_weight", 100.0)
+            
+            new_vic_kras_w = max(1.0, current_vic_kras_w - 10.0)  # Страховка от ухода в минус
+            new_vic_pidor_w = current_vic_pidor_w + 10.0
+            
             supabase.table("users").update({
                 "kras_count": max(0, victim["kras_count"] - 1), 
                 "pidor_count": victim["pidor_count"] + 1, 
-                "pidor_weight": 70.0, 
-                "kras_weight": 70.0
+                "pidor_weight": new_vic_pidor_w, 
+                "kras_weight": new_vic_kras_w
             }).eq("user_id", victim["user_id"]).execute()
+
             
             # 3. Перебиваем историю сегодняшнего дня в daily_winners строго по ролям
             supabase.table("daily_winners").update({"user_id": victim["user_id"]}).eq("game_date", str(today)).eq("role", "pidor").execute()
@@ -2525,18 +2548,26 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Вычисляем, какой множитель прилетел сегодня (х1, х2, х3 или х5)
             pidor_multiplier = max(1, fresh_pidor_count - today_winner["pidor_count"])
             
+            # === 🃏 ПУТЬ Б: УСПЕШНЫЙ ОБЫЧНЫЙ ПЕРЕВОДЕ ===
+            # Вычисляем новые веса силами Питона (По -10.0 к позорному весу обоим!)
+            current_sender_w = player_res.data.get("pidor_weight", 100.0) if player_res.data else 100.0
+            current_victim_w = victim.get("pidor_weight", 100.0)
+            
+            new_sender_w = max(1.0, current_sender_w - 10.0)  # Жесткий пол 1.0 от ухода в минус
+            new_victim_w = max(1.0, current_victim_w - 10.0)
+            
             # 1. Обновляем Стрелочника (списываем ВСЕ начисленные сегодня позоры под ноль!)
             supabase.table("users").update({
                 "pidor_count": max(0, fresh_pidor_count - pidor_multiplier), 
-                "pidor_weight": 85.0
+                "pidor_weight": new_sender_w
             }).eq("user_id", user.id).execute()
             
             # 2. Обновляем Жертву (навешиваем ей ВЕСЬ сегодняшний джекпот целиком!)
             supabase.table("users").update({
                 "pidor_count": victim["pidor_count"] + pidor_multiplier, 
-                "pidor_weight": 80.0
+                "pidor_weight": new_victim_w
             }).eq("user_id", victim["user_id"]).execute()
-            
+
             # Точечно перебиваем историю сегодняшнего дня в daily_winners
             supabase.table("daily_winners").update({"user_id": victim["user_id"]}).eq("game_date", str(today)).eq("role", "pidor").execute()
             
@@ -2647,13 +2678,18 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         try:
             if is_robbing_chad:
+                # Вытаскиваем текущий позорный вес Стрелочника до промаха карты
+                current_p_weight = player_res.data.get("pidor_weight", 100.0) if player_res.data else 100.0
+                new_p_weight = current_p_weight + 20.0  # Локально накидываем +20 к пидор-весу!
+
                 # ЖЕЛЕЗНЫЙ ФИКС РОМЫ: Сдвигаем кулдаун на +6 дней в будущее, чтобы суммарно вышло 12 дней КД!
                 fake_cd_date = today + timedelta(days=6)
                 supabase.table("users").update({
                     "last_switch_date": str(fake_cd_date), 
                     "pidor_count": fresh_pidor_count + added_penalty,
-                    "pidor_weight": 110.0
+                    "pidor_weight": new_p_weight  # Записали идеальное динамическое число!
                 }).eq("user_id", user.id).execute()
+
 
                 try:
                     # ЖЕЛЕЗНО ИСПРАВЛЕНО: Записываем жесткий маркер провала -1 вместо нуля!
@@ -2679,12 +2715,17 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
                 
             elif is_coin_loser_target:
-                # Жесткое х3 наказание за провал добивания раненого (Вес 150.0)
+                # Вытаскиваем текущий позорный вес Стрелочника до промаха карты
+                current_p_weight = player_res.data.get("pidor_weight", 100.0) if player_res.data else 100.0
+                new_p_weight = current_p_weight + 35.0  # Локально накидываем +35 за провал добивания!
+
+                # Жесткое х3 наказание за провал добивания раненого (Вес взлетает на +30)
                 supabase.table("users").update({
                     "last_switch_date": str(today), 
                     "pidor_count": fresh_pidor_count + added_penalty,
-                    "pidor_weight": 150.0
+                    "pidor_weight": new_p_weight  # Записали идеальное динамическое число!
                 }).eq("user_id", user.id).execute()
+
                 
                 try:
                     supabase.table("uno_logs").insert({
@@ -2709,13 +2750,18 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             else:
                 if is_retry_attempt:
-                    # Вторая попытка провалилась — сжигаем карту с х2 штрафом от утра
+                    # Вытаскиваем текущий позорный вес Стрелочника до промаха карты
+                    current_p_weight = player_res.data.get("pidor_weight", 100.0) if player_res.data else 100.0
+                    new_p_weight = current_p_weight + 5.0  # Локально накидываем +5 за тотал-неудачника!
+
+                    # Вторая попытка провалилась — сжигаем карту с х2 штрафом от утра и +5 к весу позора
                     supabase.table("users").update({
                         "last_switch_date": str(today), 
                         "pidor_count": fresh_pidor_count + added_penalty,
-                        "pidor_weight": 95.0
+                        "pidor_weight": new_p_weight
                     }).eq("user_id", user.id).execute()
                     context.user_data.pop("switch_retry", None)
+
 
                     # === 🎰 [ЖЕЛЕЗНЫЙ ФИКС]: ЗАПИСЫВАЕМ ПРОВАЛ ВТОРОГО ШАНСА В БАЗУ ===
                     try:
@@ -2757,11 +2803,18 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERg85qT110qgTm1RJWyqRuKm0QwbCoLwAC9B4AAiNcOEtYh2FNKYLHdDwE')
                         return
                     else:
-                        # Стандартный провал на мирного с первого раза с честным х2
+                        # Вытаскиваем текущий позорный вес Стрелочника до промаха карты
+                        current_p_weight = player_res.data.get("pidor_weight", 100.0) if player_res.data else 100.0
+                        
+                        # КАЗИНОВСКИЙ РАНДОМ: накидываем случайный штраф от +5.0 до +25.0 к текущему весу!
+                        random_penalty_weight = random.uniform(5.0, 25.0)
+                        new_p_weight = current_p_weight + random_penalty_weight
+
+                        # Стандартный провал на мирного с первого раза с честным х2 и рандомным штрафом к весу
                         supabase.table("users").update({
                             "last_switch_date": str(today), 
                             "pidor_count": fresh_pidor_count + added_penalty,
-                            "pidor_weight": 100.0
+                            "pidor_weight": round(new_p_weight, 1)  # Округляем до 1 знака для красоты в базе
                         }).eq("user_id", user.id).execute()
 
                         # === 🎰 [ЖЕЛЕЗНЫЙ ФИКС]: ЗАПИСЫВАЕМ СТАНДАРТНЫЙ ПРОВАЛ ===
@@ -3032,16 +3085,18 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     old_p_chance = (player.get("pidor_weight", 100.0) / total_p_before * 100) if total_p_before > 0 else 0.0
     old_k_chance = (player.get("kras_weight", 100.0) / total_k_before * 100) if total_k_before > 0 else 0.0
 
-    # Разветвление весов
+    # === 🎲 [БАЛАНСИРОВАННАЯ КАРМА]: КУБИКИ СУДЬБЫ (МАКСИМУМ 30.0) ===
     if dice_value <= 3:
         # ======= 🤡 ВЕТКА ПОЗОРА (1, 2, 3) =======
-        step = 3.0 if dice_value == 3 else (7.0 if dice_value == 2 else 12.0)
-        k_minus = 1.0 if dice_value == 3 else (4.0 if dice_value == 2 else 7.0)
+        # ШАГ СБАЛАНСИРОВАН: Грань 3 -> +5, Грань 2 -> +15, Грань 1 -> +30 к позорному весу!
+        step = 5.0 if dice_value == 3 else (15.0 if dice_value == 2 else 30.0)
+        k_minus = 2.0 if dice_value == 3 else (5.0 if dice_value == 2 else 10.0)
         
         new_pidor_weight = player["pidor_weight"] + step
         new_kras_weight = max(1.0, player["kras_weight"] - k_minus)
         
-        current_dice_gain = -4.0 if dice_value == 3 else (-11.0 if dice_value == 2 else -19.0)
+        # Пересчитали чистый профит сессии под максимум 30
+        current_dice_gain = -7.0 if dice_value == 3 else (-20.0 if dice_value == 2 else -40.0)
         saved_balance = current_dice_gain if current_attempts == 0 else prev_balance
 
         supabase.table("users").update({
@@ -3051,27 +3106,28 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "dice_start_balance": saved_balance
         }).eq("user_id", user.id).execute()
         
-        # Умная кастомизация: для парней проседает шарм, для девчонок — обаяние
         charm_title = g_text(player, "личный шарм заметно просел", "женское обаяние слегка пошатнулось 💔")
 
         if dice_value == 1:
-            power_text = "💥 <b>КРИТИЧЕСКИЙ УДАР ПО СТАВКАМ!</b> 💥 Твоя вероятность забрать позорное клеймо резко увеличилась, а шансы на корону Красавчика крупно скользнули вниз!"
+            power_text = "💥 <b>КРИТИЧЕСКИЙ УДАР ПО СТАВКАМ! (+30 к позору)!</b> 💥 Твоя вероятность забрать позорное клеймо увеличилась, а шансы на корону Красавчика скользнули вниз!"
         elif dice_value == 2:
-            power_text = f"ощутимый заплыв в сомнительную сторону. Твои риски на Пидора дня увеличились, а {charm_title}."
+            power_text = f"ощутимый заплыв в сомнительную сторону (+15 к позору). Твои риски на Пидора дня увеличились, а {charm_title}."
         else:
-            power_text = "микро-осечка за игровым столом. Косметический сдвиг: шансы на Пидора лишь слегка скорректировались вверх."
+            power_text = "микро-осечка за игровым столом (+5 к позору). Коэффициенты скорректировались вверх, фортуна выражает недовольство."
 
         intro_text = f"🎲 На кубике выпадает: <b>{dice_value}</b>!\n\n🤡 <b>ФОРТУНА ОТВЕРНУЛАСЬ!</b> <b>{safe_name}</b>, это {power_text}"
             
     else:
         # ======= 😎 ВЕТКА УДАЧИ (4, 5, 6) =======
-        step = 3.0 if dice_value == 4 else (7.0 if dice_value == 5 else 12.0)
-        p_minus = 1.0 if dice_value == 4 else (4.0 if dice_value == 5 else 7.0)
+        # ШАГ СБАЛАНСИРОВАН: Грань 4 -> +5, Грань 5 -> +15, Грань 6 -> +30 к чемпионскому весу!
+        step = 5.0 if dice_value == 4 else (15.0 if dice_value == 5 else 30.0)
+        p_minus = 2.0 if dice_value == 4 else (5.0 if dice_value == 5 else 10.0)
         
         new_kras_weight = player["kras_weight"] + step
         new_pidor_weight = max(1.0, player["pidor_weight"] - p_minus)
         
-        current_dice_gain = 4.0 if dice_value == 4 else (11.0 if dice_value == 5 else 19.0)
+        # Пересчитали чистый профит сессии под максимум 30
+        current_dice_gain = 7.0 if dice_value == 4 else (20.0 if dice_value == 5 else 40.0)
         saved_balance = current_dice_gain if current_attempts == 0 else prev_balance
 
         supabase.table("users").update({
@@ -3081,41 +3137,34 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "dice_start_balance": saved_balance
         }).eq("user_id", user.id).execute()
         
-        # Умная кастомизация: для парней прибывает шарм, для девчонок — обаяние (на основе player)
         charm_gain = g_text(player, "мощный прилив шарма", "мощный прилив обаяния ✨")
         pobeda_word = g_text(player, "на победу", "на корону Красавицы")
 
         if dice_value == 6:
-            power_text = "👑 <b>АБСОЛЮТНЫЙ ДЖЕКПОТ КАЗИНО!</b> 👑 Твои показатели привлекательности за столом засияли максимальным блеском, а позорные риски рулетки неплохо так снизились!"
+            power_text = "👑 <b>АБСОЛЮТНЫЙ ДЖЕКПОТ КАЗИНО (+30 к весу)!</b> 👑 Твои показатели привлекательности за столом засияли ярким блеском, а позорные риски рулетки неплохо так снизились!"
         elif dice_value == 5:
-            power_text = f"{charm_gain}! Проценты {pobeda_word} уверенно поползли вверх, а вероятность поймать позорное клеймо тает на глазах."
+            power_text = f"{charm_gain} (+15 к весу)! Проценты {pobeda_word} уверенно поползли вверх, а вероятность поймать позорное клеймо тает."
         else:
-            power_text = "скромный шаг к успеху за игровым столом. Чуть-чуть подбавил уверенности в стату, риски позора символически снижены."
+            power_text = "скромный шаг к успеху за игровым столом (+5 к весу). Чуть-чуть подбавил веса в стату, риски позора символически снижены."
 
         intro_text = f"🎲 На кубике выпадает: <b>{dice_value}</b>!\n\n😎 <b>ФОРТУНА УЛЫБАЕТСЯ ТЕБЕ!</b> <b>{safe_name}</b>, это {power_text}"
 
-    # 📊 МАТЕМАТИКА 2: [ЖЕЛЕЗНО ИСПРАВЛЕНО] Пересчитываем точные суммы чата с учётом клампинга веса игрока!
+    # 📊 МАТЕМАТИКА 2: Пересчитываем точные суммы чата с учётом клампинга веса игрока!
     if dice_value <= 3:
-        # Ветка позора: вычисляем РЕАЛЬНУЮ дельту просадки красавчика у игрока после среза до пола 1.0
         real_kras_delta = player.get("kras_weight", 100.0) - new_kras_weight
-        
         total_p_after = total_p_before + step
         total_k_after = total_k_before - real_kras_delta
     else:
-        # Ветка удачи: вычисляем РЕАЛЬНУЮ дельту просадки пидора у игрока после среза до пола 1.0
         real_pidor_delta = player.get("pidor_weight", 100.0) - new_pidor_weight
-        
         total_k_after = total_k_before + step
         total_p_after = total_p_before - real_pidor_delta
     
-    # Считаем точные новые проценты игрока на основе его свежих весов, сохраненных в ветках выше
     new_p_chance = (new_pidor_weight / total_p_after * 100) if total_p_after > 0 else 0.0
     new_k_chance = (new_kras_weight / total_k_after * 100) if total_k_after > 0 else 0.0
 
 
-    # --- 🚨 ПЕРЕХВАТ ДУБЛЕЙ (С НОВЫМИ ПРОЦЕНТАМИ И ГЕНДЕРАМИ ВНУТРИ) ---
-    if current_attempts == 1 and prev_balance == -19.0 and dice_value == 1:
-        # Собираем динамические гендерные слова для дубля (на основе player)
+    # --- 🚨 ПЕРЕХВАТ ДУБЛЕЙ (ЖЕЛЕЗНО ПЕРЕПИСАЛИ ИЗ-ЗА НОВЫХ ШАГОВ НА БАЛАНС 40.0) ---
+    if current_attempts == 1 and prev_balance == -40.0 and dice_value == 1:
         status_title = g_text(player, "Игрок", "Леди")
         vjsh_text = g_text(player, "умудряется выбить", "умудряется выбросить")
         bro_text = g_text(player, "бро", "леди")
@@ -3123,8 +3172,8 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         result_text = (
             f"🎲 На кубике выпадает: <b>1</b> (Дубль!)\n\n"
-            f"🚨 <b>ЧЁРНЫЙ ДЕНЬ ДЛЯ СТАВОК! ПРОБИТИЕ МАТЕМАТИЧЕСКОГО ДНА!</b> 🎪\n\n"
-            f"{status_title} <b>{safe_name}</b> {vjsh_text} дубль <b>1 и 1</b> за неделю! 😭\n"
+            f"🚨 <b>ЧЁРНЫЙ ДЕНЬ ДЛЯ СТАВОК! КРИТИЧЕСКОЕ ПРОБИТИЕ ДНА В ВЕСАХ!</b> 🎪\n\n"
+            f"{status_title} <b>{safe_name}</b> {vjsh_text} дубль <b>1 и 1</b> за неделю! Это суммарно +60 к позору! 😭\n"
             f"Да уж, соболезнуем {ego_text}, {bro_text}! Крупье за игровым столом вытирает слёзы жалости.\n\n"
             f"📊 <b>ДИНАМИКА ТВОИХ ШАНСОВ:</b>\n"
             f" └ 🤡 Шанс Пидора: <code>{old_p_chance:.1f}%</code> ➡️ <b>{new_p_chance:.1f}%</b> 📈\n"
@@ -3133,7 +3182,7 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgUAAxkBAAERr4pqeX-dpAQpHvj3CZnAcPY0_UmGSQACgggAAjiksVVM5Vj4fvPn0z0E')
 
-    elif current_attempts == 1 and prev_balance == 19.0 and dice_value == 6:
+    elif current_attempts == 1 and prev_balance == 40.0 and dice_value == 6:
         # Собираем динамические гендерные титулы и фразы для везунчика (на основе player)
         status_title = g_text(player, "Игрок", "Леди")
         vybros_text = g_text(player, "выбрасывает", "выбрасывает ✨")
@@ -3142,7 +3191,7 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         result_text = (
             f"🎲 На кубике выпадает: <b>6</b> (Дубль!)\n\n"
             f"🎰 <b>ОБНАРУЖЕН ЧИТЕР! ВЫ С КЕМ ТАМ НАВЕРХУ ДОГОВОРИЛИСЬ?!</b> 👑\n\n"
-            f"{status_title} <b>{safe_name}</b> {vybros_text} дубль <b>6 и 6</b> за неделю! 🤯\n"
+            f"{status_title} <b>{safe_name}</b> {vybros_text} дубль <b>6 и 6</b> за неделю! Это суммарно +60 к весу Красавчика! 🤯\n"
             f"Администрация казино официально заявляет: этот игровой стол поддался от такой наглой удачи, ты — {style_title}!\n\n"
             f"📊 <b>ДИНАМИКА ТВОИХ ШАНСОВ:</b>\n"
             f" └ 🤡 Шанс Пидора: <code>{old_p_chance:.1f}%</code> ➡️ <b>{new_p_chance:.1f}%</b> 📉\n"
@@ -3170,6 +3219,7 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     except Exception as e:
         print(f"Ошибка вывода результатов кубиков dice: {e}")
+        
     # =================================================================
     # 🎰 ПОДВЕДЕНИЕ ТОЧНЫХ СУММАРНЫХ ИТОГОВ НЕДЕЛИ (СТРОГО НА 2-Й БРОСОК)
     # =================================================================
@@ -3189,9 +3239,9 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Чистый профит — это строго сумма весов двух кубиков!
             total_net_gain = first_dice_gain + second_dice_gain
             
-            # ПРОВЕРКА: Если это БЫЛ ультра-дубль (1-1 или 6-6), скипаем банальные итоги, чтобы не спамить чат!
-            is_absolute_jackpot = (first_dice_gain == 19.0 and dice_value == 6)
-            is_absolute_fiasco = (first_dice_gain == -19.0 and dice_value == 1)
+            # ЖЕЛЕЗНЫЙ МАТЕМАТИЧЕСКИЙ ФИКС: Сверяем дубли строго по новому шагу баланса 40.0!
+            is_absolute_jackpot = (first_dice_gain == 40.0 and dice_value == 6)
+            is_absolute_fiasco = (first_dice_gain == -40.0 and dice_value == 1)
             
             if not is_absolute_jackpot and not is_absolute_fiasco:
                 try:
@@ -3449,7 +3499,156 @@ async def command_sosamba(update: Update, context: ContextTypes.DEFAULT_TYPE):
             msg_girl = "Поймала собственный рикошет... Карта UNO порвалась прямо у меня в руках, лови удваивание. 🤦‍♀️"
             
         await context.bot.send_message(chat_id=chat_id, text=f"🤡 <b>{safe_name}</b> сокрушённо констатирует факт своего фиаско:\n\n👀 <i>{g_text(player, msg_boy, msg_girl)}</i>", parse_mode="HTML")
+
+async def pizdec_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.effective_chat.id
+    user = update.effective_user
+    today = date.today()
+    today_str = str(today)
+
+    if update.effective_chat.type == "private":
+        await context.bot.send_message(chat_id=chat_id, text="❌ Протокол тотального пиздеца активируется только при свидетелях в групповом чате!")
+        return
+
+    # 1. Вытаскиваем живой профиль игрока из базы для гендерного автомата и чека весов
+    all_users = get_users()
+    active_users = [u for u in all_users if u.get("is_active", True)]
+    player = next((u for u in active_users if u["user_id"] == user.id), None)
+
+    if not player:
+        await context.bot.send_message(chat_id=chat_id, text="❌ Ты даже не зарегистрирован в казино! Пиши <code>/register</code>", parse_mode="HTML")
+        return
+
+    # === 🕵️‍♂️ РАЗВЕДКА КАРМИЧЕСКИХ СТАТУСОВ ИГРОКА НА СЕГОДНЯ ===
+    is_today_pidor = False
+    is_uno_failed = False
+    is_horrible_dice = False
+    is_max_chance_leader = False
+
+    # Условие A: Выпал ли человек сегодня Пидором дня?
+    today_pidor_res = get_today_winner("pidor")
+    if today_pidor_res and today_pidor_res["user_id"] == user.id:
+        is_today_pidor = True
+
+    # Условие B: НЕ смог ли перевести карту UNO (запись в логах с multiplier == -1)
+    uno_fail_res = supabase.table("uno_logs").select("id").eq("game_date", today_str).eq("sender_name", user.first_name).eq("multiplier", -1).execute()
+    if uno_fail_res.data and len(uno_fail_res.data) > 0:
+        is_uno_failed = True
+
+    # Условие C: Выпали паршивые кости? Проверяем дубли 1/1, 1/2 или 2/2 на этой неделе
+    current_week_num = today.isocalendar()[1]
+    db_dice_value = player.get("dice_count", 0) or 0
+    last_dice_week = db_dice_value // 10
+    current_attempts = db_dice_value % 10
+    prev_balance = player.get("dice_start_balance", 0.0) or 0.0
+
+    # Если игрок открутил оба кубика на ЭТОЙ неделе
+    if last_dice_week == current_week_num and current_attempts == 2:
+        # prev_balance == -40.0 означает, что первый кубик был равен 1 (Грань 1 -> -40 по балансу весов)
+        # Наш сбалансированный шаг для кубика 1 равен просадке в -40.0, для кубика 2 равен -20.0
+        # Чекаем комбинации: 1/1 (баланс улетел в -80), 1/2 или 2/2 (баланс просел ниже нуля)
+        if prev_balance < 0:
+            is_horrible_dice = True
+
+    # Условие D: Имеет ли он максимальный позорный вес (шанс) в чате прямо сейчас?
+    if active_users:
+        max_pidor_weight_in_chat = max(u.get("pidor_weight", 100.0) for u in active_users)
+        if player.get("pidor_weight", 100.0) >= max_pidor_weight_in_chat:
+            is_max_chance_leader = True
+
+    # === 🎰 ГЕНДЕРНО-ОРКЕСТРОВАННЫЙ ВЫВОД СТЕНЫ ПЛАЧА ===
+    safe_name = user.first_name.replace("<", "&lt;").replace(">", "&gt;")
+    
+    # 💥 ВЕТКА 1: ДИНАМИЧЕСКИЙ ДВОЙНОЙ/ТРОЙНОЙ КОМБО-ПИЗДЕЦ (Полный разнос по пунктам!)
+    if sum([is_today_pidor, is_uno_failed, is_horrible_dice, is_max_chance_leader]) >= 2:
+        # Собираем индивидуальный список грехов игрока на сегодня
+        pizdec_reasons = []
+        if is_today_pidor:
+            pizdec_reasons.append(" ├ 🤡 Официально заклеймён главным <b>Пидором дня</b>")
+        if is_uno_failed:
+            pizdec_reasons.append(" ├ 🃏 Позорно проебал карту UNO, поймав рикошет")
+        if is_horrible_dice:
+            pizdec_reasons.append(" ├ 🎲 Выбросил паршивые кости в кубиках кармы")
+        if is_max_chance_leader:
+            pizdec_reasons.append(" └ 🎯 Удерживает максимальный шанс на пидора в чате")
+
+        joined_reasons = "\n".join(pizdec_reasons)
+
+        # Сочные гендерные панчлайны под комбо-удар
+        msg_boy = (
+            f"попал в сингулярность тотального пиздеца! Карма устроила ему групповой расстрел, "
+            f"парень уничтожен как личность за игровым столом! Крупье сочувственно наливает за счёт заведения. 💀💣🎰"
+        )
+        msg_girl = (
+            f"попала в эпицентр космического нефорта! Боги рандома устроили ей абсолютный разнос, "
+            f"леди официально и громко негодует, требуя сжечь это казино к чертям! 🔥🎪"
+        )
+
+        combo_text = (
+            f"☢️ <b>УЛЬТРА-ПИЗДЕЦ ЗАФИКСИРОВАН! СИНГУЛЯРНОСТЬ БОЛИ!</b> ☢️\n\n"
+            f"Мало того, что игрок <b>{safe_name}</b> умудрился собрать комбо-страйк неудачника:\n"
+            f"{joined_reasons}\n\n"
+            f"🎯 Так он/она ещё и {g_text(player, msg_boy, msg_girl)}"
+        )
+
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=combo_text,
+            parse_mode="HTML"
+        )
+        await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgUAAxkBAAERr4pqeX-dpAQpHvj3CZnAcPY0_UmGSQACgggAAjiksVVM5Vj4fvPn0z0E')
+        return
+
+
+    # 🎲 ВЕТКА 2: ПАРШИВЫЕ КОСТИ В КУБИКАХ СУДЬБЫ
+    if is_horrible_dice:
+        msg_boy = "смотрит на эти ебучие кубики кармы и проклинает этот день! Выбросил паршивые кости (1/1, 1/2 или 2/2) и намертво засадил свои проценты в болото! 🎲📉"
+        msg_girl = "выкинула паршивые кости на этой неделе и изящно топает каблуком от злости! Её шансы растаяли, леди у барной стойки дико негодует! 💅💔🎲"
         
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"🎲 <b>ПРОТОКОЛ ПИЗДЕЦА: ЕБУЧИЕ КОСТИ!</b> 🎲\n\n🤡 <b>{safe_name}</b> {g_text(player, msg_boy, msg_girl)}",
+            parse_mode="HTML"
+        )
+        await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERg9tqT2Lb7EssiCPdH7XeEz1W5sbVswAC6S8AApkAAYhJDcx-Vp6-Sco8BA')
+        return
+
+    # 🤡 ВЕТКА 3: СЕГОДНЯШНИЙ ПИДОР ДНЯ
+    if is_today_pidor:
+        msg_boy = "негодует от полученного статуса Пидора дня на сегодня! Клеймо позора жжёт ему лоб, Салун глумится во весь голос! 🎪🤡"
+        msg_girl = "негодует от утреннего вердикта Крупье! Статус Пидорессы дня обрушил её настроение, леди требует перезагрузить этот чертов автомат! 💅🔥"
+        
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"🤡 <b>ПРОТОКОЛ ПИЗДЕЦА: СЕГОДНЯШНИЙ ПОЗОР!</b> 🤡\n\n👉 <b>{safe_name}</b> {g_text(player, msg_boy, msg_girl)}",
+            parse_mode="HTML"
+        )
+        await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERePBqQ27RxFYFJcHGEaZ9kPTDkhO1EAACSk4AAuAKOUlEfzO0OLfimzwE')
+        return
+
+    # 🎯 ВЕТКА 4: МАКСИМАЛЬНЫЙ ШАНС СТАТЬ ПИДОРОМ (ЛИДЕР СЕТКИ ПОЗОРНЫХ ВЕСОВ)
+    if is_max_chance_leader:
+        msg_boy = "прямо сейчас сидит на пороховой бочке! У него максимальный шанс на Пидора в чате на текущий момент, парень люто негодует от этой подкрутки! 🌋🚨"
+        msg_girl = "возглавляет позорный рейтинг шансов на завтрашнее утро! Её веса взлетели в топ, прекрасная леди за игровым столом дико паникует и негодует! 💅🚨"
+        
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"🚨 <b>ПРОТОКОЛ ПИЗДЕЦА: ФАВОРИТ КЛЕЙМА!</b> 🚨\n\n👀 Наш парень/леди с максимальным шансом на пидора на текущий момент негодует:\n👉 <b>{safe_name}</b> {g_text(player, msg_boy, msg_girl)}",
+            parse_mode="HTML"
+        )
+        await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERocZqavV1gUjQriQqP3uLpw6uz9qdAwAChhEAAoC6wEokCKx8CQHogD0E')
+        return
+
+    # 😎 ВЕТКА 5: БЕЛАЯ КОСТЬ, ЧИСТЫЙ ВЕЗУНЧИК (Если ни одно условие не выполнено)
+    msg_lucky_boy = "Ты какого хера тут сопли развёл? Ты чист перед законом, кубики в плюсе, клейма нет. Скройся с глаз Крупье, пока фортуна не передумала! 🥂"
+    msg_lucky_girl = "У вас всё идеально, милая! Никаких позоров, проценты в полном порядке (как минимум не в топе). Оставьте эту стену плача для местных неудачников Казиныча! ✨"
+    
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=f"😎 <b>ОТКАЗ В ИСПУСКАНЬЕ НЫТЬЯ!</b> 😎\n\nЭй, <b>{safe_name}</b>! {g_text(player, msg_lucky_boy, msg_lucky_girl)}",
+        parse_mode="HTML"
+    )
+
 # ---------------- ЗАПУСК (ВЕБХУК) ----------------
 
 async def main():
@@ -3488,6 +3687,7 @@ async def main():
     app.add_handler(CommandHandler("sosamba", command_sosamba, filters=filters.TEXT))
     app.add_handler(CommandHandler("ok", admin_ok, filters=filters.TEXT))
     app.add_handler(CommandHandler("nook", admin_nook, filters=filters.TEXT))
+    app.add_handler(CommandHandler("pizdec", pizdec_command, filters=filters.TEXT))
 
 
     if RENDER_URL:
