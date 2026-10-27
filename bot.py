@@ -33,22 +33,17 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 async def global_anti_spam_middleware(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from telegram.ext import ApplicationHandlerStop
     
-    # ЖЕЛЕЗНЫЙ ИСПРАВЛЕННЫЙ ФИКС: Проверяем, что это ИМЕННО системное уведомление чата.
-    # Если сообщения нет, или это обычный технический апдейт (не от юзера) — пропускаем базу данных!
+    # 1. Если это асинхронный технический ответ базы данных Supabase или тик планировщика
+    # у него физически нет объекта message. МЫ СПОКОЙНО ИХ ПРОПУСКАЕМ НАБЛЮДАТЬ!
     if not update.message:
-        return  # ПУСКАЕМ ТЕХНИЧЕСКИЕ ПАКЕТЫ БАЗЫ ДАННЫХ И ПЛАНИРОВЩИКА!
+        return  # База данных спасёна, бесконечный цикл /pidor прерывается штатно!
         
-    # Бьём по кастомным сервисным триггерам Телеграма (смена титулов, закрепы, ливы)
-    # Если в сообщении присутствует служебный флаг изменения чата:
-    if (update.message.pinned_message or 
-        update.message.new_chat_members or 
-        update.message.left_chat_member or 
-        update.message.group_chat_created or 
-        update.message.supergroup_chat_created):
-        
-        print("🎰 Мидлварь: Системный флуд успешно сожжён в группе -1.")
-        raise ApplicationHandlerStop()  # Выжигаем только админскую чепуху!
-
+    # 2. Если это сообщение прилетело от живого юзера в чат, но в нём НЕТ ТЕКСТА 
+    # или его текст не начинается со священного командного слэша "/"
+    # (А скрытый админский флуд Никиты как раз прилетает без текста или без слэша!)
+    if not update.message.text or not update.message.text.strip().startswith("/"):
+        # print("🎰 Мидлварь: Скрытая чепуха Никиты со сменой титулов сожжена на подлёте!")
+        raise ApplicationHandlerStop()  # Выжигаем админский флуд намертво!
 
 # ---------------- КОД ТИХОГО БЭКАПА ----------------
 async def silent_backup(context: ContextTypes.DEFAULT_TYPE):
