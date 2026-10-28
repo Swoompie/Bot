@@ -2414,8 +2414,8 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     fresh_pidor_count = fresh_winner_res.data[0]["pidor_count"] if (fresh_winner_res.data and len(fresh_winner_res.data) > 0) else today_winner["pidor_count"]
     # Жесткое х3 наказание за провал добивания раненого (Вес взлетает на +30.0)
     if not is_success and is_coin_loser_target:
-        # ЖЕЛЕЗНО ИСПРАВЛЕНО: Безопасный забор веса из уже существующего локального объекта player!
-        current_p_weight = player[0].get("pidor_weight", 100.0) if (player and isinstance(player, list) and len(player) > 0) else 100.0
+        # ЖЕЛЕЗНО ИСПРАВЛЕНО РОМОЙ: Чистый забор веса напрямую из словаря player!
+        current_p_weight = player.get("pidor_weight", 100.0)
         new_p_weight = current_p_weight + 30.0  # Локально плюсуем 30 веса!
         
         # Прибавляем ЧИСТУЮ добавку added_penalty к текущему счету и обновляем вес
@@ -2467,9 +2467,9 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # 👑 ПУТЬ А: УСПЕШНОЕ ОГРАБЛЕНИЕ КРАСАВЧИКА (КД НЕ ЗАПИСЫВАЕМ!)
         if is_robbing_chad:
-            # ЖЕЛЕЗНО ИСПРАВЛЕНО: Безопасный забор весов Стрелочника из списка player
-            current_kras_w = player[0].get("kras_weight", 100.0) if (player and isinstance(player, list) and len(player) > 0) else 100.0
-            current_pidor_w = player[0].get("pidor_weight", 100.0) if (player and isinstance(player, list) and len(player) > 0) else 100.0
+            # ЖЕЛЕЗНО ИСПРАВЛЕНО РОМОЙ: Чистый забор весов напрямую из словаря player!
+            current_kras_w = player.get("kras_weight", 100.0)
+            current_pidor_w = player.get("pidor_weight", 100.0)
             
             # Считаем динамические дельты (+20 к красавчику и -15 к пидору)
             new_kras_w = current_kras_w + 20.0
@@ -2569,12 +2569,13 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pidor_multiplier = max(1, fresh_pidor_count - today_winner["pidor_count"])
             
             # === 🃏 ПУТЬ Б: УСПЕШНЫЙ ОБЫЧНЫЙ ПЕРЕВОД ===
-            # ЖЕЛЕЗНО ИСПРАВЛЕНО: Забираем вес из готового локального объекта player, предотвращая AttributeError!
-            current_sender_w = player.get("pidor_weight", 100.0) if (player and isinstance(player, list) and len(player) > 0) else 100.0
+            # ЖЕЛЕЗНО ИСПРАВЛЕНО РОМОЙ: Чистый забор веса из словаря player, без ложных сбросов в 100!
+            current_sender_w = player.get("pidor_weight", 100.0)
             current_victim_w = victim.get("pidor_weight", 100.0)
             
             new_sender_w = max(1.0, current_sender_w - 10.0)  # Жесткий пол 1.0 от ухода в минус
             new_victim_w = max(1.0, current_victim_w - 10.0)
+
             # 1. Обновляем Стрелочника (списываем ВСЕ начисленные сегодня позоры под ноль!)
             supabase.table("users").update({
                 "pidor_count": max(0, fresh_pidor_count - pidor_multiplier), 
@@ -2707,7 +2708,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if is_robbing_chad:
             # Вытаскиваем текущий позорный вес Стрелочника до промаха карты
-            current_p_weight = player.get("pidor_weight", 100.0) if (player and isinstance(player, list) and len(player) > 0) else 100.0
+            current_p_weight = player.get("pidor_weight", 100.0)
             new_p_weight = current_p_weight + 20.0  # Локально накидываем +20 к пидор-весу!
 
             # Сдвигаем кулдаун на +6 дней в будущее, чтобы суммарно вышло 12 дней КД!
@@ -2746,7 +2747,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
         elif is_coin_loser_target:
             # Вытаскиваем текущий позорный вес Стрелочника до промаха карты
-            current_p_weight = player.get("pidor_weight", 100.0) if (player and isinstance(player, list) and len(player) > 0) else 100.0
+            current_p_weight = player.get("pidor_weight", 100.0)
             new_p_weight = current_p_weight + 30.0  # Локально накидываем +30 за провал добивания раненого!
 
             # Жесткое х3 наказание за провал добивания раненого
@@ -2784,7 +2785,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             if is_retry_attempt:
                 # Вытаскиваем текущий позорный вес Стрелочника до промаха карты
-                current_p_weight = player.get("pidor_weight", 100.0) if (player and isinstance(player, list) and len(player) > 0) else 100.0
+                current_p_weight = player.get("pidor_weight", 100.0)
                 new_p_weight = current_p_weight + 5.0  # Локально накидываем +5 за тотал-неудачника!
 
                 # Вторая попытка провалилась — сжигаем карту с х2 штрафом от утра и +5 к весу позора
@@ -2841,7 +2842,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     return
                 else:
                     # Стандартный провал на мирного с первого раза с честным х2
-                    current_p_weight = player.get("pidor_weight", 100.0) if (player and isinstance(player, list) and len(player) > 0) else 100.0
+                    current_p_weight = player.get("pidor_weight", 100.0)
                     
                     # КАЗИНОВСКИЙ РАНДОМ: накидываем случайный штраф от +5.0 до +25.0 к текущему весу!
                     random_penalty_weight = random.uniform(5.0, 25.0)
