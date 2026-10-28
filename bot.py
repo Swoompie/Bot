@@ -2878,9 +2878,9 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         pass
                     return
 
-        # ЖЕЛЕЗНО ИСПРАВЛЕНО: except подвинут в самый левый край функции (вровень с try)
-        except Exception as global_uno_err:
-            print(f"❌ Глобальный сбой функции switch: {global_uno_err}")
+                    # ЖЕЛЕЗНО ИСПРАВЛЕНО: except подвинут в самый левый край функции (вровень с try)
+                    except Exception as global_uno_err:
+                        print(f"❌ Глобальный сбой функции switch: {global_uno_err}")
 
 async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
