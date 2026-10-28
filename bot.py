@@ -1705,7 +1705,7 @@ async def records(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print(f"Ошибка вывода абсолютного лидера records: {e}")
 
 async def mimic(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # === 🛡️ ЖЕЛЕЗНЫЙ АНТИ-РЕПЛАЙ ЩИТ КАЗИНО: ЗАЩИТА ОТ ФАНТАНМНЫХ ТЕГОВ ===
+    # === 🛡️ ЖЕЛЕЗНЫЙ АНТИ-РЕПЛАЙ ЩИТ КАЗИНО: ЗАЩИТА ОТ ФАНТОМНЫХ ТЕГОВ ===
     if update.message and update.message.text:
         if not update.message.text.strip().startswith("/mimic"):
             return
@@ -1714,10 +1714,38 @@ async def mimic(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     today = date.today()
 
+    if update.effective_chat.type == "private":
+        await update.message.reply_text("❌ Активировать Мимика можно только в групповых чатах!")
+        return
+
+    # === 🚨 [ЗАКОН КАЗИНО]: НЕЛЬЗЯ МИМИКРИРОВАТЬ ПОСЛЕ /pidor ДО /run 🚨 ===
+    # 1. Проверяем, выбраны ли сегодняшние победители рулеток
+    pidor_today = get_today_winner("pidor")
+    kras_today = get_today_winner("krasavchik")
+
+    # 2. Если Пидор УЖЕ откручен, а Красавчик ЕЩЁ НЕ выбран — шпионы идут нахер!
+    if pidor_today and not kras_today:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=(
+                f"🎰 <b>ПРОТОКОЛ МИМИКРИИ ЗАБЛОКИРОВАН!</b> 🎭\n\n"
+                f"Эй, лазейка закрыта! Карта Мимикрии настраивается строго <b>ДО начала утренних рулеток</b>!\n"
+                f"Чат уже узнал имя своего сегодняшнего Пидора дня, а Колесо Красавчика <code>/run</code> ещё не запущено! "
+                f"Казино запрещает подсматривать результаты и включать радары на ходу!\n\n"
+                f"<i>Приходите после открута, ну или завтра с утра, шпионы! С уважением, Шериф. 🤠🔫</i>"
+            ),
+            parse_mode="HTML"
+        )
+        # Отправляем стикер
+        await context.bot.send_sticker(
+            chat_id=chat_id, 
+            sticker='CAACAgIAAxkBAAESHMBq4YIrKGYudo11XtQ-X2LH-n3yLgACvzcAApy_UErp84UcgOcPmT0E'
+        )
+        return
+
     # === 🕵️‍♂️ [ФИКС] ВЫТАСКИВАЕМ МИМИКА ИЗ БАЗЫ ДЛЯ ГЕНДЕРНОГО АВТОМАТА ===
     player_res = supabase.table("users").select("*").eq("user_id", user.id).execute()
     player = player_res.data[0] if player_res.data and len(player_res.data) > 0 else {"gender": "boy"}
-
 
     if update.effective_chat.type == "private":
         await update.message.reply_text("❌ Активировать Мимика можно только в групповых чатах!")
