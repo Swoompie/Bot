@@ -2872,17 +2872,15 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                              f"Твой сегодняшний позор честно удваивается: лови ещё <b>+{added_penalty} пидора</b> в досье <i>(всего {total_day_gained} за сегодня)</i>! Карта уходит на КД 6 дней! 🤡",
                         parse_mode="HTML"
                     )
-                    
-                    # ИЗОЛИРОВАЛИ СТИКЕР: Теперь он в своём закрытом боксе и никому не мешает
                     try:
                         await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAEReQpqQ3adafSczLOzJ3WEyKHoQvfvJAACNhUAAjhx-EmeBZwsT5kj1TwE')
-                    except Exception as s_err:
-                        print(f"Микро-сбой отправки стикера провала: {s_err}")
+                    except Exception:
+                        pass
                     return
 
-    except Exception as global_uno_err:
-        # ЭТОТ БЛОК ОСТАЁТСЯ СТРОГО ОДИН В САМОМ КОНЦЕ ДЛЯ ОТЛОВЛИ КРИТИЧЕСКИХ ПАДЕНИЙ ФУНКЦИИ
-        print(f"❌ Глобальный сбой функции switch: {global_uno_err}")
+        # ЖЕЛЕЗНО ИСПРАВЛЕНО: except подвинут в самый левый край функции (вровень с try)
+        except Exception as global_uno_err:
+            print(f"❌ Глобальный сбой функции switch: {global_uno_err}")
 
 async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
@@ -3566,7 +3564,7 @@ async def pizdec_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if today_pidor_res and today_pidor_res["user_id"] == user.id:
         is_today_pidor = True
 
-    # Условие B: НЕ смог ли перевести карту UNO (запись в логах с multiplier == -1)
+    # Условие B: НЕ смог ли перевести карту UNO (запись в логах с multiplier == -1) 
     uno_fail_res = supabase.table("uno_logs").select("id").eq("game_date", today_str).eq("sender_name", user.first_name).eq("multiplier", 0).execute()
     if uno_fail_res.data and len(uno_fail_res.data) > 0:
         is_uno_failed = True
