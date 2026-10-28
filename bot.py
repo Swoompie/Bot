@@ -2389,14 +2389,10 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     is_success = random.randint(1, 100) <= success_chance
 
-    # === 🧮 [УЛЬТИМАТИВНЫЙ ФИКС РОМЫ + SUPABASE]: ВЫТАСКИВАЕМ МНОЖИТЕЛЬ ИЗ БАЗЫ ===
-    today_str = str(date.today())
-    # Стучимся в daily_winners за сегодняшним реальным множителем Пидора
-    winner_log_res = supabase.table("daily_winners").select("multiplier").eq("game_date", today_str).eq("role", "pidor").execute()
-    
-    # Если запись нашли — забираем multiplier из базы, если что-то пошло не так — страхуемся дефолтом 1
-    if winner_log_res.data and len(winner_log_res.data) > 0:
-        today_gained_pidors = winner_log_res.data[0].get("multiplier", 1)
+    # === 🧮 [ТИТАНОВЫЙ ОПЕРАТИВНЫЙ ФИКС]: ДОСТАЕМ МНОЖИТЕЛЬ НАПРЯМУЮ ИЗ ПАМЯТИ ===
+    # Больше не насилуем Supabase отсутствующими колонками! Забираем из bot_data:
+    if context.bot_data and "today_pidor_multiplier" in context.bot_data:
+        today_gained_pidors = int(context.bot_data["today_pidor_multiplier"])
     else:
         today_gained_pidors = 1
     
