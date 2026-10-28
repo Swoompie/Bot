@@ -3567,7 +3567,7 @@ async def pizdec_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         is_today_pidor = True
 
     # Условие B: НЕ смог ли перевести карту UNO (запись в логах с multiplier == -1)
-    uno_fail_res = supabase.table("uno_logs").select("id").eq("game_date", today_str).eq("sender_name", user.first_name).eq("multiplier", -1).execute()
+    uno_fail_res = supabase.table("uno_logs").select("id").eq("game_date", today_str).eq("sender_name", user.first_name).eq("multiplier", 0).execute()
     if uno_fail_res.data and len(uno_fail_res.data) > 0:
         is_uno_failed = True
 
