@@ -1566,7 +1566,7 @@ async def procents_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if today_pidor:
             if u["user_id"] == today_pidor["user_id"]:
-                status_str = "🤡 <b>(Сегодняшний призер!)</b>"
+                status_str = "🤡 <b>(Сегодняшний пидор!)</b>"
             else:
                 status_str = ""
             pidor_list.append({
@@ -1645,7 +1645,7 @@ async def procents_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # =====================================================================
     if today_pidor and today_kras:
         response = "🏆 <b>ИТОГИ И ЗАВТРАШНИЕ ТРЕНДЫ КАЗИНО</b> 🏆\n"
-        response += "<i>(Сегодняшние титулы розданы. В скобках указаны сочные шансы на ЗАВТРАШНЕЕ утро!)</i>\n\n"
+        response += "<i>(Сегодняшние титулы розданы. А так же фиксируйте шансы на ЗАВТРАШНИЙ день!)</i>\n\n"
     else:
         response = "🎯 <b>ТЕКУЩИЕ ШАНСЫ УЧАСТНИКОВ</b>\n"
         response += "<i>(Коэффициенты рассчитаны с учётом живого пула и переброса монетки)</i>\n\n"
@@ -1676,7 +1676,7 @@ async def procents_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if today_pidor and today_kras:
         response += (
             "\n⚡️ <i>Завтрашняя турнирная таблица уже горит! Хочешь переписать эти проценты прямо сейчас? "
-            "Бегом крути кубики <code>/dice</code> или сжигай карты <code>/switch</code>! Сломай рандом! 🥂🎰</i>"
+            "Бегом крути кубики <code>/dice</code>, если остались или сжигай карты UNO <code>/switch</code>! Стреляйся в дуэлях <code>/duel</code> Сломай рандом! 🥂🎰</i>"
         )
     else:
         response += "\n🎰 <i>Казино играет честно. Фортуна начинает свой ход... 🍸</i>"
