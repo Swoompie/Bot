@@ -1527,6 +1527,7 @@ async def procents_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     all_users = get_users()
     active_users = [u for u in all_users if u.get("is_active", True)]
+    today = date.today()
     
     if len(active_users) <= 1:
         await context.bot.send_message(chat_id=chat_id, text="Недостаточно игроков за столом.", parse_mode="HTML")
@@ -1536,18 +1537,21 @@ async def procents_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     m = 0.30  
     q = 0.50  
 
-    # Проверяем, кто уже занял титулы сегодня, чтобы исключить их из реальных пулов
+    # Проверяем, кто уже занял титулы сегодня
     today_pidor = get_today_winner("pidor")
     today_kras = get_today_winner("krasavchik")
 
     # =====================================================================
-    # 🤡 1. ЧЕСТНЫЙ РАСЧЁТ ПИДОРА ДНЯ
+    # 🤡 1. ЧЕСТНЫЙ РАСЧЁТ ПИДОРА (ТЕКУЩИЕ ИЛИ НА ЗАВТРА)
     # =====================================================================
-    # Исключаем из пула сегодняшнего Красавчика (как в функции pidor())
-    opposite_kras_id = today_kras["user_id"] if today_kras else get_opposite_winner_id("pidor")
-    filtered_p_users = [u for u in active_users if u["user_id"] != opposite_kras_id]
-    if not filtered_p_users:
+    # Если сегодня УЖЕ откручен, считаем чистый пул НА ЗАВТРА (без исключений тёзок сегодняшнего дня)
+    if today_pidor:
         filtered_p_users = active_users
+    else:
+        opposite_kras_id = today_kras["user_id"] if today_kras else get_opposite_winner_id("pidor")
+        filtered_p_users = [u for u in active_users if u["user_id"] != opposite_kras_id]
+        if not filtered_p_users:
+            filtered_p_users = active_users
 
     total_p_weight = sum(u.get("pidor_weight", 100.0) for u in filtered_p_users)
     
@@ -1557,29 +1561,44 @@ async def procents_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         username_str = f" (@{u['username']})" if u.get("username") else ""
         display_name = f"{safe_name}{username_str}"
 
+        # Рассчитываем чистый завтрашний процент в любом случае для вывода в скобках
+        tomorrow_chance = (u.get("pidor_weight", 100.0) / total_p_weight) * 100 if total_p_weight > 0 else 0.0
+
         if today_pidor:
-            # Если Пидор дня УЖЕ выбран — у победителя 100%, у остальных 0%
-            chance_pct = 100.0 if u["user_id"] == today_pidor["user_id"] else 0.0
-        elif u["user_id"] not in [user["user_id"] for user in filtered_p_users]:
-            # Если игрока нет в пуле кандидатов рулетки — строго 0%
-            chance_pct = 0.0
+            if u["user_id"] == today_pidor["user_id"]:
+                status_str = "🤡 <b>(Сегодняшний призер!)</b>"
+            else:
+                status_str = ""
+            pidor_list.append({
+                "display": f"{display_name} {status_str}", 
+                "chance": tomorrow_chance, 
+                "is_tomorrow": True
+            })
         else:
-            # Честная доля веса в РЕАЛЬНОМ пуле кандидатов
-            chance_pct = (u.get("pidor_weight", 100.0) / total_p_weight) * 100
-            
-        pidor_list.append({"display": display_name, "chance": chance_pct})
+            if u["user_id"] not in [user["user_id"] for user in filtered_p_users]:
+                chance_pct = 0.0
+            else:
+                chance_pct = tomorrow_chance
+            pidor_list.append({
+                "display": display_name, 
+                "chance": chance_pct, 
+                "is_tomorrow": False
+            })
     
     # Сортируем от большего к меньшему
     pidor_list = sorted(pidor_list, key=lambda x: x["chance"], reverse=True)
 
     # =====================================================================
-    # 👑 2. ЧЕСТНЫЙ РАСЧЁТ КРАСАВЧИКА ДНЯ
+    # 👑 2. ЧЕСТНЫЙ РАСЧЁТ КРАСАВЧИКА (ТЕКУЩИЕ ИЛИ НА ЗАВТРА)
     # =====================================================================
-    # Исключаем из пула сегодняшнего Пидора (как в функции run_command())
-    opposite_pidor_id = today_pidor["user_id"] if today_pidor else get_opposite_winner_id("krasavchik")
-    filtered_k_users = [u for u in active_users if u["user_id"] != opposite_pidor_id]
-    if not filtered_k_users:
+    # Если сегодня УЖЕ откручен, считаем чистый пул НА ЗАВТРА
+    if today_kras:
         filtered_k_users = active_users
+    else:
+        opposite_pidor_id = today_pidor["user_id"] if today_pidor else get_opposite_winner_id("krasavchik")
+        filtered_k_users = [u for u in active_users if u["user_id"] != opposite_pidor_id]
+        if not filtered_k_users:
+            filtered_k_users = active_users
 
     N_kras = len(filtered_k_users)
     total_k_weight = sum(u.get("kras_weight", 100.0) for u in filtered_k_users)
@@ -1590,55 +1609,74 @@ async def procents_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         username_str = f" (@{u['username']})" if u.get("username") else ""
         display_name = f"{safe_name}{username_str}"
 
-        if today_kras:
-            # Если Красавчик дня УЖЕ выбран — у победителя 100%, у остальных 0%
-            chance_pct = 100.0 if u["user_id"] == today_kras["user_id"] else 0.0
-        elif u["user_id"] not in [user["user_id"] for user in filtered_k_users]:
-            # Если игрок исключён (он сегодняшний Пидор) — строго 0%
-            chance_pct = 0.0
+        # Рассчитываем базовую и Монте-Карло дельту для завтрашнего пула
+        p_i = u.get("kras_weight", 100.0) / total_k_weight if total_k_weight > 0 else 0.0
+        if N_kras > 1:
+            tomorrow_chance_k = ((1 - m) * p_i + m * (q * p_i + ((1 - p_i) / (N_kras - 1)) * q)) * 100
         else:
-            # Базовая вероятность внутри реального усечённого пула
-            p_i = u.get("kras_weight", 100.0) / total_k_weight
-            if N_kras > 1:
-                # Применяем формулу Ромы-Монте-Карло строго к усечённому знаменателю N_kras!
-                real_chance = (1 - m) * p_i + m * (q * p_i + ((1 - p_i) / (N_kras - 1)) * q)
-                chance_pct = real_chance * 100
+            tomorrow_chance_k = p_i * 100
+
+        if today_kras:
+            if u["user_id"] == today_kras["user_id"]:
+                status_str = "👑 <b>(Победитель дня!)</b>"
             else:
-                chance_pct = p_i * 100
-                
-        kras_list.append({"name": display_name, "chance": chance_pct})
+                status_str = ""
+            kras_list.append({
+                "name": f"{display_name} {status_str}", 
+                "chance": tomorrow_chance_k, 
+                "is_tomorrow": True
+            })
+        else:
+            if u["user_id"] not in [user["user_id"] for user in filtered_k_users]:
+                chance_pct = 0.0
+            else:
+                chance_pct = tomorrow_chance_k
+            kras_list.append({
+                "name": display_name, 
+                "chance": chance_pct, 
+                "is_tomorrow": False
+            })
     
     # Сортируем от большего к меньшему
     kras_list = sorted(kras_list, key=lambda x: x["chance"], reverse=True)
 
     # =====================================================================
-    # 🎯 3. УМНОЕ ДИНАМИЧЕСКОЕ ФОРМИРОВАНИЕ ТЕКСТА ШАПКИ
+    # 🎯 3. ДИНАМИЧЕСКОЕ ФОРМИРОВАНИЕ ТЕКСТА
     # =====================================================================
-    # Чекаем, завершён ли полностью сегодняшний день
     if today_pidor and today_kras:
-        response = "🏆 <b>ИТОГИ СЕГОДНЯШНИХ РОЗЫГРЫШЕЙ</b> 🏆\n"
-        response += "<i>(Все ставки на сегодня сыграли, крупье зафиксировал результаты)</i>\n\n"
+        response = "🏆 <b>ИТОГИ И ЗАВТРАШНИЕ ТРЕНДЫ КАЗИНО</b> 🏆\n"
+        response += "<i>(Сегодняшние титулы розданы. В скобках указаны сочные шансы на ЗАВТРАШНЕЕ утро!)</i>\n\n"
     else:
         response = "🎯 <b>ТЕКУЩИЕ ШАНСЫ УЧАСТНИКОВ</b>\n"
         response += "<i>(Коэффициенты рассчитаны с учётом живого пула и переброса монетки)</i>\n\n"
     
     # Вывод Пидора
-    response += "🔥 <b>Шансы стать Пидором дня:</b>\n"
-    for idx, item in enumerate(pidor_list, 1):
-        response += f"{idx}. {item['display']} — <code>{item['chance']:.1f}%</code>\n"
+    if today_pidor:
+        response += "🔥 <b>Сегодняшний итог + Шансы на завтра:</b>\n"
+        for idx, item in enumerate(pidor_list, 1):
+            response += f"{idx}. {item['display']} — на завтра: <code>{item['chance']:.1f}%</code>\n"
+    else:
+        response += "🔥 <b>Шансы стать Пидором дня сегодня:</b>\n"
+        for idx, item in enumerate(pidor_list, 1):
+            response += f"{idx}. {item['display']} — <code>{item['chance']:.1f}%</code>\n"
 
     response += "\n———————————————\n\n"
 
     # Вывод Красавчика
-    response += "👑 <b>Шансы стать Красавчиком дня:</b>\n"
-    for idx, item in enumerate(kras_list, 1):
-        response += f"{idx}. {item['name']} — <code>{item['chance']:.1f}%</code>\n"
+    if today_kras:
+        response += "👑 <b>Сегодняшний итог + Шансы на завтра:</b>\n"
+        for idx, item in enumerate(kras_list, 1):
+            response += f"{idx}. {item['name']} — на завтра: <code>{item['chance']:.1f}%</code>\n"
+    else:
+        response += "👑 <b>Шансы стать Красавчиком дня сегодня:</b>\n"
+        for idx, item in enumerate(kras_list, 1):
+            response += f"{idx}. {item['name']} — <code>{item['chance']:.1f}%</code>\n"
 
-    # Динамический финал-подсказка для лаундж-зоны
+    # Динамический финал-подсказка без душноты про 12 ночи
     if today_pidor and today_kras:
         response += (
-            "\n🎰 <i>Новые коэффициенты на завтрашнее утро загрузятся ровно в полночь (00:00)! "
-            "А если хочешь узнать процент на завтра пораньше, пиши <code>/mystats</code>! 🔥🥂</i>"
+            "\n⚡️ <i>Завтрашняя турнирная таблица уже горит! Хочешь переписать эти проценты прямо сейчас? "
+            "Бегом крути кубики <code>/dice</code> или сжигай карты <code>/switch</code>! Сломай рандом! 🥂🎰</i>"
         )
     else:
         response += "\n🎰 <i>Казино играет честно. Фортуна начинает свой ход... 🍸</i>"
@@ -2390,11 +2428,18 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     is_success = random.randint(1, 100) <= success_chance
 
-    # === 🧮 [ТИТАНОВЫЙ ОПЕРАТИВНЫЙ ФИКС]: ДОСТАЕМ МНОЖИТЕЛЬ НАПРЯМУЮ ИЗ ПАМЯТИ ===
-    if context.bot_data and "today_pidor_multiplier" in context.bot_data:
-        today_gained_pidors = int(context.bot_data["today_pidor_multiplier"])
+    # === 🧮 [УМНЫЙ ОПЕРАТИВНЫЙ ФИКС]: ДИНАМИЧЕСКИЙ ВЫБОР МНОЖИТЕЛЯ РАУНДА ===
+    # Если Рома грабит Красавчика дня — забираем чемпионский кэш, иначе — позорный утренний!
+    if is_robbing_chad:
+        if context.bot_data and "today_kras_multiplier" in context.bot_data:
+            today_gained_pidors = int(context.bot_data["today_kras_multiplier"])
+        else:
+            today_gained_pidors = 1
     else:
-        today_gained_pidors = 1
+        if context.bot_data and "today_pidor_multiplier" in context.bot_data:
+            today_gained_pidors = int(context.bot_data["today_pidor_multiplier"])
+        else:
+            today_gained_pidors = 1
     
     if is_coin_loser_target:
         # Х3 НАКАЗАНИЕ ЗА РАНЕНОГО: Утренний позор умножается на 3. 
@@ -2554,6 +2599,9 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception:
                 pass
 
+        # ЖЕЛЕЗНО ИСПРАВЛЕНО РОМОЙ: Жёсткий выход, чтобы бот не проваливался в обычный перевод и не двоил фразы!
+        return
+
         # 🃏 ПУТЬ Б: УСПЕШНЫЙ ОБЫЧНЫЙ ПЕРЕВОД / ДОБИВАНИЕ (ВЫЧИСЛЯЕМ МНОЖИТЕЛЬ ПОЗОРА)
         if not is_robbing_chad:
             # Записываем КД стрелочнику
@@ -2696,7 +2744,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERv_1qh-RMBre9eek9ykdsovu3gf-SvwACCnUAAlgXsEkCKvJjaqw9iT0E')
 
-    # ================= ❌❌❌ ВЫПАЛ ПРОВАЛ (ГЕНДЕРНАЯ ТИТАНОВАЯ БРОНЯ) =================
+    # ================= ❌❌❌ ВЫПАЛ ПРОВАЛ (КОСМЕТИЧЕСКИЙ ПРОЦЕНТАЖ ОТ РОМЫ) =================
     if not is_success:
         safe_name = user.first_name.replace("<", "&lt;").replace(">", "&gt;")
 
@@ -2706,21 +2754,30 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         nakazali_text = g_text(player, "наказали тебя за жестокость", "наказали тебя за жестокость, подруга")
         umudrilsya_text = g_text(player, "умудрился", "умудрилась")
 
-        if is_robbing_chad:
-            # Вытаскиваем текущий позорный вес Стрелочника до промаха карты
-            current_p_weight = player.get("pidor_weight", 100.0)
-            new_p_weight = current_p_weight + 20.0  # Локально накидываем +20 к пидор-весу!
+        # 📊 ВЫЧИСЛЯЕМ ОБЩИЙ УТРЕННИЙ ВЕС ЧАТА ДЛЯ РАСЧЁТА ДЕЛЬТЫ ШАНСОВ
+        all_users_p = get_users()
+        active_users_p = [u for u in all_users_p if u.get("is_active", True)]
+        total_p_before = sum(u.get("pidor_weight", 100.0) for u in active_users_p)
+        current_p_weight = player.get("pidor_weight", 100.0)
 
-            # Сдвигаем кулдаун на +6 дней в будущее, чтобы суммарно вышло 12 дней КД!
-            fake_cd_date = today + timedelta(days=6)
+        # Вычисляем стартовый утренний шанс Ромы ДО промаха карты
+        old_chance = (current_p_weight / total_p_before * 100) if total_p_before > 0 else 0.0
+
+        if is_robbing_chad:
+            # Математика веса внутри бота (фиксированные +20.0 веса)
+            new_p_weight = current_p_weight + 20.0
+
+            # Косметический расчёт дельты процентов на лету силами Питона
+            new_chance = (new_p_weight / (total_p_before + 20.0) * 100) if (total_p_before + 20.0) > 0 else 0.0
+            chance_delta = max(0.1, new_chance - old_chance)
+
             supabase.table("users").update({
-                "last_switch_date": str(fake_cd_date), 
-                "pidor_count": fresh_pidor_count + added_penalty,
+                "last_switch_date": str(fake_cd_date := today + timedelta(days=6)), 
+                "pidor_count": fresh_pidor_count + 2,
                 "pidor_weight": new_p_weight  
             }).eq("user_id", user.id).execute()
 
             try:
-                # ЖЕЛЕЗНО ИСПРАВЛЕНО: Записываем 0 вместо -1, теперь база пропустит транзакцию лога!
                 supabase.table("uno_logs").insert({
                     "sender_name": user.first_name,
                     "victim_name": victim["first_name"],
@@ -2735,8 +2792,9 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 chat_id=chat_id,
                 text=f"❌ <b>КОРОЛЕВСКОЕ ОГРАБЛЕНИЕ ПРОВАЛЕНО!</b> ❌\n\n"
                      f"Королевская защита Красавчика оказалась непробиваемой. Карта UNO рассыпалась в прах!\n\n"
-                     f"<b>{safe_name}</b>, за покушение на Корону твой утренний позор удваивается: получай <b>+{added_penalty} пидора</b> в досье <i>(всего {total_day_gained} за сегодня)</i>!\n"
-                     f"⏳ А за наглость шериф изымает карту UNO на <b>12 ДНЕЙ ПЕРЕЗАРЯДКИ</b>! 🤡💣",
+                     f"<b>{safe_name}</b>, за покушение на Корону ты получаешь штрафные <b>+2 пидора</b> в досье!\n"
+                     f"🚨 Риски утреннего позора в <code>/procents</code> для тебя подпрыгнули на <b>+{chance_delta:.1f}%</b>!\n"
+                     f"⏳ За наглость шериф изымает карту UNO на <b>12 ДНЕЙ ПЕРЕЗАРЯДКИ</b>! 🤡💣",
                 parse_mode="HTML"
             )
             try:
@@ -2746,19 +2804,20 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
             
         elif is_coin_loser_target:
-            # Вытаскиваем текущий позорный вес Стрелочника до промаха карты
-            current_p_weight = player.get("pidor_weight", 100.0)
-            new_p_weight = current_p_weight + 30.0  # Локально накидываем +30 за провал добивания раненого!
+            # Математика веса внутри бота (фиксированные +30.0 веса за раненого)
+            new_p_weight = current_p_weight + 30.0
 
-            # Жесткое х3 наказание за провал добивания раненого
+            # Косметический расчёт дельты процентов на лету силами Питона
+            new_chance = (new_p_weight / (total_p_before + 30.0) * 100) if (total_p_before + 30.0) > 0 else 0.0
+            chance_delta = max(0.1, new_chance - old_chance)
+
             supabase.table("users").update({
                 "last_switch_date": str(today), 
-                "pidor_count": fresh_pidor_count + added_penalty,
+                "pidor_count": fresh_pidor_count + 3,
                 "pidor_weight": new_p_weight  
             }).eq("user_id", user.id).execute()
             
             try:
-                # ЖЕЛЕЗНО ИСПРАВЛЕНО: Записываем 0 вместо -1
                 supabase.table("uno_logs").insert({
                     "sender_name": user.first_name,
                     "victim_name": victim["first_name"],
@@ -2773,7 +2832,8 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 chat_id=chat_id,
                 text=f"❌ <b>ТОТАЛЬНОЕ КАРМИЧЕСКОЕ ПРАВОСУДИЕ!</b> ❌\n\n"
                      f"Карта UNO расплавилась в руках <b>{safe_name}</b> при попытке добить раненого! Шанс был 45%, но ты {umudrilsya_text} промазать!\n\n"
-                     f"Боги рандома {nakazali_text} в тройном размере: твой утренний позор умножается на 3! Получай ещё <b>+{added_penalty} пидора</b> в досье <i>(всего {total_day_gained} за сегодня)</i>! 🤡💥💣",
+                     f"Боги рандома {nakazali_text}: за излишнюю кровожадность ты получаешь фиксированные <b>+3 пидора</b> в досье!\n"
+                     f"📈 Твоя вероятность стать главным позором чата завтра утром подскочила на жирные <b>+{chance_delta:.1f}%</b>! 🤡💥💣",
                 parse_mode="HTML"
             )
             try:
@@ -2784,20 +2844,21 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         else:
             if is_retry_attempt:
-                # Вытаскиваем текущий позорный вес Стрелочника до промаха карты
-                current_p_weight = player.get("pidor_weight", 100.0)
-                new_p_weight = current_p_weight + 5.0  # Локально накидываем +5 за тотал-неудачника!
+                # Математика веса внутри бота (фиксированные +5.0 веса за ретрай)
+                new_p_weight = current_p_weight + 5.0
 
-                # Вторая попытка провалилась — сжигаем карту с х2 штрафом от утра и +5 к весу позора
+                # Косметический расчёт дельты процентов на лету силами Питона
+                new_chance = (new_p_weight / (total_p_before + 5.0) * 100) if (total_p_before + 5.0) > 0 else 0.0
+                chance_delta = max(0.1, new_chance - old_chance)
+
                 supabase.table("users").update({
                     "last_switch_date": str(today), 
-                    "pidor_count": fresh_pidor_count + added_penalty,
+                    "pidor_count": fresh_pidor_count + 2,
                     "pidor_weight": new_p_weight
                 }).eq("user_id", user.id).execute()
                 context.user_data.pop("switch_retry", None)
 
                 try:
-                    # ЖЕЛЕЗНО ИСПРАВЛЕНО: Записываем 0 вместо -1
                     supabase.table("uno_logs").insert({
                         "game_date": str(date.today()),
                         "sender_name": user.first_name,
@@ -2813,7 +2874,8 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await context.bot.send_message(
                     chat_id=chat_id,
                     text=f"💀 <b>ПОЛНОЕ ФИАСКО, {streloch_title}!</b> Второй шанс тоже провален! 💀\n\n"
-                         f"Твоя карта UNO превратилась в пепел. Твой сегодняшний позор удваивается: получай ещё <b>+{added_penalty} пидора</b> <i>(всего {total_day_gained} за сегодня)</i>. Кулдаун 6 дней взведён! 🤡",
+                         f"Твоя карта UNO превратилась в пепел. На твой счёт капает <b>+2 пидора</b> в статистику!\n"
+                         f"📈 Риск утреннего клейма для тебя символически подрос на <b>+{chance_delta:.1f}%</b>, а Кулдаун 6 дней взведён! 🤡",
                     parse_mode="HTML"
                 )
                 try:
@@ -2829,7 +2891,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if has_second_chance:
                     context.user_data["switch_retry"] = True 
                     await context.bot.send_message(
-                        chat_id=chat_id,
+                        chat_id=update.effective_chat.id,
                         text=f"⚡️ <b>ОПА, ОСЕЧКА... ИЛИ НЕТ?!</b> ⚡️\n\n"
                              f"<b>{safe_name}</b>, твоя карта UNO задымилась, но боги рандома дали тебе <b>ВТОРОЙ ШАНС</b>! Шанс перевода всё ещё 30%!\n"
                              f"Кулдаун НЕ активирован! Быстро пиши команду <code>/switch</code> ещё раз, пока лазейка не закрылась! 🃏",
@@ -2841,21 +2903,118 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         pass
                     return
                 else:
-                    # Стандартный провал на мирного с первого раза с честным х2
+                    # Стандартный провал на мирного с первого раза
+                    random_penalty_weight = random.uniform(5.0, 25.0)
+                    new_p_weight = current_p_weight + random_penalty_weight
+
+                    # Косметический расчёт дельты процентов на лету силами Питона
+                    new_chance = (new_p_weight / (total_p_before + random_penalty_weight) * 100) if (total_p_before + random_penalty_weight) > 0 else 0.0
+                    chance_delta = max(0.1, new_chance - old_chance)
+
+                    # Обычный промах даёт строго +1 пидора в досье
+                    supabase.table("users").update({
+                        "last_switch_date": str(today), 
+                        "pidor_count": fresh_pidor_count + 1,
+                        "pidor_weight": round(new_p_weight, 1)  
+                    }).eq("user_id", user.id).execute()
+
+                    try:
+                        supabase.table("uno_logs").insert({
+                            "game_date": str(date.today()),
+                            "sender_name": user.first_name,
+                            "victim_name": victim["first_name"],
+                            "multiplier": 0,  
+                            "is_krasavchik": False
+                        }).execute()
+                    except Exception as e_log:
+                        print(f"Ошибка сохранения лога стандартного провала: {e_log}")
+
+                    await context.bot.send_message(
+                        chat_id=update.effective_chat.id,
+                        text=f"❌ <b>КАРТА UNO ПОРВАЛАСЬ!</b> ❌\n\n"
+                             f"Перевод сорвался и отрикошетил обратно в <b>{safe_name}</b>. Лови <b>+1 пидора</b> в досье!\n"
+                             f"📈 Риск утреннего клейма для тебя прямо сейчас подскочил на <b>+{chance_delta:.1f}%</b>, а карта уходит на КД 6 дней! 🤡",
+                        parse_mode="HTML"
+                    )
+                    try:
+                        await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAEReQpqQ3adafSczLOzJ3WEyKHoQvfvJAACNhUAAjhx-EmeBZwsT5kj1TwE')
+                    except Exception:
+                        pass
+                    return
+
+        else:
+            if is_retry_attempt:
+                # Вытаскиваем текущий позорный вес Стрелочника до промаха карты
+                current_p_weight = player.get("pidor_weight", 100.0)
+                new_p_weight = current_p_weight + 5.0  # Локально накидываем +5 за тотал-неудачника
+
+                # ГУМАННЫЙ ФИКС: За провал ретрая строго +2 пидора в досье
+                supabase.table("users").update({
+                    "last_switch_date": str(today), 
+                    "pidor_count": fresh_pidor_count + 2,
+                    "pidor_weight": new_p_weight
+                }).eq("user_id", user.id).execute()
+                context.user_data.pop("switch_retry", None)
+
+                try:
+                    supabase.table("uno_logs").insert({
+                        "game_date": str(date.today()),
+                        "sender_name": user.first_name,
+                        "victim_name": victim["first_name"],
+                        "multiplier": 0,  
+                        "is_krasavchik": False
+                    }).execute()
+                except Exception as e_log:
+                    print(f"Ошибка сохранения уно-лога провала ретрая: {e_log}")
+
+                streloch_title = g_text(player, "СТРЕЛОЧНИК", "СТРЕЛОЧНИЦА")
+
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"💀 <b>ПОЛНОЕ ФИАСКО, {streloch_title}!</b> Второй шанс тоже провален! 💀\n\n"
+                         f"Твоя карта UNO превратилась в пепел. Ты получаешь штрафные <b>+2 пидора</b> в статистику, а Кулдаун 6 дней взведён наглухо! 🤡",
+                    parse_mode="HTML"
+                )
+                try:
+                    await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERg9tqT2Lb7EssiCPdH7XeEz1W5sbVswAC6S8AApkAAYhJDcx-Vp6-Sco8BA')
+                except Exception:
+                    pass
+                return  
+
+            else:
+                # Первый провал на мирного — крутим скрытые 5% на "Второй Шанс"
+                has_second_chance = random.randint(1, 100) <= 5
+                
+                if has_second_chance:
+                    context.user_data["switch_retry"] = True 
+                    await context.bot.send_message(
+                        chat_id=update.effective_chat.id,
+                        text=f"⚡️ <b>ОПА, ОСЕЧКА... ИЛИ НЕТ?!</b> ⚡️\n\n"
+                             f"<b>{safe_name}</b>, твоя карта UNO задымилась, но боги рандома дали тебе <b>ВТОРОЙ ШАНС</b>! Шанс перевода всё ещё 30%!\n"
+                             f"Кулдаун НЕ активирован! Быстро пиши команду <code>/switch</code> ещё раз, пока лазейка не закрылась! 🃏",
+                        parse_mode="HTML"
+                    )
+                    try:
+                        await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERg85qT110qgTm1RJWyqRuKm0QwbCoLwAC9B4AAiNcOEtYh2FNKYLHdDwE')
+                    except Exception:
+                        pass
+                    return
+                else:
+                    # Стандартный провал на мирного с первого раза
                     current_p_weight = player.get("pidor_weight", 100.0)
                     
                     # КАЗИНОВСКИЙ РАНДОМ: накидываем случайный штраф от +5.0 до +25.0 к текущему весу!
                     random_penalty_weight = random.uniform(5.0, 25.0)
                     new_p_weight = current_p_weight + random_penalty_weight
 
+                    # ГУМАННЫЙ ФИКС: Обычный промах даёт строго +1 пидора в досье!
                     supabase.table("users").update({
                         "last_switch_date": str(today), 
-                        "pidor_count": fresh_pidor_count + added_penalty,
+                        "pidor_count": fresh_pidor_count + 1,
                         "pidor_weight": round(new_p_weight, 1)  
                     }).eq("user_id", user.id).execute()
 
                     try:
-                        # ЖЕЛЕЗНО ИСПРАВЛЕНО: Записываем 0 вместо -1
                         supabase.table("uno_logs").insert({
                             "game_date": str(date.today()),
                             "sender_name": user.first_name,
@@ -2870,7 +3029,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         chat_id=chat_id,
                         text=f"❌ <b>КАРТА UNO ПОРВАЛАСЬ!</b> ❌\n\n"
                              f"Перевод сорвался и отрикошетил обратно в <b>{safe_name}</b>. "
-                             f"Твой сегодняшний позор честно удваивается: лови ещё <b>+{added_penalty} пидора</b> в досье <i>(всего {total_day_gained} за сегодня)</i>! Карта уходит на КД 6 дней! 🤡",
+                             f"Лови заслуженного <b>+1 пидора</b> в досье, а карта уходит на КД 6 дней! 🤡",
                         parse_mode="HTML"
                     )
                     try:
@@ -3123,7 +3282,11 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         step = 5.0 if dice_value == 3 else (15.0 if dice_value == 2 else 30.0)
         k_minus = 2.0 if dice_value == 3 else (5.0 if dice_value == 2 else 10.0)
         
-        new_pidor_weight = player["pidor_weight"] + step
+        # 📊 ВЫЧИСЛЯЕМ СТАРТОВЫЙ ШАНС ДО БРОСКА КУБИКА ДЛЯ КОСМЕТИЧЕСКОГО ПРОЦЕНТАЖА
+        current_p_weight = player.get("pidor_weight", 100.0)
+        old_chance = (current_p_weight / total_p_before * 100) if total_p_before > 0 else 0.0
+
+        new_pidor_weight = current_p_weight + step
         new_kras_weight = max(1.0, player["kras_weight"] - k_minus)
         
         # Пересчитали чистый профит сессии под максимум 30
@@ -3137,24 +3300,31 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "dice_start_balance": saved_balance
         }).eq("user_id", user.id).execute()
         
+        # Считаем новый шанс после броска кубика и находим чистую дельту процентов
+        new_chance_p = (new_pidor_weight / (total_p_before + step) * 100) if (total_p_before + step) > 0 else 0.0
+        chance_delta_p = max(0.1, new_chance_p - old_chance)
+
         charm_title = g_text(player, "личный шарм заметно просел", "женское обаяние слегка пошатнулось 💔")
 
         if dice_value == 1:
-            power_text = "💥 <b>КРИТИЧЕСКИЙ УДАР ПО СТАВКАМ! (+30 к позору)!</b> 💥 Твоя вероятность забрать позорное клеймо увеличилась, а шансы на корону Красавчика скользнули вниз!"
+            power_text = f"💥 <b>КРИТИЧЕСКИЙ УДАР ПО СТАВКАМ!</b> 💥 Твоя вероятность забрать позорное клеймо в <code>/procents</code> резко подскочила сразу на <b>+{chance_delta_p:.1f}%</b>, а шансы на корону Красавчика крупно скользнули вниз!"
         elif dice_value == 2:
-            power_text = f"ощутимый заплыв в сомнительную сторону (+15 к позору). Твои риски на Пидора дня увеличились, а {charm_title}."
+            power_text = f"ощутимый заплыв в сомнительную сторону. Твои риски на Пидора дня увеличились на <b>+{chance_delta_p:.1f}%</b>, а {charm_title}."
         else:
-            power_text = "микро-осечка за игровым столом (+5 к позору). Коэффициенты скорректировались вверх, фортуна выражает недовольство."
+            power_text = f"микро-осечка за игровым столом. Твой риск утреннего клейма скорректировался вверх на <b>+{chance_delta_p:.1f}%</b>, фортуна выражает недовольство."
 
         intro_text = f"🎲 На кубике выпадает: <b>{dice_value}</b>!\n\n🤡 <b>ФОРТУНА ОТВЕРНУЛАСЬ!</b> <b>{safe_name}</b>, это {power_text}"
-            
     else:
         # ======= 😎 ВЕТКА УДАЧИ (4, 5, 6) =======
         # ШАГ СБАЛАНСИРОВАН: Грань 4 -> +5, Грань 5 -> +15, Грань 6 -> +30 к чемпионскому весу!
         step = 5.0 if dice_value == 4 else (15.0 if dice_value == 5 else 30.0)
         p_minus = 2.0 if dice_value == 4 else (5.0 if dice_value == 5 else 10.0)
         
-        new_kras_weight = player["kras_weight"] + step
+        # 📊 ВЫЧИСЛЯЕМ СТАРТОВЫЙ ЧЕМПИОНСКИЙ ШАНС ДО БРОСКА ДЛЯ КОСМЕТИЧЕСКОГО ПРОЦЕНТАЖА
+        current_k_weight = player.get("kras_weight", 100.0)
+        old_chance_k = (current_k_weight / total_k_before * 100) if total_k_before > 0 else 0.0
+
+        new_kras_weight = current_k_weight + step
         new_pidor_weight = max(1.0, player["pidor_weight"] - p_minus)
         
         # Пересчитали чистый профит сессии под максимум 30
@@ -3168,15 +3338,19 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "dice_start_balance": saved_balance
         }).eq("user_id", user.id).execute()
         
+        # Считаем новый шанс на победу и находим чистую дельту прироста крутости
+        new_chance_k = (new_kras_weight / (total_k_before + step) * 100) if (total_k_before + step) > 0 else 0.0
+        chance_delta_k = max(0.1, new_chance_k - old_chance_k)
+
         charm_gain = g_text(player, "мощный прилив шарма", "мощный прилив обаяния ✨")
         pobeda_word = g_text(player, "на победу", "на корону Красавицы")
 
         if dice_value == 6:
-            power_text = "👑 <b>АБСОЛЮТНЫЙ ДЖЕКПОТ КАЗИНО (+30 к весу)!</b> 👑 Твои показатели привлекательности за столом засияли ярким блеском, а позорные риски рулетки неплохо так снизились!"
+            power_text = f"👑 <b>АБСОЛЮТНЫЙ УЛЬТРА-ДЖЕКПОТ КАЗИНО!</b> 👑 Твои показатели привлекательности за столом засияли ослепительным блеском, а шансы на триумф в <code>/procents</code> взлетели ракетой сразу на <b>+{chance_delta_k:.1f}%</b>!"
         elif dice_value == 5:
-            power_text = f"{charm_gain} (+15 к весу)! Проценты {pobeda_word} уверенно поползли вверх, а вероятность поймать позорное клеймо тает."
+            power_text = f"{charm_gain}! Проценты {pobeda_word} уверенно поползли вверх сразу на <b>+{chance_delta_k:.1f}%</b>, а вероятность поймать утренний позор тает на глазах."
         else:
-            power_text = "скромный шаг к успеху за игровым столом (+5 к весу). Чуть-чуть подбавил веса в стату, риски позора символически снижены."
+            power_text = f"скромный, но верный шаг к успеху за игровым столом. Подбавил крутости в статус, подняв шансы на Корону на <b>+{chance_delta_k:.1f}%</b>!"
 
         intro_text = f"🎲 На кубике выпадает: <b>{dice_value}</b>!\n\n😎 <b>ФОРТУНА УЛЫБАЕТСЯ ТЕБЕ!</b> <b>{safe_name}</b>, это {power_text}"
 
@@ -3193,43 +3367,56 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     new_p_chance = (new_pidor_weight / total_p_after * 100) if total_p_after > 0 else 0.0
     new_k_chance = (new_kras_weight / total_k_after * 100) if total_k_after > 0 else 0.0
 
-
-    # --- 🚨 ПЕРЕХВАТ ДУБЛЕЙ (ЖЕЛЕЗНО ПЕРЕПИСАЛИ ИЗ-ЗА НОВЫХ ШАГОВ НА БАЛАНС 40.0) ---
+    # --- 🚨 ПЕРЕХВАТ ДУБЛЕЙ (ЖЕЛЕЗНО ПЕРЕПИСАЛИ ПОД ПРОЦЕНТНЫЙ ВЫВОД ОТ РОМЫ) ---
     if current_attempts == 1 and prev_balance == -40.0 and dice_value == 1:
+        # Вычисляем чистую разность процентов для адского дубля 1 и 1
+        chance_delta_p = max(0.1, new_p_chance - old_p_chance)
+        chance_delta_k = max(0.1, old_k_chance - new_k_chance)
+
         status_title = g_text(player, "Игрок", "Леди")
         vjsh_text = g_text(player, "умудряется выбить", "умудряется выбросить")
         bro_text = g_text(player, "бро", "леди")
         ego_text = g_text(player, "твоему авторитету", "твоим ставкам")
 
         result_text = (
-            f"🎲 На кубике выпадает: <b>1</b> (Дубль!)\n\n"
-            f"🚨 <b>ЧЁРНЫЙ ДЕНЬ ДЛЯ СТАВОК! КРИТИЧЕСКОЕ ПРОБИТИЕ ДНА В ВЕСАХ!</b> 🎪\n\n"
-            f"{status_title} <b>{safe_name}</b> {vjsh_text} дубль <b>1 и 1</b> за неделю! Это суммарно +60 к позору! 😭\n"
-            f"Да уж, соболезнуем {ego_text}, {bro_text}! Крупье за игровым столом вытирает слёзы жалости.\n\n"
+            f"🎲 На кубике выпадает: <b>1</b> (АДСКИЙ ДУБЛЬ!)\n\n"
+            f"🚨 <b>ЧЁРНЫЙ ДЕНЬ ДЛЯ СТАВОК! КАТАСТРОФИЧЕСКОЕ ПРОБИТИЕ ДНА В ВЕСАХ!</b> 🎪\n\n"
+            f"{status_title} <b>{safe_name}</b> {vjsh_text} дубль <b>1 и 1</b> за неделю! Твои позорные коэффициенты разорваны на куски! 😭\n"
+            f"Да уж, соболезнуем {ego_text}, {bro_text}! Крупье за игровым столом вытирает слёзы жалости, шансы улетели в космос.\n\n"
             f"📊 <b>ДИНАМИКА ТВОИХ ШАНСОВ:</b>\n"
-            f" └ 🤡 Шанс Пидора: <code>{old_p_chance:.1f}%</code> ➡️ <b>{new_p_chance:.1f}%</b> 📈\n"
-            f" └ 😎 Шанс Красавчика: <code>{old_k_chance:.1f}%</code> ➡️ <b>{new_k_chance:.1f}%</b> 📉\n\n"
+            f" └ 🤡 Шанс Пидора: <code>{old_p_chance:.1f}%</code> ➡️ <b>{new_p_chance:.1f}%</b> (<b>+{chance_delta_p:.1f}%</b> 📈)\n"
+            f" └ 😎 Шанс Красавчика: <code>{old_k_chance:.1f}%</code> ➡️ <b>{new_k_chance:.1f}%</b> (<b>-{chance_delta_k:.1f}%</b> 📉)\n\n"
             f"{remains_text}"
         )
-        await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgUAAxkBAAERr4pqeX-dpAQpHvj3CZnAcPY0_UmGSQACgggAAjiksVVM5Vj4fvPn0z0E')
+        try:
+            await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgUAAxkBAAERr4pqeX-dpAQpHvj3CZnAcPY0_UmGSQACgggAAjiksVVM5Vj4fvPn0z0E')
+        except Exception:
+            pass
 
     elif current_attempts == 1 and prev_balance == 40.0 and dice_value == 6:
+        # Вычисляем чистую разность процентов для читерского дубля 6 и 6
+        chance_delta_p = max(0.1, old_p_chance - new_p_chance)
+        chance_delta_k = max(0.1, new_k_chance - old_k_chance)
+
         # Собираем динамические гендерные титулы и фразы для везунчика (на основе player)
         status_title = g_text(player, "Игрок", "Леди")
         vybros_text = g_text(player, "выбрасывает", "выбрасывает ✨")
         style_title = g_text(player, "наглый любимчик фортуны", "настоящая икона стиля 💎")
 
         result_text = (
-            f"🎲 На кубике выпадает: <b>6</b> (Дубль!)\n\n"
+            f"🎲 На кубике выпадает: <b>6</b> (УЛЬТРА-ДУБЛЬ!)\n\n"
             f"🎰 <b>ОБНАРУЖЕН ЧИТЕР! ВЫ С КЕМ ТАМ НАВЕРХУ ДОГОВОРИЛИСЬ?!</b> 👑\n\n"
-            f"{status_title} <b>{safe_name}</b> {vybros_text} дубль <b>6 и 6</b> за неделю! Это суммарно +60 к весу Красавчика! 🤯\n"
-            f"Администрация казино официально заявляет: этот игровой стол поддался от такой наглой удачи, ты — {style_title}!\n\n"
+            f"{status_title} <b>{safe_name}</b> {vybros_text} дубль <b>6 и 6</b> за неделю! Матрица казино взломана абсолютной удачей! 🤯\n"
+            f"Администрация казино официально заявляет: этот игровой стол поддался от такого дикого везения, ты — {style_title}!\n\n"
             f"📊 <b>ДИНАМИКА ТВОИХ ШАНСОВ:</b>\n"
-            f" └ 🤡 Шанс Пидора: <code>{old_p_chance:.1f}%</code> ➡️ <b>{new_p_chance:.1f}%</b> 📉\n"
-            f" └ 😎 Шанс Красавчика: <code>{old_k_chance:.1f}%</code> ➡️ <b>{new_k_chance:.1f}%</b> 📈\n\n"
+            f" └ 🤡 Шанс Пидора: <code>{old_p_chance:.1f}%</code> ➡️ <b>{new_p_chance:.1f}%</b> (<b>-{chance_delta_p:.1f}%</b> 📉)\n"
+            f" └ 😎 Шанс Красавчика: <code>{old_k_chance:.1f}%</code> ➡️ <b>{new_k_chance:.1f}%</b> (<b>+{chance_delta_k:.1f}%</b> 📈)\n\n"
             f"{remains_text}"
         )
-        await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgQAAxkBAAERlA5qX28PoaHLw_vQlr61kl4t7WzyFgACUAgAAtRigFLWQCl12cGV0z0E')
+        try:
+            await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgQAAxkBAAERlA5qX28PoaHLw_vQlr61kl4t7WzyFgACUAgAAtRigFLWQCl12cGV0z0E')
+        except Exception:
+            pass
 
     else:
         # СТАНДАРТНЫЙ ВЫВОД С ДИНАМИЧЕСКИМ СРАВНЕНИЕМ ПРОЦЕНТОВ
