@@ -869,12 +869,19 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
 
     # ---------------- БЛОК ЮБИЛЕЙНЫХ ПОЗДРАВЛЕНИЙ ПИДОРА ----------------
-    # ЖЕЛЕЗНО ОБЪЯВЛЯЕМ СЕЛЕБРАТОРА: Вытаскиваем имя и экранируем спецсимволы чата!
-    # (Если у тебя в начале функции объект победителя называется final_pidor_user, используй его)
-    celebrator_name = winner.first_name.replace("<", "&lt;").replace(">", "&gt;") if 'winner' in locals() else final_pidor_user.get("first_name", "Игрок").replace("<", "&lt;").replace(">", "&gt;")
-    
-    # Также явно забираем его итоговый счет (celebrator_count) и старый (old_count), если они называются по-другому
-    # Убедись, что эти переменные у тебя рассчитаны в базе при инсерте утреннего пидора!
+    # Сначала определяем референсный объект победителя для чека полов
+    ref_winner = winner if 'winner' in locals() else (final_pidor_user if 'final_pidor_user' in locals() else player)
+
+    # ЖЕЛЕЗНО ИСПРАВЛЕНО РОМОЙ: Гендерный аварийный щит вместо статичного Ковбоя!
+    try:
+        if 'winner' in locals() and winner:
+            celebrator_name = winner.first_name.replace("<", "&lt;").replace(">", "&gt;")
+        elif 'final_pidor_user' in locals() and final_pidor_user:
+            celebrator_name = final_pidor_user.get("first_name", "Игрок").replace("<", "&lt;").replace(">", "&gt;")
+        else:
+            celebrator_name = g_text(ref_winner, "Парень", "Девушка ✨")
+    except Exception:
+        celebrator_name = g_text(ref_winner, "Парень", "Девушка ✨")
 
     pidor_stickers_pool = [
         'CAACAgIAAxkBAAEReO5qQ22SmZkDyLqKq0vP6-ELBjPTUAACjnQAAihj2EtnaWFztIKP7DwE',
@@ -949,7 +956,6 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_sticker(chat_id=chat_id, sticker=random_sticker)
         except Exception:
             pass
-
 
 async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from datetime import date
@@ -1337,6 +1343,21 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
     # ---------------- БЛОК ЮБИЛЕЙНЫХ ПОЗДРАВЛЕНИЙ С ИЗДЁВКОЙ ----------------
+    # Сначала определяем референсный объект победителя для чека полов
+    ref_winner = final_winner if 'final_winner' in locals() else (winner if 'winner' in locals() else player)
+
+    # ЖЕЛЕЗНО ИСПРАВЛЕНО РОМОЙ: Гендерный аварийный щит вместо статичного Ковбоя!
+    try:
+        if 'final_winner' in locals() and final_winner:
+            celebrator_name = final_winner.first_name.replace("<", "&lt;").replace(">", "&gt;")
+        elif 'winner' in locals() and winner:
+            celebrator_name = winner.first_name.replace("<", "&lt;").replace(">", "&gt;")
+        else:
+            celebrator_name = g_text(ref_winner, "Парень", "Девушка ✨")
+    except Exception:
+        celebrator_name = g_text(ref_winner, "Парень", "Девушка ✨")
+
+
     kras_stickers_pool = [
         'CAACAgIAAxkBAAERePpqQ3C50Eqg_2plBXsHEFEtGOtmnQACk1QAAgmZ4EkPKsG3ATUGIDwE',
         'CAACAgIAAxkBAAERePxqQ3FkKQTrDt2Kt3E3v09Q90uUzgAC5zMAAvyF0EhRH0ZM6KsQGjwE',
@@ -1354,16 +1375,13 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         40: "✨ <b>40 РАЗ КРАСАВЧИК!</b> Уровень эго {celebrator_name} превысил все допустимые нормы. Скоро тебе понадобится отдельная комната для твоей короны! 🗄",
         50: "🎖 <b>ПОЛУВЕКОВОЙ ЮБИЛЕЙ!</b> 50 побед! {celebrator_name}, мы скидываемся тебе на памятник при жизни в полный рост. Из чистого золота, естественно! 🏅",
         60: "🎰 <b>60 ПОБЕД!</b> {celebrator_name} официально признан {narciss_title} Датчики привлекательности сгорели от такого пафоса! ⚡️",
-        70: "🛰 <b>КОСМИЧЕСКИЙ КРАСАВЧИК!</b> 70-й раз! {celebrator_name}, твоё великолепие ослепляет даже спутники наблюдения! Надень маску, побереги наши глаза! 🌌",
+        70: "🚨 <b>КОСМИЧЕСКИЙ УРОВЕНЬ!</b> 70-й раз! {celebrator_name}, {geystvo_title} Надень маску, побереги наши глаза! 🌌",
         80: "🛡 <b>80 РАЗ! СВЕРХЛЮДИ СРЕДИ НАС!</b> К {celebrator_name} уже выстроилась очередь за автографами. Не забудь упомянуть этот чат, когда поедешь на {mister_vselennaya}",
-        90: "🏛 <b>90 ПОБЕД!</b> {celebrator_name} одной ногой в зале славы {pobeditel_title} Ещё чуть-чуть, и твоё лицо напечатают на обложках всех журналов! 🧛‍♂️",
+        90: "🏛 <b>90 ПОБЕД!</b> {celebrator_name} одной ногой в зале славы {pobeditel_title} Ещё чуть-чуть, и твоё лицо напечатают на обложках всех журналов! 🗄",
         100: "👑🍾 <b>ЛЕГЕНДА ВЕКА! СТОКРАТНЫЙ КРАСАВЧИК!</b> 🎉💥 {celebrator_name} официально {proshel_game} 100 побед! {boss_title} 🏆🌟"
     }
 
-
     is_anniversary = False
-    
-    # УЛЬТИМАТИВНЫЙ АВТОМАТ ДЛЯ КРОН: Проверяем перешагивание юбилея
     triggered_joke_count = None
     for j_key in jokes.keys():
         if celebrator_count >= j_key and old_count < j_key:
@@ -1372,7 +1390,10 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Проверка на разогрев (5-й раз Красавчика)
     if celebrator_count >= 5 and old_count < 5:
-        kras_5_title = g_text(final_winner, "набирает обороты", "сияет на игровом столе ✨")
+        # Страхуемся по объекту final_winner / winner для гендеров
+        ref_winner = final_winner if 'final_winner' in locals() else (winner if 'winner' in locals() else player)
+        kras_5_title = g_text(ref_winner, "набирает обороты", "сияет на игровом столе ✨")
+        
         await context.bot.send_message(
             chat_id=chat_id,
             text=f"🎉 <b>РАЗОГРЕВ ОКОНЧЕН!</b> {celebrator_name} {kras_5_title} уже 5-й раз! Начало положено, но до зала великой славы ещё нужно дойти! 🎖",
@@ -1381,29 +1402,42 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         is_anniversary = True
         
     elif triggered_joke_count is not None:
-        # Считаем гендерные переменные СТРОГО при срабатывании на основе final_winner
-        miss_mr_title = g_text(final_winner, "мистер Обаяние! 📸", "мисс Обаяние! ✨📸")
-        podkrutil_text = g_text(final_winner, "подкрутил", "подкрутила")
-        podkupil_text = g_text(final_winner, "подкупил", "подкупила")
-        narciss_title = g_text(final_winner, "главным нарциссом этого чата.", "главной нарцисской этого чата! 💖")
-        mister_vselennaya = g_text(final_winner, "Мистер Вселенная! 🦾", "Мисс Вселенная! ✨🦾")
-        pobeditel_title = g_text(final_winner, "великих Победителей.", "великих Победительниц. ✨")
-        boss_title = g_text(final_winner, "икона стиля и босс этого чата! Салют чемпиону!", "икона стиля и королева этого чата! Салют чемпионке! ✨")
-        proshel_game = g_text(final_winner, "полностью прошёл эту игру!", "полностью прошла эту игру! ✨")
+        ref_winner = final_winner if 'final_winner' in locals() else (winner if 'winner' in locals() else player)
+        
+        # Считаем гендерные переменные СТРОГО при срабатывании на основе ref_winner
+        miss_mr_title = g_text(ref_winner, "мистер Обаяние! 📸", "мисс Обаяние! ✨📸")
+        podkrutil_text = g_text(ref_winner, "подкрутил", "подкрутила")
+        podkupil_text = g_text(ref_winner, "подкупил", "подкупила")
+        narciss_title = g_text(ref_winner, "главным нарциссом этого чата.", "главной нарцисской этого чата! 💖")
+        geystvo_title = g_text(ref_winner, "твоё великолепие ослепляет даже спутники наблюдения!", "твой позорный шлейф ослепляет даже спутники из космоса!")
+        mister_vselennaya = g_text(ref_winner, "Мистер Вселенная! 🦾", "Мисс Вселенная! ✨🦾")
+        pobeditel_title = g_text(ref_winner, "великих Победителей.", "великих Победительниц. ✨")
+        boss_title = g_text(ref_winner, "икона стиля и босс этого чата! Салют чемпиону!", "икона стиля и королева этого чата! Салют чемпионке! ✨")
+        proshel_game = g_text(ref_winner, "полностью прошёл эту игру!", "полностью прошла эту игру! ✨")
 
-        # Наполняем шаблон юбилея Красавчика
         raw_joke = jokes[triggered_joke_count]
-        formatted_joke = raw_joke.format(
-            celebrator_name=celebrator_name,
-            miss_mr_title=miss_mr_title,
-            podkrutil_text=podkrutil_text,
-            podkupil_text=podkupil_text,
-            narciss_title=narciss_title,
-            mister_vselennaya=mister_vselennaya,
-            pobeditel_title=pobeditel_title,
-            proshel_game=proshel_game,
-            boss_title=boss_title
-        )
+        
+        # ЖЕЛЕЗНЫЙ ТИТАНОВЫЙ ФИКС СЕЙФ-ФОРМАТА: Защищаем Питона от краша из-за лишних/отсутствующих ключей!
+        # Мы собираем полный защищённый словарь, и .format() подставит только то, что есть в строке!
+        safe_kwargs = {
+            "celebrator_name": celebrator_name,
+            "miss_mr_title": miss_mr_title,
+            "podkrutil_text": podkrutil_text,
+            "podkupil_text": podkupil_text,
+            "narciss_title": narciss_title,
+            "geystvo_title": geystvo_title,
+            "mister_vselennaya": mister_vselennaya,
+            "pobeditel_title": pobeditel_title,
+            "proshel_game": proshel_game,
+            "boss_title": boss_title
+        }
+        
+        # Фильтруем safe_kwargs, оставляя только те ключи, которые РЕАЛЬНО написаны в фигурных скобках этой строки!
+        import re
+        needed_keys = re.findall(r'\{([\w_]+)\}', raw_joke)
+        filtered_kwargs = {k: v for k, v in safe_kwargs.items() if k in needed_keys}
+        
+        formatted_joke = raw_joke.format(**filtered_kwargs)
 
         await context.bot.send_message(
             chat_id=chat_id,
@@ -1413,8 +1447,12 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         is_anniversary = True
          
     if is_anniversary:
-        random_sticker = random.choice(kras_stickers_pool)
-        await context.bot.send_sticker(chat_id=chat_id, sticker=random_sticker)
+        try:
+            random_sticker = random.choice(kras_stickers_pool)
+            await context.bot.send_sticker(chat_id=chat_id, sticker=random_sticker)
+        except Exception:
+            pass
+
 
 
     # ================= 🎲 СВОДКА ПО ДОСТУПНЫМ КУБИКАМ СУДЬБЫ =================
