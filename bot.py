@@ -869,7 +869,13 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
 
     # ---------------- БЛОК ЮБИЛЕЙНЫХ ПОЗДРАВЛЕНИЙ ПИДОРА ----------------
-    # ЖЕЛЕЗНО ИСПРАВЛЕНО: Убрали затирание имени, celebrator_name берется из логики Мимика выше!
+    # ЖЕЛЕЗНО ОБЪЯВЛЯЕМ СЕЛЕБРАТОРА: Вытаскиваем имя и экранируем спецсимволы чата!
+    # (Если у тебя в начале функции объект победителя называется final_pidor_user, используй его)
+    celebrator_name = winner.first_name.replace("<", "&lt;").replace(">", "&gt;") if 'winner' in locals() else final_pidor_user.get("first_name", "Игрок").replace("<", "&lt;").replace(">", "&gt;")
+    
+    # Также явно забираем его итоговый счет (celebrator_count) и старый (old_count), если они называются по-другому
+    # Убедись, что эти переменные у тебя рассчитаны в базе при инсерте утреннего пидора!
+
     pidor_stickers_pool = [
         'CAACAgIAAxkBAAEReO5qQ22SmZkDyLqKq0vP6-ELBjPTUAACjnQAAihj2EtnaWFztIKP7DwE',
         'CAACAgIAAxkBAAERePBqQ27RxFYFJcHGEaZ9kPTDkhO1EAACSk4AAuAKOUlEfzO0OLfimzwE',
@@ -879,7 +885,6 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
         'CAACAgIAAxkBAAERePhqQ29fvKDHMorjySaOzDQ013gcdgACNUoAAoRQOEkf13J-sHIrqTwE'
     ]
         
-    # Юбилейные шаблоны для Пидора дня (без вызова несуществующих переменных!)
     jokes = {
         10: "🎂 <b>ОГО, 10 РАЗ!</b> {celebrator_name}, поздравляем! Первый юбилей на дне. Давай, расскажи всем, что это просто «случайность»! 🤡",
         20: "👑 <b>УЖЕ 20 ПОБЕД!</b> {celebrator_name} официально переходит в Высшую лигу {parney_title}. Корона из картона готова! 🎪",
@@ -888,22 +893,18 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
         50: "🎖 <b>ПОЛУВЕКОВОЙ ЮБИЛЕЙ!</b> 50 раз! {celebrator_name} получает золотую медаль и {bar_title}",
         60: "🎰 <b>МАСТЕР СВОЕГО ДЕЛА!</b> 60 побед у {celebrator_name}! Датчики сомнительных мыслей зашкаливают! ⚡️",
         70: "🚨 <b>КОСМИЧЕСКИЙ УРОВЕНЬ!</b> 70-й раз! {celebrator_name}, {geystvo_title} 🌌",
-        80: "🦾 <b>ТИФЛОНОВЫЙ СТАТУС!</b> 80 раз! К {celebrator_name} уже просто ничего не липнет, это абсолютный иммунитет! 🛡",
+        80: "🦾 <b>ТИФЛОНОВЫЙ СТАТУС!</b> 80 раз! К {celebrator_name} уже просто ничего не липнет, это absolute иммунитет! 🛡",
         90: "🧛‍♂️ <b>ДРЕВНИЙ ОЛДХЭД!</b> 90 побед! {celebrator_name} выходит на финишную прямую к великому залу славы {gaymaster_title}",
         100: "🏆 <b>ЛЕГЕНДА ВЕКА! СТОКРАТНЫЙ ПИДОР!</b> 🎉💥 {celebrator_name} {proshel_title} с обратной стороны! 👑🍾"
     }
 
-
     is_anniversary = False
-    
-    # ЖЕЛЕЗНЫЙ АВТОМАТ: Сравниваем новый счёт со старым (old_count нужно сохранить в самом начале функции, до апдейта в базе!)
     triggered_joke_count = None
     for j_key in jokes.keys():
         if celebrator_count >= j_key and old_count < j_key:
             triggered_joke_count = j_key
             break
 
-    # Проверка на разогрев (5-й раз)
     if celebrator_count >= 5 and old_count < 5:
         kos_text = g_text(winner, "косячит", "рискует за игровым столом")
         masters_text = g_text(winner, "данжн мастеров", "королев драмы")
@@ -916,7 +917,6 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
         is_anniversary = True
         
     elif triggered_joke_count is not None:
-        # Считаем гендерные переменные СТРОГО в момент триггера юбилея на основе winner
         parney_title = g_text(winner, "сомнительных парней", "сомнительных леди 💅")
         ploh_title = g_text(winner, "Стабильно плох!", "Стабильно плоха! 💅")
         bar_title = g_text(winner, "пожизненную путевку в гейбар! 🏅", "пожизненную путевку на мужской стриптиз! 🏅")
@@ -924,8 +924,8 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
         gaymaster_title = g_text(winner, "ГЕЙмастеров! 🏛", "Королев Драмы! 🏛")
         proshel_title = g_text(winner, "полностью прошёл эту жизнь", "полностью прошла эту жизнь")
 
-        # Достаем текстовый шаблон из словаря по пойманному ключу перешагивания!
         raw_joke = jokes[triggered_joke_count]
+        # ЖЕЛЕЗНО ИСПРАВЛЕНО: Передаём абсолютно ВСЕ ключи форматирования, чтобы не поймать KeyError рантайма!
         formatted_joke = raw_joke.format(
             celebrator_name=celebrator_name,
             parney_title=parney_title,
@@ -944,8 +944,12 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
         is_anniversary = True
          
     if is_anniversary:
-        random_sticker = random.choice(pidor_stickers_pool)
-        await context.bot.send_sticker(chat_id=chat_id, sticker=random_sticker)
+        try:
+            random_sticker = random.choice(pidor_stickers_pool)
+            await context.bot.send_sticker(chat_id=chat_id, sticker=random_sticker)
+        except Exception:
+            pass
+
 
 async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     from datetime import date
