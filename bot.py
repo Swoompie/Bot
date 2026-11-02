@@ -3190,10 +3190,7 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         step = 5.0 if dice_value == 3 else (15.0 if dice_value == 2 else 30.0)
         k_minus = 2.0 if dice_value == 3 else (5.0 if dice_value == 2 else 10.0)
         
-        # 📊 ВЫЧИСЛЯЕМ СТАРТОВЫЙ ШАНС ДО БРОСКА КУБИКА ДЛЯ КОСМЕТИЧЕСКОГО ПРОЦЕНТАЖА
         current_p_weight = player.get("pidor_weight", 100.0)
-        old_chance = (current_p_weight / total_p_before * 100) if total_p_before > 0 else 0.0
-
         new_pidor_weight = current_p_weight + step
         new_kras_weight = max(1.0, player["kras_weight"] - k_minus)
         
@@ -3208,30 +3205,24 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "dice_start_balance": saved_balance
         }).eq("user_id", user.id).execute()
         
-        # Считаем новый шанс после броска кубика и находим чистую дельту процентов
-        new_chance_p = (new_pidor_weight / (total_p_before + step) * 100) if (total_p_before + step) > 0 else 0.0
-        chance_delta_p = max(0.1, new_chance_p - old_chance)
-
         charm_title = g_text(player, "личный шарм заметно просел", "женское обаяние слегка пошатнулось 💔")
 
         if dice_value == 1:
-            power_text = f"💥 <b>КРИТИЧЕСКИЙ УДАР ПО СТАВКАМ!</b> 💥 Твоя вероятность забрать позорное клеймо в <code>/procents</code> резко подскочила сразу на <b>+{chance_delta_p:.1f}%</b>, а шансы на корону Красавчика крупно скользнули вниз!"
+            power_text = "💥 <b>КРИТИЧЕСКИЙ УДАР ПО СТАВКАМ!</b> 💥 Твоя вероятность забрать позорное клеймо заметно увеличилась, а шансы на корону Красавчика крупно скользнули вниз!"
         elif dice_value == 2:
-            power_text = f"ощутимый заплыв в сомнительную сторону. Твои риски на Пидора дня увеличились на <b>+{chance_delta_p:.1f}%</b>, а {charm_title}."
+            power_text = f"ощутимый заплыв в сомнительную сторону. Твои риски на Пидора дня увеличились, а {charm_title}."
         else:
-            power_text = f"микро-осечка за игровым столом. Твой риск утреннего клейма скорректировался вверх на <b>+{chance_delta_p:.1f}%</b>, фортуна выражает недовольство."
+            power_text = "микро-осечка за игровым столом. Косметический сдвиг: шансы на Пидора лишь слегка скорректировались вверх, фортуна выражает недовольство."
 
         intro_text = f"🎲 На кубике выпадает: <b>{dice_value}</b>!\n\n🤡 <b>ФОРТУНА ОТВЕРНУЛАСЬ!</b> <b>{safe_name}</b>, это {power_text}"
+
     else:
         # ======= 😎 ВЕТКА УДАЧИ (4, 5, 6) =======
         # ШАГ СБАЛАНСИРОВАН: Грань 4 -> +5, Грань 5 -> +15, Грань 6 -> +30 к чемпионскому весу!
         step = 5.0 if dice_value == 4 else (15.0 if dice_value == 5 else 30.0)
         p_minus = 2.0 if dice_value == 4 else (5.0 if dice_value == 5 else 10.0)
         
-        # 📊 ВЫЧИСЛЯЕМ СТАРТОВЫЙ ЧЕМПИОНСКИЙ ШАНС ДО БРОСКА ДЛЯ КОСМЕТИЧЕСКОГО ПРОЦЕНТАЖА
         current_k_weight = player.get("kras_weight", 100.0)
-        old_chance_k = (current_k_weight / total_k_before * 100) if total_k_before > 0 else 0.0
-
         new_kras_weight = current_k_weight + step
         new_pidor_weight = max(1.0, player["pidor_weight"] - p_minus)
         
@@ -3246,19 +3237,15 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "dice_start_balance": saved_balance
         }).eq("user_id", user.id).execute()
         
-        # Считаем новый шанс на победу и находим чистую дельту прироста крутости
-        new_chance_k = (new_kras_weight / (total_k_before + step) * 100) if (total_k_before + step) > 0 else 0.0
-        chance_delta_k = max(0.1, new_chance_k - old_chance_k)
-
         charm_gain = g_text(player, "мощный прилив шарма", "мощный прилив обаяния ✨")
         pobeda_word = g_text(player, "на победу", "на корону Красавицы")
 
         if dice_value == 6:
-            power_text = f"👑 <b>АБСОЛЮТНЫЙ УЛЬТРА-ДЖЕКПОТ КАЗИНО!</b> 👑 Твои показатели привлекательности за столом засияли ослепительным блеском, а шансы на триумф в <code>/procents</code> взлетели ракетой сразу на <b>+{chance_delta_k:.1f}%</b>!"
+            power_text = "👑 <b>АБСОЛЮТНЫЙ УЛЬТРА-ДЖЕКПОТ КАЗИНО!</b> 👑 Твои показатели привлекательности за столом засияли ослепительным блеском, а шансы на триумф уверенно взлетели ракетой вверх!"
         elif dice_value == 5:
-            power_text = f"{charm_gain}! Проценты {pobeda_word} уверенно поползли вверх сразу на <b>+{chance_delta_k:.1f}%</b>, а вероятность поймать утренний позор тает на глазах."
+            power_text = f"{charm_gain}! Проценты {pobeda_word} уверенно поползли вверх, а вероятность поймать утренний позор тает на глазах."
         else:
-            power_text = f"скромный, но верный шаг к успеху за игровым столом. Подбавил крутости в статус, подняв шансы на Корону на <b>+{chance_delta_k:.1f}%</b>!"
+            power_text = "скромный, но верный шаг к успеху за игровым столом. Немного подбавил крутости в статус, риски позора символически снижены."
 
         intro_text = f"🎲 На кубике выпадает: <b>{dice_value}</b>!\n\n😎 <b>ФОРТУНА УЛЫБАЕТСЯ ТЕБЕ!</b> <b>{safe_name}</b>, это {power_text}"
 
