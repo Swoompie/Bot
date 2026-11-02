@@ -2844,13 +2844,15 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         else:
             if is_retry_attempt:
-                # Математика веса внутри бота (фиксированные +5.0 веса за ретрай)
-                new_p_weight = current_p_weight + 5.0
-
+                # Вытаскиваем текущий позорный вес Стрелочника до промаха карты
+                current_p_weight = player.get("pidor_weight", 100.0)
+                
                 # Косметический расчёт дельты процентов на лету силами Питона
+                new_p_weight = current_p_weight + 5.0  # Локально накидываем +5 за тотал-неудачника
                 new_chance = (new_p_weight / (total_p_before + 5.0) * 100) if (total_p_before + 5.0) > 0 else 0.0
                 chance_delta = max(0.1, new_chance - old_chance)
 
+                # За провал ретрая строго +2 пидора в досье
                 supabase.table("users").update({
                     "last_switch_date": str(today), 
                     "pidor_count": fresh_pidor_count + 2,
@@ -2858,14 +2860,16 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 }).eq("user_id", user.id).execute()
                 context.user_data.pop("switch_retry", None)
 
+                # ЖЕЛЕЗНО ЗАКРЫЛИ БЛОК ТРАНЗАКЦИИ ЛОГОВ: Никаких битых try!
                 try:
                     supabase.table("uno_logs").insert({
                         "game_date": str(date.today()),
                         "sender_name": user.first_name,
                         "victim_name": victim["first_name"],
-                        "multiplier": 0,  
+                        "multiplier": 0,  # Записали 0, база пропустит со свистом!
                         "is_krasavchik": False
                     }).execute()
+                    print("🎰 [БАЗА]: Лог провала ретрая успешно записан.")
                 except Exception as e_log:
                     print(f"Ошибка сохранения уно-лога провала ретрая: {e_log}")
 
@@ -2875,14 +2879,14 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     chat_id=chat_id,
                     text=f"💀 <b>ПОЛНОЕ ФИАСКО, {streloch_title}!</b> Второй шанс тоже провален! 💀\n\n"
                          f"Твоя карта UNO превратилась в пепел. На твой счёт капает <b>+2 пидора</b> в статистику!\n"
-                         f"📈 Риск утреннего клейма для тебя символически подрос на <b>+{chance_delta:.1f}%</b>, а Кулдаун 6 дней взведён! 🤡",
+                         f"📈 Риск утреннего клейма для тебя подрос на <b>+{chance_delta:.1f}%</b>, а Кулдаун 6 дней взведён! 🤡",
                     parse_mode="HTML"
                 )
                 try:
                     await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERg9tqT2Lb7EssiCPdH7XeEz1W5sbVswAC6S8AApkAAYhJDcx-Vp6-Sco8BA')
                 except Exception:
                     pass
-                return  
+                return  # ЖЕСТКИЙ ВЫХОД ИЗ ФУНКЦИИ
 
             else:
                 # Первый провал на мирного — крутим скрытые 5% на "Второй Шанс"
