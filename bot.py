@@ -294,10 +294,13 @@ def redistribute_weights(winner_id, weight_column):
         # Обновляем веса текущего юзера в Supabase
         supabase.table("users").update({weight_column: new_weight}).eq("user_id", user["user_id"]).execute()
     
-    # === 📅 ЕЖЕНЕДЕЛЬНЫЙ АВТОСБРОС ЗАВИСШИХ ДУЭЛЕЙ ПО ПОНЕДЕЛЬНИКАМ ===
-    # weekday() == 0 — это строго понедельник. Сжигаем несыгранные перчатки.
+    # === 📅 ЕЖЕНЕДЕЛЬНЫЙ АВТОСБРОС ЗАВИСШИХ ДУЭЛЕЙ И КУБИКОВ ПО ПОНЕДЕЛЬНИКАМ ===
+    # weekday() == 0 — это строго понедельник. Сжигаем несыгранные перчатки и обнуляем балансы кубиков!
     if date.today().weekday() == 0:
-        supabase.table("users").update({"duel_target_id": None}).neq("user_id", 0).execute()
+        supabase.table("users").update({
+            "duel_target_id": None,
+            "dice_start_balance": 0.0  # Сжигаем старые хвосты кубиков в базе
+        }).neq("user_id", 0).execute()
 
 # ---------------- КОМАНДЫ ----------------
 
@@ -312,16 +315,17 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         " ├ <code>/pidor</code> — Найти Пидора дня 🤡\n"
         " ├ <code>/run</code> — Найти Красавчика дня 😎\n"
         " ├ <code>/stats</code> — Посмотреть общую статистику побед 📊\n"
-        " ├ <code>/procents</code> — Узнать свои шансы на победу 🎯\n"
+        " ├ <code>/procents</code> — Узнать свои шансы на победу (и тренды на завтра!) 🎯\n"
         " └ <code>/records</code> — Узнать лидеров чата 👀\n\n"
 
         "⚔️ <b>ЛИГА ДУЭЛЕЙ И АЗАРТНЫЙ РАНДОМ</b>\n"
         " ├ <code>/duel @username</code> — Устроить перестрелку в обойме на 6 патронов за игровой стол 🔫\n"
-        " └ <code>/dice</code> — Кинуть кубик кармы (2 в неделю), но надо быть осторожным, возможны аномальные колебания процентов 🎲📉\n\n"
+        " └ <code>/dice</code> — Кинуть кубик кармы (2 в неделю) с динамическим расчётом процентов 🎲📉\n\n"
 
-        "🃏 <b>ТАКТИЧЕСКИЕ КАРТЫ (Перехват инициативы)</b>\n"
+        "🃏 <b>ТАКТИЧЕСКИЕ КАРТЫ (Перехват инициативы и крик души)</b>\n"
         " ├ <code>/switch @username</code> — Использовать карту UNO и перевести от себя пидора (КД 6 дней) 🃏⚡️\n"
-        " ├ <code>/mimic @username</code> — Mimic-протокол: мимикрировать под другого игрока с удвоением статуса (КД 14 дней) 🎭\n"
+        " ├ <code>/mimic @username</code> — Мимикрировать под другого игрока ДО начала рулеток (КД 14 дней) 🎭\n"
+        " ├ <code>/pizdec</code> — 🌋 Протокол тотального негодования: разбор твоих позоров, паршивых костей и UNO-осечек за день! 💥\n"
         " ├ <code>/mystats</code> — Узнать свою личную статистику и карту UNO 📊\n"
         " └ <code>/unostats</code> — Узнать свои архивные переводы карты UNO 📜\n\n"
 
@@ -338,11 +342,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "<i>Все ставки сделаны, фортуна начинает свой ход... 🍸🎰</i>"
     )
     
-    await context.bot.send_message(
-        chat_id=chat_id,
-        text=help_text,
-        parse_mode="HTML"
-    )
+    await context.bot.send_message(chat_id=chat_id, text=help_text, parse_mode="HTML")
+
 
 
 async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
