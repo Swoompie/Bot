@@ -305,8 +305,17 @@ def redistribute_weights(winner_id, weight_column):
 # ---------------- КОМАНДЫ ----------------
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # === 🛡️ УЛЬТИМАТИВНЫЙ АНТИ-РЕПЛАЙ ЩИТ HELP: АВТО-РЕГИСТР И РУСИФИКАЦИЯ ===
+    if update.message and update.message.text:
+        # Переводим текст в нижний регистр и очищаем пробелы
+        raw_text = update.message.text.strip().lower()
+        
+        # Разрешаем /help и /помощь на любом языке и в любом регистре!
+        if not (raw_text.startswith("/help") or raw_text.startswith("/помощь")):
+            return
+
     chat_id = update.effective_chat.id
-    
+
     help_text = (
         "🎰 <b>ДОБРО ПОЖАЛОВАТЬ В ИГРОВОЙ ЗАЛ КАЗИНО!</b> 🎰\n"
         "<i>Крупье приветствует участников за столом. Текущие протоколы:</i>\n\n"
@@ -347,9 +356,18 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_chat.id  #ФИКС БАГА: Объявили переменную!
+    # === 🛡️ УЛЬТИМАТИВНЫЙ АНТИ-РЕПЛАЙ ЩИТ REGISTER: АВТО-РЕГИСТР И РУСИФИКАЦИЯ ===
+    if update.message and update.message.text:
+        # Переводим текст в нижний регистр и очищаем пробелы
+        raw_text = update.message.text.strip().lower()
+        
+        # Разрешаем /register и /регистрация на любом языке и в любом регистре!
+        if not (raw_text.startswith("/register") or raw_text.startswith("/регистрация")):
+            return
+
+    chat_id = update.effective_chat.id  # ФИКС БАГА: Объявили переменную!
     user = update.effective_user
-    
+
     # 1. Проверяем, был ли пользователь вообще когда-то в базе
     res = supabase.table("users").select("*").eq("user_id", user.id).execute()
 
@@ -406,9 +424,19 @@ async def register(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_sticker(sticker='CAACAgIAAxkBAAERfsVqSV-02VP19CvVOwAB7so57DV18eIAAtAeAALu9ShIWVtSKDbs0pY8BA')
 
 async def unreg(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # === 🛡️ УЛЬТИМАТИВНЫЙ АНТИ-РЕПЛАЙ ЩИТ UNREG: АВТО-РЕГИСТР И РУСИФИКАЦИЯ ===
+    if update.message and update.message.text:
+        # Переводим текст в нижний регистр и очищаем пробелы
+        raw_text = update.message.text.strip().lower()
+        
+        # Разрешаем /unreg, /ливнуть и /выход на любом языке и в любом регистре!
+        valid_commands = ["/unreg", "/ливнуть", "/выход"]
+        if not any(raw_text.startswith(cmd) for cmd in valid_commands):
+            return
+
     chat_id = update.effective_chat.id
     user = update.effective_user
-    
+
     # Запрашиваем профиль игрока из базы
     user_db_res = supabase.table("users").select("is_active", "status_wait").eq("user_id", user.id).execute()
     
@@ -544,9 +572,18 @@ async def reset_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_sticker(sticker='CAACAgQAAxkBAAEReRBqQ3htVR15fuIwV3C_4QUWL8_xxQACbhwAAltJOVMTctyzCRD65jwE')
 
 async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # === 🛡️ УЛЬТИМАТИВНЫЙ АНТИ-РЕПЛАЙ ЩИТ PIDOR: АВТО-РЕГИСТР И РУСИФИКАЦИЯ ===
+    if update.message and update.message.text:
+        # Переводим текст в нижний регистр и очищаем пробелы
+        raw_text = update.message.text.strip().lower()
+        
+        # Разрешаем /pidor и /пидор на любом языке и в любом регистре!
+        if not (raw_text.startswith("/pidor") or raw_text.startswith("/пидор")):
+            return
+
     today = date.today()
-    user = update.effective_user  # ЖЕЛЕЗНЫЙ ФИКС: Вытащили профиль нажавшего!
-    
+    user = update.effective_user  # ЖЕЛЕЗНО ИСПРАВЛЕНО: Вытащили профиль нажавшего!
+
     # === 🛡️ ТИТАНОВЫЙ АВТО-ОБНОВИТЕЛЬ ТЕГОВ КАЗИНО: ЗАЩИТА ОТ СМЕНЫ НИКНЕЙМОВ ===
     # Как только игрок жмёт кнопку, база на лету освежает его актуальный тег и имя!
     if user and user.username:
@@ -959,12 +996,23 @@ async def pidor(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
 
 async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # === 🛡️ УЛЬТИМАТИВНЫЙ АНТИ-РЕПЛАЙ ЩИТ RUN: АВТО-РЕГИСТР И РУСИФИКАЦИЯ ===
+    if update.message and update.message.text:
+        # Переводим текст в нижний регистр и очищаем пробелы
+        raw_text = update.message.text.strip().lower()
+        
+        # Разрешаем /run, /красавчик и /ран на любом языке и в любом регистре!
+        valid_commands = ["/run", "/красавчик", "/ран"]
+        if not any(raw_text.startswith(cmd) for cmd in valid_commands):
+            return
+
     from datetime import date
     game_today = date.today()
 
     # === 🛡️ [ЗАКОН КАЗИНО]: ЗАПРЕТ НА КРАСАВЧИКА БЕЗ ПИДОРА ===
     # Проверяем, был ли уже выбран Пидор дня за сегодня
     pidor_already_chosen = get_today_winner("pidor")
+
     
     if not pidor_already_chosen:
         # 1. Сначала отправляем HTML-текст отказа
@@ -1515,11 +1563,21 @@ async def run_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.application.create_task(silent_backup(context))
 
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # === 🛡️ УЛЬТИМАТИВНЫЙ АНТИ-РЕПЛАЙ ЩИТ STATS: АВТО-РЕГИСТР И РУСИФИКАЦИЯ ===
+    if update.message and update.message.text:
+        # Переводим текст в нижний регистр и очищаем пробелы
+        raw_text = update.message.text.strip().lower()
+        
+        # Разрешаем /stats, /статистика и /стата на любом языке и в любом регистре!
+        valid_commands = ["/stats", "/статистика", "/стата"]
+        if not any(raw_text.startswith(cmd) for cmd in valid_commands):
+            return
+
     chat_id = update.effective_chat.id
     # ИСПРАВЛЕНО: Вытаскиваем всех и берем строго активных участников
     all_users = get_users()
     users = [u for u in all_users if u.get("is_active", True)]
-    
+
     if not users:
         # ЖЕЛЕЗНО ИСПРАВЛЕНО: Перевели отлуп на HTML и прямой send_message по chat_id
         await context.bot.send_message(
@@ -1567,6 +1625,16 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print(f"Ошибка вывода общей статистики stats: {e}")
 
 async def procents_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # === 🛡️ УЛЬТИМАТИВНЫЙ АНТИ-РЕПЛАЙ ЩИТ PROCENTS: АВТО-РЕГИСТР И РУСИФИКАЦИЯ ===
+    if update.message and update.message.text:
+        # Переводим текст в нижний регистр и очищаем пробелы
+        raw_text = update.message.text.strip().lower()
+        
+        # Разрешаем /procents, /проценты и /шансы на любом языке и в любом регистре!
+        valid_commands = ["/procents", "/проценты", "/шансы"]
+        if not any(raw_text.startswith(cmd) for cmd in valid_commands):
+            return
+
     chat_id = update.effective_chat.id
     all_users = get_users()
     active_users = [u for u in all_users if u.get("is_active", True)]
@@ -1727,11 +1795,20 @@ async def procents_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=chat_id, text=response, parse_mode="HTML")
 
 async def records(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # === 🛡️ УЛЬТИМАТИВНЫЙ АНТИ-РЕПЛАЙ ЩИТ RECORDS: АВТО-РЕГИСТР И РУСИФИКАЦИЯ ===
+    if update.message and update.message.text:
+        # Переводим текст в нижний регистр и очищаем пробелы
+        raw_text = update.message.text.strip().lower()
+        
+        # Разрешаем /records и /рекорды на любом языке и в любом регистре!
+        if not (raw_text.startswith("/records") or raw_text.startswith("/рекорды")):
+            return
+
     chat_id = update.effective_chat.id
     # ИСПРАВЛЕНО: Вытаскиваем всех и ищем чемпиона СТРОГО среди активных участников
     all_users = get_users()
     users = [u for u in all_users if u.get("is_active", True)]
-    
+
     if not users:
         # ЖЕЛЕЗНО ИСПРАВЛЕНО: Заменили на send_message по HTML
         await context.bot.send_message(
@@ -1786,9 +1863,14 @@ async def records(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print(f"Ошибка вывода абсолютного лидера records: {e}")
 
 async def mimic(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # === 🛡️ ЖЕЛЕЗНЫЙ АНТИ-РЕПЛАЙ ЩИТ КАЗИНО: ЗАЩИТА ОТ ФАНТОМНЫХ ТЕГОВ ===
+    # === 🛡️ УЛЬТИМАТИВНЫЙ АНТИ-РЕПЛАЙ ЩИТ MIMIC: АВТО-РЕГИСТР И РУСИФИКАЦИЯ ===
     if update.message and update.message.text:
-        if not update.message.text.strip().startswith("/mimic"):
+        # Переводим текст в нижний регистр и очищаем пробелы
+        raw_text = update.message.text.strip().lower()
+        
+        # Разрешаем /mimic, /мимик и /мимикрировать на любом языке и в любом регистре!
+        valid_commands = ["/mimic", "/мимик", "/мимикрировать"]
+        if not any(raw_text.startswith(cmd) for cmd in valid_commands):
             return
 
     user = update.effective_user
@@ -1973,9 +2055,13 @@ async def mimic(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERl5RqYy9g5SuIKeL-HYdt9H78f80S9wACGTkAAnsn4UlP1wuYX7Od8j0E')
 
 async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # === 🛡️ ЖЕЛЕЗНЫЙ АНТИ-РЕПЛАЙ ЩИТ КАЗИНО: ЗАЩИТА ОТ ФАНТАНМНЫХ ТЕГОВ ===
+    # === 🛡️ УЛЬТИМАТИВНЫЙ АНТИ-РЕПЛАЙ ЩИТ С АВТО-РЕГИСТРОМ И РУСИФИКАЦИЕЙ ===
     if update.message and update.message.text:
-        if not update.message.text.strip().startswith("/duel"):
+        # Переводим текст в нижний регистр и очищаем пробелы
+        raw_text = update.message.text.strip().lower()
+        
+        # Чекаем, начинается ли сообщение с легитимного вызова дуэли на любом языке и в любом регистре!
+        if not (raw_text.startswith("/duel") or raw_text.startswith("/дуэль")):
             return
 
     user = update.effective_user
@@ -2292,10 +2378,16 @@ async def duel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERnnhqaMio_yi6YSjV0Ysi5q16lPq1ogAC9xIAAvmEAUtGFDZQ8K2jFj0E')
     
 async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # === 🛡️ ЖЕЛЕЗНЫЙ АНТИ-РЕПЛАЙ ЩИТ КАЗИНО: ЗАЩИТА ОТ ФАНТОМНЫХ ТЕГОВ ===
+    # === 🛡️ УЛЬТИМАТИВНЫЙ АНТИ-РЕПЛАЙ ЩИТ UNO: АВТО-РЕГИСТР И РУСИФИКАЦИЕЙ ===
     if update.message and update.message.text:
-        if not update.message.text.strip().startswith("/switch"):
-            return # Если сообщение просто содержит тег, но не начинается с команды — тихо игнорируем!
+        # Переводим текст в нижний регистр и очищаем пробелы
+        raw_text = update.message.text.strip().lower()
+        
+        # Разрешаем /switch, /uno, /уно на любом языке и в любом регистре!
+        valid_commands = ["/switch", "/uno", "/уно"]
+        if not any(raw_text.startswith(cmd) for cmd in valid_commands):
+            return # Если сообщение просто содержит тег, но не начинается с легитимной команды — тихо игнорируем!
+
 
     # === 🕵️‍♂️ [ФИКС] ВЫТАСКИВАЕМ СТРЕЛОЧНИКА ДЛЯ ГЕНДЕРНОГО АВТОМАТА ===
     user = update.effective_user
@@ -2990,10 +3082,20 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     return
 
 async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # === 🛡️ УЛЬТИМАТИВНЫЙ АНТИ-РЕПЛАЙ ЩИТ MY_STATS: АВТО-РЕГИСТР И РУСИФИКАЦИЯ ===
+    if update.message and update.message.text:
+        # Переводим текст в нижний регистр и очищаем пробелы
+        raw_text = update.message.text.strip().lower()
+        
+        # Разрешаем /mystats, /моястатистика и /моястата на любом языке и в любом регистре!
+        valid_commands = ["/mystats", "/моястатистика", "/моястата"]
+        if not any(raw_text.startswith(cmd) for cmd in valid_commands):
+            return
+
     user = update.effective_user
     chat_id = update.effective_chat.id
     today = date.today()
-    
+
     # === 🛡️ ТИТАНОВЫЙ АВТО-ОБНОВИТЕЛЬ ТЕГОВ КАЗИНО: ЗАЩИТА ОТ СМЕНЫ НИКНЕЙМОВ ===
     # Как только игрок запрашивает досье, база на лету освежает его актуальный тег и имя!
     if user and user.username:
@@ -3139,7 +3241,17 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # === 🛡️ ТИТАНОВЫЙ АВТОМАТ-ЩИТ: УНИЧТОЖАЕМ NAMEERROR НА КОРНЮ ===
     today_kras_dice = None
     today_pidor_dice = None
-    
+
+    # === 🛡️ УЛЬТИМАТИВНЫЙ АНТИ-РЕПЛАЙ ЩИТ DICE: АВТО-РЕГИСТР И РУСИФИКАЦИЯ ===
+    if update.message and update.message.text:
+        # Переводим текст в нижний регистр и очищаем пробелы
+        raw_text = update.message.text.strip().lower()
+        
+        # Разрешаем /dice, /кубик, /куб на любом языке и в любом регистре!
+        valid_commands = ["/dice", "/кубик", "/куб"]
+        if not any(raw_text.startswith(cmd) for cmd in valid_commands):
+            return
+            
     chat_id = update.effective_chat.id
     user = update.effective_user
     today = date.today()
@@ -3455,9 +3567,19 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     print(f"Ошибка вывода недельных итогов кубиков: {e}")
 
 async def uno_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # === 🛡️ УЛЬТИМАТИВНЫЙ АНТИ-РЕПЛАЙ ЩИТ UNO_STATS: АВТО-РЕГИСТР И РУСИФИКАЦИЯ ===
+    if update.message and update.message.text:
+        # Переводим текст в нижний регистр и очищаем пробелы
+        raw_text = update.message.text.strip().lower()
+        
+        # Разрешаем /unostats и /статауно на любом языке и в любом регистре!
+        valid_commands = ["/unostats", "/статауно"]
+        if not any(raw_text.startswith(cmd) for cmd in valid_commands):
+            return
+
     chat_id = update.effective_chat.id
     user = update.effective_user
-    
+
     # 1. ЖЕЛЕЗНЫЙ ВЕРНЫЙ ЗАПРОС: Вытаскиваем только успешные переводы (multiplier > 0)
     # Сортируем по id от свежих к старым сразу в базе!
     res = supabase.table("uno_logs").select("*").eq("sender_name", user.first_name).gt("multiplier", 0).order("id", desc=True).execute()
@@ -3559,6 +3681,12 @@ async def uno_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def set_gender_boy(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # === 🛡️ УЛЬТИМАТИВНЫЙ АНТИ-РЕПЛАЙ ЩИТ: АВТО-РЕГИСТР И РУСИФИКАЦИЯ ===
+    if update.message and update.message.text:
+        raw_text = update.message.text.strip().lower()
+        if not (raw_text.startswith("/boy") or raw_text.startswith("/парень")):
+            return
+
     chat_id = update.effective_chat.id
     user = update.effective_user
     supabase.table("users").update({"gender": "boy"}).eq("user_id", user.id).execute()
@@ -3569,6 +3697,12 @@ async def set_gender_boy(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def set_gender_girl(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # === 🛡️ УЛЬТИМАТИВНЫЙ АНТИ-РЕПЛАЙ ЩИТ: АВТО-РЕГИСТР И РУСИФИКАЦИЯ ===
+    if update.message and update.message.text:
+        raw_text = update.message.text.strip().lower()
+        if not (raw_text.startswith("/girl") or raw_text.startswith("/девушка")):
+            return
+
     chat_id = update.effective_chat.id
     user = update.effective_user
     supabase.table("users").update({"gender": "girl"}).eq("user_id", user.id).execute()
@@ -3686,10 +3820,20 @@ async def command_sosamba(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await context.bot.send_message(chat_id=chat_id, text=f"🤡 <b>{safe_name}</b> сокрушённо констатирует факт своего фиаско:\n\n👀 <i>{g_text(player, msg_boy, msg_girl)}</i>", parse_mode="HTML")
 
 async def pizdec_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # === 🛡️ УЛЬТИМАТИВНЫЙ АНТИ-РЕПЛАЙ ЩИТ PIZDEC: АВТО-РЕГИСТР И РУСИФИКАЦИЯ ===
+    if update.message and update.message.text:
+        # Переводим текст в нижний регистр и очищаем пробелы
+        raw_text = update.message.text.strip().lower()
+        
+        # Разрешаем /pizdec и /пиздец на любом языке и в любом регистре!
+        if not (raw_text.startswith("/pizdec") or raw_text.startswith("/пиздец")):
+            return
+
     chat_id = update.effective_chat.id
     user = update.effective_user
     today = date.today()
     today_str = str(today)
+
 
     if update.effective_chat.type == "private":
         await context.bot.send_message(chat_id=chat_id, text="❌ Протокол тотального пиздеца активируется только при свидетелях в групповом чате!")
