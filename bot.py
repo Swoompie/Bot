@@ -3331,6 +3331,7 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # =====================================================================
     # 📊 МАТЕМАТИКА 2: Пересчитываем точные суммы чата ПОСЛЕ броска кубика
     # =====================================================================
+    # Пересчитываем новые глобальные знаменатели весов с учётом изменившегося веса игрока
     if dice_value <= 3:
         real_kras_delta = player.get("kras_weight", 100.0) - new_kras_weight
         total_p_after = total_p_before + step
@@ -3340,7 +3341,7 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         total_k_after = total_k_before + step
         total_p_after = total_p_before - real_pidor_delta
 
-    # Финальный шанс Пидора на завтра
+    # Финальный шанс Пидора на завтра (Чистый расчёт от живого пула весов!)
     new_p_chance = (new_pidor_weight / total_p_after * 100) if total_p_after > 0 else 0.0
 
     # Финальный шанс Красавчика на завтра по формуле Ромы-Монте-Карло
