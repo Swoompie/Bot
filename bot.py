@@ -3221,22 +3221,30 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     prev_balance = player.get("dice_start_balance", 0.0) if player.get("dice_start_balance") is not None else 0.0
 
     # =====================================================================
-    # 📊 МАТЕМАТИКА 1: Считаем ЧЕСТНЫЕ проценты ДО броска (ЖЕСТКИЙ ФИКС ТИПОВ)
+    # 📊 МАТЕМАТИКА 1: Считаем ЧЕСТНЫЕ проценты ДО броска (МОНТЕ-КАРЛО НА ЗАВТРА)
     # =====================================================================
     all_users_before = get_users()
     active_users_before = [u for u in all_users_before if u.get("is_active", True)]
     
-    # Чистая сумма ВСЕХ живых весов в чате с принудительным приведением к float()
+    # Принудительное приведение типов к float, чтобы исключить зануления
     total_p_before = sum(float(u.get("pidor_weight", 100.0) or 100.0) for u in active_users_before)
     total_k_before = sum(float(u.get("kras_weight", 100.0) or 100.0) for u in active_users_before)
     
-    # Жестко вытаскиваем личные веса игрока как чистые числа, чтобы уничтожить фантомные нули!
     my_old_p_weight = float(player.get("pidor_weight", 100.0) or 100.0)
     my_old_k_weight = float(player.get("kras_weight", 100.0) or 100.0)
 
-    # Кристально честная стартовая доля веса ковбоя в общем банке чата
+    # 🤡 Шанс Пидора (Чистая линейная доля)
     old_p_chance = (my_old_p_weight / total_p_before * 100) if total_p_before > 0 else 0.0
-    old_k_chance = (my_old_k_weight / total_k_before * 100) if total_k_before > 0 else 0.0
+
+    # 👑 Шанс Красавчика СТРОГО ПО ФОРМУЛЕ РОМЫ-МОНТЕ-КАРЛО (Синхрон с /procents!)
+    N_kras_dice = len(active_users_before)
+    m_dice, q_dice = 0.30, 0.50
+    p_i_before = my_old_k_weight / total_k_before if total_k_before > 0 else 0.0
+    
+    if N_kras_dice > 1:
+        old_k_chance = ((1 - m_dice) * p_i_before + m_dice * (q_dice * p_i_before + ((1 - p_i_before) / (N_kras_dice - 1)) * q_dice)) * 100
+    else:
+        old_k_chance = p_i_before * 100
 
     # === 🎲 [БАЛАНСИРОВАННАЯ КАРМА]: КУБИКИ СУДЬБЫ (МАКСИМУМ 30.0) ===
     if dice_value <= 3:
@@ -3307,19 +3315,24 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # =====================================================================
     # 📊 МАТЕМАТИКА 2: Пересчитываем точные суммы чата ПОСЛЕ броска кубика
     # =====================================================================
-    # Вычисляем новые глобальные знаменатели весов чата после сдвига
     if dice_value <= 3:
-        real_kras_delta = player.get("kras_weight", 100.0) - new_kras_weight
+        real_kras_delta = float(player.get("kras_weight", 100.0) or 100.0) - new_kras_weight
         total_p_after = total_p_before + step
         total_k_after = total_k_before - real_kras_delta
     else:
-        real_pidor_delta = player.get("pidor_weight", 100.0) - new_pidor_weight
+        real_pidor_delta = float(player.get("pidor_weight", 100.0) or 100.0) - new_pidor_weight
         total_k_after = total_k_before + step
         total_p_after = total_p_before - real_pidor_delta
 
-    # Финальные шансы на завтра (Чистая доля от нового живого пула весов!)
+    # Финальный шанс Пидора на завтра
     new_p_chance = (new_pidor_weight / total_p_after * 100) if total_p_after > 0 else 0.0
-    new_k_chance = (new_kras_weight / total_k_after * 100) if total_k_after > 0 else 0.0
+
+    # Финальный шанс Красавчика на завтра СТРОГО ПО ФОРМУЛЕ РОМЫ-МОНТЕ-КАРЛО!
+    p_i_after = new_kras_weight / total_k_after if total_k_after > 0 else 0.0
+    if N_kras_dice > 1:
+        new_k_chance = ((1 - m_dice) * p_i_after + m_dice * (q_dice * p_i_after + ((1 - p_i_after) / (N_kras_dice - 1)) * q_dice)) * 100
+    else:
+        new_k_chance = p_i_after * 100
 
     # --- 🚨 ПЕРЕХВАТ ДУБЛЕЙ (ЖЕЛЕЗНО ПЕРЕПИСАЛИ ПОД ПРОЦЕНТНЫЙ) ---
     if current_attempts == 1 and prev_balance == -40.0 and dice_value == 1:
