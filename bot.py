@@ -3347,9 +3347,9 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Финальный шанс Красавчика на завтра по формуле Ромы-Монте-Карло
     p_i_after = new_kras_weight / total_k_after if total_k_after > 0 else 0.0
     if N_kras_before > 1:
-        new_k_chance = ((1 - m_dice) * p_i_after + m_dice * (q_dice * p_i_after + ((1 - p_i_after) / (N_kras_before - 1)) * q_dice)) * 100
+        new_kras_chance = ((1 - m_dice) * p_i_after + m_dice * (q_dice * p_i_after + ((1 - p_i_after) / (N_kras_before - 1)) * q_dice)) * 100
     else:
-        new_k_chance = p_i_after * 100
+        new_kras_chance = p_i_after * 100
             
     # Приравниваем к переменной вывода дублей, чтобы не ломать нижний текст шаблонов
     new_k_chance = new_kras_chance
