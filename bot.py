@@ -3219,8 +3219,13 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # =====================================================================
     # 📊 МАТЕМАТИКА 1: Считаем СТАРЫЕ проценты ДО броска (СТРОГО ТРЕНД НА ЗАВТРА)
     # =====================================================================
+    # АВАРИЙНЫЙ ЩИТ: Объявляем переменную.
+    today_kras_dice = None
+    today_pidor_dice = None
+    
     all_users_before = get_users()
     active_users_before = [u for u in all_users_before if u.get("is_active", True)]
+
     
     m_dice, q_dice = 0.30, 0.50
 
