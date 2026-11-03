@@ -3136,10 +3136,14 @@ async def my_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print(f"Ошибка вывода досье mystats: {e}")
 
 async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    chat_id = update.effective_chat.id
-    today = date.today()
+    # === 🛡️ ТИТАНОВЫЙ АВТОМАТ-ЩИТ: УНИЧТОЖАЕМ NAMEERROR НА КОРНЮ ===
+    today_kras_dice = None
+    today_pidor_dice = None
     
+    chat_id = update.effective_chat.id
+    user = update.effective_user
+    today = date.today()
+
     # Получаем чистый номер текущей недели в году
     current_week_num = today.isocalendar()[1]
 
