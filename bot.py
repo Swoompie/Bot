@@ -4023,31 +4023,35 @@ async def main():
     # Привязываем мидлварь к рождённому приложению в приоритетную группу -1!
     app.add_handler(TypeHandler(Update, global_anti_spam_middleware), group=-1)
         
-    # Все команды теперь реагируют СТРОГО на живой пользовательский текст!
-    app.add_handler(CommandHandler("start", help_command, filters=filters.TEXT))
-    app.add_handler(CommandHandler("help", help_command, filters=filters.TEXT))
-    app.add_handler(CommandHandler("register", register, filters=filters.TEXT))
-    app.add_handler(CommandHandler("unreg", unreg, filters=filters.TEXT))
+    # === 🎰 РЕГИСТРАЦИЯ ВСЕЯДНЫХ ХЭНДЛЕРОВ КАЗИНО (МНОЖЕСТВЕННЫЕ ВЫЗОВЫ С ФИЛЬТРАМИ) ===
+    app.add_handler(CommandHandler(["start", "help", "помощь"], help_command, filters=filters.TEXT))
+    app.add_handler(CommandHandler(["register", "регистрация"], register, filters=filters.TEXT))
+    app.add_handler(CommandHandler(["unreg", "ливнуть", "выход"], unreg, filters=filters.TEXT))
     app.add_handler(CommandHandler("reset", reset_stats, filters=filters.TEXT))
-    app.add_handler(CommandHandler("pidor", pidor, filters=filters.TEXT))
-    app.add_handler(CommandHandler("run", run_command, filters=filters.TEXT))
-    app.add_handler(CommandHandler("stats", stats, filters=filters.TEXT))
-    app.add_handler(CommandHandler("mimic", mimic, filters=filters.TEXT))
-    app.add_handler(CommandHandler("procents", procents_command, filters=filters.TEXT))
-    app.add_handler(CommandHandler("switch", switch, filters=filters.TEXT))
-    app.add_handler(CommandHandler("records", records, filters=filters.TEXT))
-    app.add_handler(CommandHandler("mystats", my_stats, filters=filters.TEXT))
-    app.add_handler(CommandHandler("backup", manual_backup, filters=filters.TEXT))
-    app.add_handler(CommandHandler("dice", dice_command, filters=filters.TEXT))
-    app.add_handler(CommandHandler("duel", duel, filters=filters.TEXT))
-    app.add_handler(CommandHandler("unostats", uno_stats, filters=filters.TEXT))
-    app.add_handler(CommandHandler("boy", set_gender_boy, filters=filters.TEXT))
-    app.add_handler(CommandHandler("girl", set_gender_girl, filters=filters.TEXT))
+    
+    app.add_handler(CommandHandler(["pidor", "пидор"], pidor, filters=filters.TEXT))
+    app.add_handler(CommandHandler(["run", "красавчик", "ран"], run_command, filters=filters.TEXT))
+    app.add_handler(CommandHandler(["stats", "статистика", "стата"], stats, filters=filters.TEXT))
+    app.add_handler(CommandHandler(["mimic", "мимик", "мимикрировать"], mimic, filters=filters.TEXT))
+    app.add_handler(CommandHandler(["procents", "проценты", "шансы"], procents_command, filters=filters.TEXT))
+    app.add_handler(CommandHandler(["switch", "uno", "уно"], switch, filters=filters.TEXT))
+    app.add_handler(CommandHandler(["records", "рекорды"], records, filters=filters.TEXT))
+    
+    app.add_handler(CommandHandler(["mystats", "моястатистика", "моястата"], my_stats, filters=filters.TEXT))
+    app.add_handler(CommandHandler(["dice", "кубик", "куб"], dice_command, filters=filters.TEXT))
+    app.add_handler(CommandHandler(["duel", "дуэль"], duel, filters=filters.TEXT))
+    app.add_handler(CommandHandler(["unostats", "статауно"], uno_stats, filters=filters.TEXT))
+    app.add_handler(CommandHandler(["pizdec", "пиздец"], pizdec_command, filters=filters.TEXT))
+    
+    app.add_handler(CommandHandler(["boy", "парень"], set_gender_boy, filters=filters.TEXT))
+    app.add_handler(CommandHandler(["girl", "девушка"], set_gender_girl, filters=filters.TEXT))
+    
     app.add_handler(CommandHandler("notbed", command_notbed, filters=filters.TEXT))
     app.add_handler(CommandHandler("sosamba", command_sosamba, filters=filters.TEXT))
+    app.add_handler(CommandHandler("backup", manual_backup, filters=filters.TEXT))
     app.add_handler(CommandHandler("ok", admin_ok, filters=filters.TEXT))
     app.add_handler(CommandHandler("nook", admin_nook, filters=filters.TEXT))
-    app.add_handler(CommandHandler("pizdec", pizdec_command, filters=filters.TEXT))
+
 
 
     if RENDER_URL:
