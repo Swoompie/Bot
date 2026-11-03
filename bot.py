@@ -4023,34 +4023,79 @@ async def main():
     # Привязываем мидлварь к рождённому приложению в приоритетную группу -1!
     app.add_handler(TypeHandler(Update, global_anti_spam_middleware), group=-1)
         
-    # === 🎰 РЕГИСТРАЦИЯ ВСЕЯДНЫХ ХЭНДЛЕРОВ КАЗИНО (МНОЖЕСТВЕННЫЕ ВЫЗОВЫ С ФИЛЬТРАМИ) ===
-    app.add_handler(CommandHandler(["start", "help", "помощь"], help_command, filters=filters.TEXT))
-    app.add_handler(CommandHandler(["register", "регистрация"], register, filters=filters.TEXT))
-    app.add_handler(CommandHandler(["unreg", "ливнуть", "выход"], unreg, filters=filters.TEXT))
+    # === 🎰 РЕГИСТРАЦИЯ ВСЕЯДНЫХ ХЭНДЛЕРОВ КАЗИНО (СТРОГО ЛАТИНИЦА ДЛЯ СТАРТА) ===
+    app.add_handler(CommandHandler(["start", "help"], help_command, filters=filters.TEXT))
+    app.add_handler(CommandHandler("register", register, filters=filters.TEXT))
+    app.add_handler(CommandHandler(["unreg", "unoout"], unreg, filters=filters.TEXT))
     app.add_handler(CommandHandler("reset", reset_stats, filters=filters.TEXT))
     
-    app.add_handler(CommandHandler(["pidor", "пидор"], pidor, filters=filters.TEXT))
-    app.add_handler(CommandHandler(["run", "красавчик", "ран"], run_command, filters=filters.TEXT))
-    app.add_handler(CommandHandler(["stats", "статистика", "стата"], stats, filters=filters.TEXT))
-    app.add_handler(CommandHandler(["mimic", "мимик", "мимикрировать"], mimic, filters=filters.TEXT))
-    app.add_handler(CommandHandler(["procents", "проценты", "шансы"], procents_command, filters=filters.TEXT))
-    app.add_handler(CommandHandler(["switch", "uno", "уно"], switch, filters=filters.TEXT))
-    app.add_handler(CommandHandler(["records", "рекорды"], records, filters=filters.TEXT))
+    app.add_handler(CommandHandler("pidor", pidor, filters=filters.TEXT))
+    app.add_handler(CommandHandler(["run", "ran"], run_command, filters=filters.TEXT))
+    app.add_handler(CommandHandler(["stats", "stata"], stats, filters=filters.TEXT))
+    app.add_handler(CommandHandler(["mimic", "shpion"], mimic, filters=filters.TEXT))
+    app.add_handler(CommandHandler(["procents", "shansi"], procents_command, filters=filters.TEXT))
+    app.add_handler(CommandHandler(["switch", "uno"], switch, filters=filters.TEXT))
+    app.add_handler(CommandHandler("records", records, filters=filters.TEXT))
     
-    app.add_handler(CommandHandler(["mystats", "моястатистика", "моястата"], my_stats, filters=filters.TEXT))
-    app.add_handler(CommandHandler(["dice", "кубик", "куб"], dice_command, filters=filters.TEXT))
-    app.add_handler(CommandHandler(["duel", "дуэль"], duel, filters=filters.TEXT))
-    app.add_handler(CommandHandler(["unostats", "статауно"], uno_stats, filters=filters.TEXT))
-    app.add_handler(CommandHandler(["pizdec", "пиздец"], pizdec_command, filters=filters.TEXT))
+    app.add_handler(CommandHandler(["mystats", "mystat"], my_stats, filters=filters.TEXT))
+    app.add_handler(CommandHandler(["dice", "cub"], dice_command, filters=filters.TEXT))
+    app.add_handler(CommandHandler("duel", duel, filters=filters.TEXT))
+    app.add_handler(CommandHandler("unostats", uno_stats, filters=filters.TEXT))
+    app.add_handler(CommandHandler("pizdec", pizdec_command, filters=filters.TEXT))
     
-    app.add_handler(CommandHandler(["boy", "парень"], set_gender_boy, filters=filters.TEXT))
-    app.add_handler(CommandHandler(["girl", "девушка"], set_gender_girl, filters=filters.TEXT))
+    app.add_handler(CommandHandler("boy", set_gender_boy, filters=filters.TEXT))
+    app.add_handler(CommandHandler("girl", set_gender_girl, filters=filters.TEXT))
     
     app.add_handler(CommandHandler("notbed", command_notbed, filters=filters.TEXT))
     app.add_handler(CommandHandler("sosamba", command_sosamba, filters=filters.TEXT))
     app.add_handler(CommandHandler("backup", manual_backup, filters=filters.TEXT))
     app.add_handler(CommandHandler("ok", admin_ok, filters=filters.TEXT))
     app.add_handler(CommandHandler("nook", admin_nook, filters=filters.TEXT))
+
+    # 🔥 ТИТАНОВЫЙ СУПЕР-ПЕРЕХВАТЧИК РУССКИХ КОМАНД (ОБХОД ОГРАНИЧЕНИЙ TELEGRAM API)
+    # Этот хэндлер перехватывает ЛЮБОЙ текст, начинающийся со слеша, и если там русское слово — запускает нужную логику!
+    async def russian_commands_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if not update.message or not update.message.text:
+            return
+        raw_cmd = update.message.text.strip().lower().split()[0]
+        
+        if raw_cmd == "/помощь":
+            await help_command(update, context)
+        elif raw_cmd == "/регистрация":
+            await register(update, context)
+        elif raw_cmd in ["/ливнуть", "/выход"]:
+            await unreg(update, context)
+        elif raw_cmd == "/пидор":
+            await pidor(update, context)
+        elif raw_cmd in ["/красавчик", "/ран"]:
+            await run_command(update, context)
+        elif raw_cmd in ["/статистика", "/стата"]:
+            await stats(update, context)
+        elif raw_cmd in ["/проценты", "/шансы"]:
+            await procents_command(update, context)
+        elif raw_cmd == "/рекорды":
+            await records(update, context)
+        elif raw_cmd in ["/кубик", "/куб"]:
+            await dice_command(update, context)
+        elif raw_cmd == "/дуэль":
+            await duel(update, context)
+        elif raw_cmd == "/уно":
+            await switch(update, context)
+        elif raw_cmd in ["/мимик", "/мимикрировать"]:
+            await mimic(update, context)
+        elif raw_cmd == "/пиздец":
+            await pizdec_command(update, context)
+        elif raw_cmd in ["/моястатистика", "/моястата"]:
+            await my_stats(update, context)
+        elif raw_cmd == "/статауно":
+            await uno_stats(update, context)
+        elif raw_cmd == "/парень":
+            await set_gender_boy(update, context)
+        elif raw_cmd == "/девушка":
+            await set_gender_girl(update, context)
+
+    app.add_handler(MessageHandler(filters.TEXT & filters.UpdateType.MESSAGES, russian_commands_router))
+
 
 
 
