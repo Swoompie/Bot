@@ -3221,41 +3221,22 @@ async def dice_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     prev_balance = player.get("dice_start_balance", 0.0) if player.get("dice_start_balance") is not None else 0.0
 
     # =====================================================================
-    # 📊 МАТЕМАТИКА 1: Считаем ЧЕСТНЫЕ проценты ДО броска (ТРЕНД НА ЗАВТРА)
+    # 📊 МАТЕМАТИКА 1: Считаем ЧЕСТНЫЕ проценты ДО броска (ЖЕСТКИЙ ФИКС ТИПОВ)
     # =====================================================================
     all_users_before = get_users()
     active_users_before = [u for u in all_users_before if u.get("is_active", True)]
     
-    # Чистая сумма ВСЕХ живых весов в чате на завтрашнее утро
-    total_p_before = sum(u.get("pidor_weight", 100.0) for u in active_users_before)
-    total_k_before = sum(u.get("kras_weight", 100.0) for u in active_users_before)
+    # Чистая сумма ВСЕХ живых весов в чате с принудительным приведением к float()
+    total_p_before = sum(float(u.get("pidor_weight", 100.0) or 100.0) for u in active_users_before)
+    total_k_before = sum(float(u.get("kras_weight", 100.0) or 100.0) for u in active_users_before)
     
+    # Жестко вытаскиваем личные веса игрока как чистые числа, чтобы уничтожить фантомные нули!
+    my_old_p_weight = float(player.get("pidor_weight", 100.0) or 100.0)
+    my_old_k_weight = float(player.get("kras_weight", 100.0) or 100.0)
+
     # Кристально честная стартовая доля веса ковбоя в общем банке чата
-    old_p_chance = (player.get("pidor_weight", 100.0) / total_p_before * 100) if total_p_before > 0 else 0.0
-    old_k_chance = (player.get("kras_weight", 100.0) / total_k_before * 100) if total_k_before > 0 else 0.0
-
-    # --- 👑 РАСЧЁТ СТАРШЕГО ШАНСА КРАСАВЧИКА (МАНТЕ-КАРЛО + МОНЕТКА) ---
-    if today_kras_dice:
-        filtered_k_dice = active_users_before
-    else:
-        opposite_pidor_id = today_pidor_dice["user_id"] if today_pidor_dice else get_opposite_winner_id("krasavchik")
-        filtered_k_dice = [u for u in active_users_before if u["user_id"] != opposite_pidor_id]
-        if not filtered_k_dice:
-            filtered_k_dice = active_users_before
-
-    N_kras_before = len(filtered_k_dice)
-    total_k_before = sum(u.get("kras_weight", 100.0) for u in filtered_k_dice)
-
-    if today_kras_dice:
-        old_k_chance = 100.0 if player["user_id"] == today_kras_dice["user_id"] else 0.0
-    elif player["user_id"] not in [user["user_id"] for user in filtered_k_dice]:
-        old_k_chance = 0.0
-    else:
-        p_i_before = player.get("kras_weight", 100.0) / total_k_before if total_k_before > 0 else 0.0
-        if N_kras_before > 1:
-            old_k_chance = ((1 - m_dice) * p_i_before + m_dice * (q_dice * p_i_before + ((1 - p_i_before) / (N_kras_before - 1)) * q_dice)) * 100
-        else:
-            old_k_chance = p_i_before * 100
+    old_p_chance = (my_old_p_weight / total_p_before * 100) if total_p_before > 0 else 0.0
+    old_k_chance = (my_old_k_weight / total_k_before * 100) if total_k_before > 0 else 0.0
 
     # === 🎲 [БАЛАНСИРОВАННАЯ КАРМА]: КУБИКИ СУДЬБЫ (МАКСИМУМ 30.0) ===
     if dice_value <= 3:
