@@ -2877,7 +2877,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERv_1qh-RMBre9eek9ykdsovu3gf-SvwACCnUAAlgXsEkCKvJjaqw9iT0E')
 
-    # ================= ❌❌❌ ВЫПАЛ ПРОВАЛ (КОСМЕТИЧЕСКИЙ ПРОЦЕНТАЖ ОТ РОМЫ) =================
+    # ================= ❌❌❌ ВЫПАЛ ПРОВАЛ (КОСМЕТИЧЕСКИЙ ПРОЦЕНТАЖ И ГЕНДЕРЫ) =================
     if not is_success:
         safe_name = user.first_name.replace("<", "&lt;").replace(">", "&gt;")
 
@@ -2893,19 +2893,20 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         total_p_before = sum(u.get("pidor_weight", 100.0) for u in active_users_p)
         current_p_weight = player.get("pidor_weight", 100.0)
 
-        # Вычисляем стартовый утренний шанс Ромы ДО промаха карты
+        # Вычисляем стартовый шанс ДО броска карты
         old_chance = (current_p_weight / total_p_before * 100) if total_p_before > 0 else 0.0
 
         if is_robbing_chad:
-            # Математика веса внутри бота (фиксированные +20.0 веса)
+            # Математика веса внутри бота (фиксированные +20.0 веса за провал кражи короны)
             new_p_weight = current_p_weight + 20.0
 
-            # Косметический расчёт дельты процентов на лету силами Питона
+            # Косметический расчёт дельты процентов на лету
             new_chance = (new_p_weight / (total_p_before + 20.0) * 100) if (total_p_before + 20.0) > 0 else 0.0
             chance_delta = max(0.1, new_chance - old_chance)
 
+            # Счётчик строго +2 пидора
             supabase.table("users").update({
-                "last_switch_date": str(fake_cd_date := today + timedelta(days=6)), 
+                "last_switch_date": str(today + timedelta(days=6)), 
                 "pidor_count": fresh_pidor_count + 2,
                 "pidor_weight": new_p_weight  
             }).eq("user_id", user.id).execute()
@@ -2915,7 +2916,7 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "sender_name": user.first_name,
                     "victim_name": victim["first_name"],
                     "game_date": str(today),
-                    "multiplier": 0,  
+                    "multiplier": 0,  # Маркер сожжённой карты
                     "is_krasavchik": True
                 }).execute()
             except Exception as e_log:
@@ -2937,15 +2938,16 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
             
         elif is_coin_loser_target:
-            # Математика веса внутри бота (фиксированные +30.0 веса за раненого)
+            # Математика веса внутри бота (фиксированные +30.0 веса за провал добивания раненого)
             new_p_weight = current_p_weight + 30.0
 
-            # Косметический расчёт дельты процентов на лету силами Питона
+            # Косметический расчёт дельты процентов на лету
             new_chance = (new_p_weight / (total_p_before + 30.0) * 100) if (total_p_before + 30.0) > 0 else 0.0
             chance_delta = max(0.1, new_chance - old_chance)
 
+            # Счётчик строго +3 пидора фиксированно (Никаких умножений на 3 от утренних счетов!)
             supabase.table("users").update({
-                "last_switch_date": str(today), 
+                "last_switch_date": str(today + timedelta(days=6)), # Вводим КД 6 дней за провал!
                 "pidor_count": fresh_pidor_count + 3,
                 "pidor_weight": new_p_weight  
             }).eq("user_id", user.id).execute()
@@ -2964,9 +2966,9 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(
                 chat_id=chat_id,
                 text=f"❌ <b>ТОТАЛЬНОЕ КАРМИЧЕСКОЕ ПРАВОСУДИЕ!</b> ❌\n\n"
-                     f"Карта UNO расплавилась в руках <b>{safe_name}</b> при попытке добить раненого! Шанс был 45%, но ты {umudrilsya_text} промазать!\n\n"
+                     f"Карта UNO расплавилась в руках <b>{safe_name}</b> при попытке добить раненого Роман (@Aiar_bro)! Шанс был 45%, но ты {umudrilsya_text} промазать!\n\n"
                      f"Боги рандома {nakazali_text}: за излишнюю кровожадность ты получаешь фиксированные <b>+3 пидора</b> в досье!\n"
-                     f"📈 Твоя вероятность стать главным позором чата завтра утром подскочила на жирные <b>+{chance_delta:.1f}%</b>! 🤡💥💣",
+                     f"📈 Твоя вероятность стать главным позором чата завтра утром подскочила на жирные <b>+{chance_delta:.1f}%</b>, а карта уходит на КД 6 дней! 🤡💥💣",
                 parse_mode="HTML"
             )
             try:
@@ -2977,32 +2979,29 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         else:
             if is_retry_attempt:
-                # Вытаскиваем текущий позорный вес Стрелочника до промаха карты
-                current_p_weight = player.get("pidor_weight", 100.0)
-                
-                # Косметический расчёт дельты процентов на лету силами Питона
-                new_p_weight = current_p_weight + 5.0  # Локально накидываем +5 за тотал-неудачника
+                # Математика веса внутри бота (фиксированные +5.0 веса за ретрай)
+                new_p_weight = current_p_weight + 5.0
+
+                # Косметический расчёт дельты процентов на лету
                 new_chance = (new_p_weight / (total_p_before + 5.0) * 100) if (total_p_before + 5.0) > 0 else 0.0
                 chance_delta = max(0.1, new_chance - old_chance)
 
                 # За провал ретрая строго +2 пидора в досье
                 supabase.table("users").update({
-                    "last_switch_date": str(today), 
+                    "last_switch_date": str(today + timedelta(days=6)), 
                     "pidor_count": fresh_pidor_count + 2,
                     "pidor_weight": new_p_weight
                 }).eq("user_id", user.id).execute()
                 context.user_data.pop("switch_retry", None)
 
-                # ЖЕЛЕЗНО ЗАКРЫЛИ БЛОК ТРАНЗАКЦИИ ЛОГОВ: Никаких битых try!
                 try:
                     supabase.table("uno_logs").insert({
                         "game_date": str(date.today()),
                         "sender_name": user.first_name,
                         "victim_name": victim["first_name"],
-                        "multiplier": 0,  # Записали 0, база пропустит со свистом!
+                        "multiplier": 0,  
                         "is_krasavchik": False
                     }).execute()
-                    print("🎰 [БАЗА]: Лог провала ретрая успешно записан.")
                 except Exception as e_log:
                     print(f"Ошибка сохранения уно-лога провала ретрая: {e_log}")
 
@@ -3012,14 +3011,14 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     chat_id=chat_id,
                     text=f"💀 <b>ПОЛНОЕ ФИАСКО, {streloch_title}!</b> Второй шанс тоже провален! 💀\n\n"
                          f"Твоя карта UNO превратилась в пепел. На твой счёт капает <b>+2 пидора</b> в статистику!\n"
-                         f"📈 Риск утреннего клейма для тебя подрос на <b>+{chance_delta:.1f}%</b>, а Кулдаун 6 дней взведён! 🤡",
+                         f"📈 Риск утреннего клейма для тебя символически подрос на <b>+{chance_delta:.1f}%</b>, а Кулдаун 6 дней взведён! 🤡",
                     parse_mode="HTML"
                 )
                 try:
                     await context.bot.send_sticker(chat_id=chat_id, sticker='CAACAgIAAxkBAAERg9tqT2Lb7EssiCPdH7XeEz1W5sbVswAC6S8AApkAAYhJDcx-Vp6-Sco8BA')
                 except Exception:
                     pass
-                return  # ЖЕСТКИЙ ВЫХОД ИЗ ФУНКЦИИ
+                return  
 
             else:
                 # Первый провал на мирного — крутим скрытые 5% на "Второй Шанс"
@@ -3044,13 +3043,13 @@ async def switch(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     random_penalty_weight = random.uniform(5.0, 25.0)
                     new_p_weight = current_p_weight + random_penalty_weight
 
-                    # Косметический расчёт дельты процентов на лету силами Питона
+                    # Косметический расчёт дельты процентов на лету
                     new_chance = (new_p_weight / (total_p_before + random_penalty_weight) * 100) if (total_p_before + random_penalty_weight) > 0 else 0.0
                     chance_delta = max(0.1, new_chance - old_chance)
 
                     # Обычный промах даёт строго +1 пидора в досье
                     supabase.table("users").update({
-                        "last_switch_date": str(today), 
+                        "last_switch_date": str(today + timedelta(days=6)), 
                         "pidor_count": fresh_pidor_count + 1,
                         "pidor_weight": round(new_p_weight, 1)  
                     }).eq("user_id", user.id).execute()
